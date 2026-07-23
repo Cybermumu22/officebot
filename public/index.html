@@ -440,6 +440,12 @@
     .staff-face{width:24px; height:24px;}
     .staff-desk{width:40px; top:9px;}
     .staff-name{font-size:.34rem;}
+    /* the bio card is a bottom sheet on phones (see place()) — make it big
+       enough to actually read with a thumb out of the way */
+    #bio-card{max-width:min(92vw, 340px); padding:13px 16px;}
+    #bio-card .bio-name{font-size:1rem;}
+    #bio-card .bio-role{font-size:.62rem;}
+    #bio-card .bio-text{font-size:.88rem; line-height:1.5;}
     #panels{grid-template-columns:1fr; gap:14px;}
     #chat{height:170px; font-size:14px; padding:8px 10px;}
     #log{height:120px; font-size:13px; padding:8px 10px;}
@@ -2427,9 +2433,17 @@ function _bioSetup(){
     var n = el.querySelector('.token-name, .staff-name');
     return n ? n.textContent.trim() : '';
   }
+  function isSmall(){ return window.innerWidth <= 640; }
   function place(el){
-    var r = el.getBoundingClientRect();
     var cw = card.offsetWidth, ch = card.offsetHeight;
+    if(isSmall()){
+      // phones: a bottom sheet — centred, pinned above the bottom edge, never
+      // under the tapping finger and never chasing a tiny token around
+      card.style.left = Math.max(8, (window.innerWidth - cw) / 2) + 'px';
+      card.style.top = (window.innerHeight - ch - 14) + 'px';
+      return;
+    }
+    var r = el.getBoundingClientRect();
     var x = r.left + r.width / 2 - cw / 2;
     var y = r.top - ch - 10;
     if(y < 8) y = r.bottom + 12;                 // flip below if no room above
@@ -2442,20 +2456,33 @@ function _bioSetup(){
     var bio = BIOS[nameOf(el)];
     if(!bio) return;
     clearTimeout(hideT);
+    card._for = el;
     card.querySelector('.bio-name').textContent = nameOf(el);
     card.querySelector('.bio-role').textContent = bio.role;
     card.querySelector('.bio-text').textContent = bio.text;
     card.classList.add('show');
     place(el);
   }
-  function hide(){ hideT = setTimeout(function(){ card.classList.remove('show'); }, 90); }
+  function hideNow(){ card.classList.remove('show'); card._for = null; }
+  function hide(){ hideT = setTimeout(hideNow, 90); }
   var SEL = '.agent-token, .staff';
-  document.addEventListener('pointerover', function(e){ var el = e.target.closest(SEL); if(el) show(el); });
-  document.addEventListener('pointerout',  function(e){ var el = e.target.closest(SEL); if(el) hide(); });
-  document.addEventListener('click', function(e){       // tap-to-toggle on touch
+  // Hover is a MOUSE affordance. On touch, a tap fires pointerover (show) →
+  // pointerout (hide) → click (toggle-off) in one gesture — three handlers
+  // fighting made the card flash and vanish. So hover handlers ignore touch
+  // entirely; taps are owned by the click handler below.
+  document.addEventListener('pointerover', function(e){ if(e.pointerType === 'touch') return; var el = e.target.closest(SEL); if(el) show(el); });
+  document.addEventListener('pointerout',  function(e){ if(e.pointerType === 'touch') return; var el = e.target.closest(SEL); if(el) hide(); });
+  // drag guard: a floor pan that ends on a token must not open/close the card
+  var downX = 0, downY = 0;
+  document.addEventListener('pointerdown', function(e){ downX = e.clientX; downY = e.clientY; }, true);
+  document.addEventListener('click', function(e){
+    if(Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) return; // was a drag
     var el = e.target.closest(SEL);
-    if(el){ if(card.classList.contains('show')) card.classList.remove('show'); else show(el); }
-    else card.classList.remove('show');
+    if(el){
+      // tapping the SAME character closes; tapping another switches to it
+      if(card.classList.contains('show') && card._for === el) hideNow();
+      else show(el);
+    } else hideNow();
   });
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _bioSetup); else _bioSetup();
