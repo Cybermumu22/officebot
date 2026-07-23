@@ -1278,7 +1278,41 @@ function handleEvent(evt){
         })(target.codename || 'the crew');
       }
       if(aid){
-        target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, 6000);
+        target.removeTimer = setTimeout(function(){
+          // Seamless return: when the finished worker IS a crew member (same
+          // codename), don't fade them out and pop the bench copy in at the
+          // desk — that read as a teleport (caught via user feedback: "Ace
+          // said he's done, disappeared, and appeared"). Instead: remove the
+          // worker token instantly, and have the bench copy START at that
+          // exact spot and WALK home — the same person heading back to
+          // their desk.
+          const o = officeEls.get(s.id);
+          const wt = o && o.tokens.get(aid);
+          const handoffPos = wt ? { left: wt.wrap.style.left, top: wt.wrap.style.top } : null;
+          s.subagents.delete(aid);
+          let stillBusy = false; // an "Ace II" still working? bench stays hidden
+          s.subagents.forEach(function(other){ if(other.codenameBase === target.codenameBase) stillBusy = true; });
+          const crewDef = _currentCrew().filter(function(c){ return codenameForAgentType(c.agentType) === target.codenameBase; })[0];
+          const seamless = !stillBusy && crewDef && handoffPos && s.status !== 'offline'
+            && !(s.crewGone && s.crewGone.indexOf(target.codenameBase) !== -1);
+          if(seamless){ wt.wrap.remove(); o.tokens.delete(aid); } // no fade — the bench copy owns this spot now
+          render();
+          if(seamless){
+            const ct = o.tokens.get(crewDef.key);
+            if(ct){
+              const slotLeft = ct.wrap.style.left, slotTop = ct.wrap.style.top;
+              ct.wrap.style.transition = 'none';
+              ct.wrap.style.left = handoffPos.left; ct.wrap.style.top = handoffPos.top;
+              void ct.wrap.offsetWidth;
+              ct.wrap.style.transition = '';
+              ct.wrap.classList.add('is-walking');
+              requestAnimationFrame(function(){
+                ct.wrap.style.left = slotLeft; ct.wrap.style.top = slotTop;
+              });
+              setTimeout(function(){ ct.wrap.classList.remove('is-walking'); }, 1800);
+            }
+          }
+        }, 6000);
         // Settling to idle DROPS the bubble — someone who isn't talking
         // shouldn't have a speech bubble hovering over them.
         target.settleTimer = setTimeout(function(){
