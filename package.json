@@ -1,7 +1,16 @@
 {
   "name": "@cybermu22/officebot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A live pixel-art 'office' dashboard for your Claude Code sessions — watch your agents work, delegate, and clock out, with usage tracking. Zero dependencies, fully local.",
+  "author": "Mumudrummer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cybermumu22/officebot.git"
+  },
+  "homepage": "https://github.com/Cybermumu22/officebot#readme",
+  "bugs": {
+    "url": "https://github.com/Cybermumu22/officebot/issues"
+  },
   "bin": {
     "officebot": "cli.js"
   },
