@@ -2806,9 +2806,11 @@ function runWanderTick(){
       const cand = Math.random() < 0.34 ? 'lounge' : pick(WANDER_ROOMS);
       if(cand === cur) continue;
       if(cand !== 'lounge'){
-        // work rooms hold at most three loiterers — beyond that it reads as a queue
+        // work rooms stay cosy: wander only into an EMPTY room or one with a
+        // single occupant (pairs max). Only the lounge — the big space — can
+        // gather a crowd.
         const cnt = crew.filter(function(c){ return s.crewZones[c.key] === cand; }).length;
-        if(cnt >= 3) continue;
+        if(cnt >= 2) continue;
       }
       dest = cand;
     }
