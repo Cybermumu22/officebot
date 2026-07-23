@@ -55,19 +55,47 @@ same `--port` when you `start`.
 
 ---
 
-## Watch it on your phone
+## Viewing from other devices (phone, another computer, anywhere)
 
-<img src="docs/screenshot-mobile.png" alt="officebot on a phone" width="330" align="right">
+<img src="docs/screenshot-mobile.png" alt="officebot on a phone" width="300" align="right">
 
-The dashboard is a PWA (installable web app), so no app store needed:
+officebot **must run on the same machine as Claude Code** — it reads Claude
+Code's local logs and receives its local hooks, so the server can't live on a
+separate box. But the dashboard is a normal web page (and a PWA), so you can
+*view* it from anywhere. The server already listens on all network interfaces —
+you just open the machine's address instead of `localhost`.
 
-1. Make sure your phone is on the **same Wi-Fi** as the computer running it.
-2. Find the computer's local IP (e.g. `192.168.1.42`).
-3. On your phone's browser, open `http://<that-ip>:4317`.
-4. Use "Add to Home Screen" to keep it one tap away.
+**On the same Wi-Fi (phone, laptop):**
 
-If it doesn't load, allow Node through your firewall for that port (it only
-listens on your local network).
+1. Find the host computer's local IP (e.g. `192.168.1.42`).
+2. On the other device's browser, open `http://<that-ip>:4317`.
+3. On a phone, use **"Add to Home Screen"** to keep it one tap away (it's a PWA).
+
+If it won't load, allow port `4317` (or your chosen port) through the host's
+firewall.
+
+**From anywhere (outside your network):** ⚠️ officebot has **no login**, so
+don't forward the port straight to the public internet — anyone with the URL
+could see your dashboard. Use a private tunnel instead:
+
+- **[Tailscale](https://tailscale.com)** (recommended, free) — a private mesh
+  VPN. Install it on the host machine and on whatever device you want to watch
+  from, then open `http://<host's-tailscale-IP>:4317` (a `100.x.y.z` address).
+  Encrypted, no port-forwarding, nothing exposed publicly.
+- **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)**
+  (free) — if you want a real `https://…` URL:
+  `cloudflared tunnel --url http://localhost:4317`. Treat the URL as a secret,
+  or put [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+  in front of it for a login.
+
+**Custom port:** `npx @cybermu22/officebot start --port 8080` (or set
+`AGENT_VIZ_PORT`). If you change it, re-run `setup --port 8080` so the hooks
+point at the right place.
+
+**Keep it always-on:** the `start` command runs in a terminal window. To have
+it run in the background permanently, launch it as a service — Windows Task
+Scheduler / Startup, Linux `systemd`, macOS `launchd`, or a small Docker
+container.
 
 ---
 
