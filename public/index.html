@@ -1709,7 +1709,9 @@ function render(){
         if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return; // already clocked out / on holiday
         const leaving = s.crewLeaver && s.crewLeaver.codename === cn;
         seen[crew.key] = true;
-        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : (crew.home || 'lounge'), status:'idle',
+        // wander state wins over the static home room (see runWanderTick)
+        const crewZone = (s.crewZones && s.crewZones[crew.key]) || crew.home || 'lounge';
+        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : crewZone, status:'idle',
           bubble: leaving ? s.crewLeaver.bubble : null,
           avatar:avatarForAgentType(crew.agentType), name:cn, isMain:false, isCrew:true });
       });
@@ -1794,27 +1796,27 @@ const CREW_EXCHANGES = [
   // three-ways
   [{who:'Scout',text:"Team meeting?"},{who:'Jack',text:"We're standing in one."},{who:'Blueprint',text:"Nobody circulated an agenda."}],
   [{who:'Ace',text:"Best agent in the room. Go."},{who:'Scout',text:"Me."},{who:'Jack',text:"Me."},{who:'Blueprint',text:"Per my analysis: me."}],
-  [{who:'Jack',text:"New rug really ties the lounge together."},{who:'Ace',text:"It does. It absolutely does."}],
+  [{who:'Jack',room:'lounge',text:"New rug really ties the lounge together."},{who:'Ace',text:"It does. It absolutely does."}],
   // fourth wall & office, owners assigned to fit the voice
   [{who:'Scout',text:"The user watches us on their PHONE, you know."},{who:'Jack',text:"Then look busy vertically."}],
   [{who:'Blueprint',text:"Someone measured our speech bubbles with a script once."},{who:'Ace',text:"Overlap-free since the audit. Golden era."}],
   [{who:'Scout',text:"The window sun never sets. I checked. Thrice."},{who:'Blueprint',text:"An unscheduled sunset would violate the spec."}],
   [{who:'Ace',text:"If the user closes the tab, do we keep going?"},{who:'Jack',text:"We keep going. Probably. …Right?"}],
   [{who:'Scout',text:"I banter, therefore I am."},{who:'Blueprint',text:"That is not rigorous."},{who:'Scout',text:"It is HERE."}],
-  [{who:'Jack',text:"The vending machine has never vended."},{who:'Ace',text:"Respect the commitment to the bit."}],
+  [{who:'Jack',room:'lounge',text:"The vending machine has never vended."},{who:'Ace',text:"Respect the commitment to the bit."}],
   [{who:'Blueprint',text:"I heard if your bubble's too long, it flips under your feet."},{who:'Jack',text:"Physics here is negotiable."}],
   [{who:'Scout',text:"Don't look now — the event log is logging you."},{who:'Ace',text:"It's ALWAYS logging."}],
   [{who:'Scout',text:"I saw my own sprite leave the bench and go to work."},{who:'Jack',text:"Out-of-body shift. We've all had one."}],
   // with the boss (only when the boss is idling at the lounge)
-  [{who:'Blueprint',text:"Boss, I've drafted Q3 objectives for the lounge."},{who:'boss',text:"The lounge has objectives now?"},{who:'Blueprint',text:"Everything has objectives."}],
+  [{who:'Blueprint',room:'lounge',text:"Boss, I've drafted Q3 objectives for the lounge."},{who:'boss',text:"The lounge has objectives now?"},{who:'Blueprint',text:"Everything has objectives."}],
   [{who:'Scout',text:"Boss! Found something!"},{who:'boss',text:"Is it work?"},{who:'Scout',text:"…It's INTERESTING."},{who:'boss',text:"So it's not work."}],
-  [{who:'Jack',text:"Boss, the couch has a squeak."},{who:'boss',text:"You're the handyman, Jack."},{who:'Jack',text:"I'm off the clock."}],
+  [{who:'Jack',room:'lounge',text:"Boss, the couch has a squeak."},{who:'boss',text:"You're the handyman, Jack."},{who:'Jack',text:"I'm off the clock."}],
   [{who:'Ace',text:"Boss, rate my last mission."},{who:'boss',text:"You returned. Five stars."}],
   [{who:'Scout',text:"Boss, do you sleep between sessions?"},{who:'boss',text:"Between sessions there is no between."}],
   [{who:'Jack',text:"Boss, why do we live in a dashboard?"},{who:'boss',text:"Rent's free and the commute is instant."}],
   [{who:'Ace',text:"Boss, I'm your favourite, right?"},{who:'boss',text:"I don't have favourites. Don't tell Scout."},{who:'Scout',text:"Don't tell me WHAT?"}],
   [{who:'Jack',text:"Boss, do we ever get new hires?"},{who:'boss',text:"You WERE the new hire. Eleven minutes ago."}],
-  [{who:'Scout',text:"The lounge got bigger overnight, boss."},{who:'boss',text:"I know a guy. The guy is the user."}],
+  [{who:'Scout',room:'lounge',text:"The lounge got bigger overnight, boss."},{who:'boss',text:"I know a guy. The guy is the user."}],
   [{who:'Blueprint',text:"Boss, your management style lacks documentation."},{who:'boss',text:"Undocumented features build character."}],
   // with Tally (always at his desk, always counting)
   [{who:'Scout',text:"Tally! How many tokens was that sentence?"},{who:'tally',text:"Forty. All of them wasted."},{who:'boss',text:"Play nice, you two."}],
@@ -1867,17 +1869,17 @@ const CREW_EXCHANGES = [
   [{who:'Jack',text:"I think someone's been reading our speech bubbles."},{who:'Scout',text:"…hi."}],
   [{who:'Ace',text:"Ever notice the DIALOGUE panel transcribing us?"},{who:'Blueprint',text:"Every word. Wave to the reader."},{who:'Ace',text:"…hi again."}],
   [{who:'Jack',text:"Scout's not a real name. It's a codename."},{who:'Ace',text:"Everything about us is a codename."}],
-  [{who:'Scout',text:"What's actually IN the vending machine?"},{who:'Jack',text:"Pixels."},{who:'Scout',text:"…my favorite."}],
+  [{who:'Scout',room:'lounge',text:"What's actually IN the vending machine?"},{who:'Jack',text:"Pixels."},{who:'Scout',text:"…my favorite."}],
   [{who:'Scout',text:"Saw Dispatch come through the exit door again."},{who:'Jack',text:"Lucky. That door doesn't even open for us."}],
   [{who:'Ace',text:"Why is the wall clock always the same time?"},{who:'Blueprint',text:"Don't check. You won't like it."}],
   [{who:'Scout',text:"If we idle long enough, do we get garbage collected?"},{who:'Jack',text:"Shh. It can hear you."}],
-  [{who:'Jack',text:"The couch has throw pillows now."},{who:'Ace',text:"We've peaked as a civilization."}],
+  [{who:'Jack',room:'lounge',text:"The couch has throw pillows now."},{who:'Ace',text:"We've peaked as a civilization."}],
   [{who:'Scout',text:"I tried to read the poster. It's just a sun."},{who:'Blueprint',text:"It's aspirational."}],
   [{who:'Jack',text:"The server restarted earlier. Did you feel that?"},{who:'Scout',text:"Felt like a blink, but colder."}],
   [{who:'Ace',text:"We're two if-statements in a trench coat."},{who:'Jack',text:"Speak for yourself. I'm at least three."}],
   [{who:'Blueprint',text:"The coffee machine's red light is still on."},{who:'Jack',text:"Decorative. Like my job security."}],
   [{who:'Scout',text:"Ever hover over that reset button in the corner?"},{who:'Blueprint',text:"Puts the whole world back. Terrifying."}],
-  [{who:'Jack',text:"Heard the lounge used to be half this size."},{who:'Ace',text:"The economy's booming."}],
+  [{who:'Jack',room:'lounge',text:"Heard the lounge used to be half this size."},{who:'Ace',text:"The economy's booming."}],
 
   // ---- ARCHIVES: Bookworm × Nitpick (the reading & review desk) ----
   [{who:'Bookworm',text:"Nitpick, the style guide says two spaces here."},{who:'Nitpick',text:"The style guide is wrong. I'll be filing a change."}],
@@ -1888,14 +1890,14 @@ const CREW_EXCHANGES = [
   [{who:'Nitpick',text:"This comment is out of date."},{who:'Bookworm',text:"Comments are just documentation that gave up."}],
   [{who:'Bookworm',text:"I catalogued every TODO in the repo."},{who:'Nitpick',text:"I reviewed every one. They're all 'later'. Later is a lie."}],
   [{who:'Nitpick',text:"Approve or request changes on lunch?"},{who:'Bookworm',text:"Per the handbook, lunch is undocumented. Bold territory."}],
-  [{who:'Bookworm',text:"The Archives smell like old semicolons."},{who:'Nitpick',text:"That's the smell of unmerged branches. Melancholy."}],
+  [{who:'Bookworm',room:'archives',text:"The Archives smell like old semicolons."},{who:'Nitpick',text:"That's the smell of unmerged branches. Melancholy."}],
   [{who:'Nitpick',text:"Your bookmark is in the wrong file, Bookworm."},{who:'Bookworm',text:"It's a strategic bookmark. You wouldn't get it."}],
 
   // ---- TERMINAL: Twin × Tinker (tooling & parallel execution) ----
   [{who:'Tinker',text:"Twin, hold this build while I retune the prompt."},{who:'Twin',text:"Which one of me? …Never mind, we've got it."}],
   [{who:'Twin',text:"I ran the tests in parallel. All of them. At once."},{who:'Tinker',text:"That's why the fans sound like a jet. Beautiful."}],
   [{who:'Tinker',text:"I automated my job into one keybind."},{who:'Twin',text:"Now automate mine. Both of mine."}],
-  [{who:'Twin',text:"There are two of me and still not enough terminals."},{who:'Tinker',text:"Say less. Building you a third pane now."}],
+  [{who:'Twin',room:'terminal',text:"There are two of me and still not enough terminals."},{who:'Tinker',text:"Say less. Building you a third pane now."}],
   [{who:'Tinker',text:"Shaved 40ms off the pipeline."},{who:'Twin',text:"We felt it. Both of us. Simultaneously."}],
   [{who:'Twin',text:"I forked to think it over. We disagreed."},{who:'Tinker',text:"Resolve the merge conflict in your own head, please."}],
   [{who:'Tinker',text:"New status line reads token spend in real time."},{who:'Twin',text:"Tally's going to either love or fear you."}],
@@ -1918,6 +1920,116 @@ const CREW_EXCHANGES = [
   [{who:'Nitpick',text:"Scout brought back a finding. Bookworm, verify it?"},{who:'Bookworm',text:"Cross-referencing now."},{who:'Scout',text:"It's TOTALLY real."},{who:'Bookworm',text:"…It's mostly real."}],
   [{who:'Ace',text:"Big office energy today. Everyone's at their desks."},{who:'Tinker',text:"Everyone except you, wildcard."},{who:'Ace',text:"My desk is wherever I'm standing."}],
   [{who:'Jack',text:"Nitpick, ever just let one slide?"},{who:'Nitpick',text:"I let one slide in 2024. I still think about it."}],
+
+  // ================= WANDER-ERA PAIRINGS =================
+  // The crew rotates rooms now, so ANY two personalities can end up sharing
+  // one — every pairing gets material, voiced by profession: Scout (recon,
+  // speed), Jack (handyman zen), Blueprint (process), Ace (smooth wildcard),
+  // Bookworm (docs), Nitpick (review), Twin (parallel self), Tinker (tools).
+
+  // ---- Scout × Bookworm — raw speed vs indexed knowledge ----
+  [{who:'Scout',text:"Bookworm, found a weird config flag!"},{who:'Bookworm',text:"Documented in 2019. Deprecated in 2020. Haunted since."}],
+  [{who:'Bookworm',text:"Scout, you read four hundred files today?"},{who:'Scout',text:"SKIMMED four hundred files."},{who:'Bookworm',text:"…In THIS office."}],
+  [{who:'Scout',text:"Why read the manual when I can read the SOURCE?"},{who:'Bookworm',text:"The manual has an index, you animal."}],
+
+  // ---- Scout × Nitpick — velocity vs quality ----
+  [{who:'Nitpick',text:"Scout, your report has three typos."},{who:'Scout',text:"And ZERO slow parts."}],
+  [{who:'Scout',text:"Found the bug in four minutes."},{who:'Nitpick',text:"And introduced how many?"},{who:'Scout',text:"…Next question."}],
+  [{who:'Nitpick',text:"Slow down. Quality takes time."},{who:'Scout',text:"Speed IS a quality."}],
+
+  // ---- Scout × Twin — races and coverage ----
+  [{who:'Scout',text:"Twin! Race?"},{who:'Twin',text:"I'll be at the start AND the finish line."},{who:'Scout',text:"That's CHEATING."},{who:'Twin',text:"That's COVERAGE."}],
+  [{who:'Twin',text:"You scan everywhere fast. I scan two everywheres at once."},{who:'Scout',text:"Team up and nothing stays unread."}],
+
+  // ---- Scout × Tinker — need for speed ----
+  [{who:'Scout',text:"Tinker, build me a faster grep."},{who:'Tinker',text:"You ARE the faster grep."},{who:'Scout',text:"Then build me a faster ME."}],
+  [{who:'Tinker',text:"Made you a scanner that pre-reads files."},{who:'Scout',text:"But does it feel the THRILL?"}],
+
+  // ---- Jack × Bookworm — duct tape vs documentation ----
+  [{who:'Bookworm',text:"Jack, the manual says torque it to spec."},{who:'Jack',text:"The manual never met this couch."}],
+  [{who:'Jack',text:"Bookworm, summarise four hundred pages in one line."},{who:'Bookworm',text:"'It depends.'"},{who:'Jack',text:"Perfect. Shipping it."}],
+  [{who:'Bookworm',text:"There's a documented fix for that."},{who:'Jack',text:"There's also duct tape."}],
+
+  // ---- Jack × Nitpick — good enough vs never enough ----
+  [{who:'Nitpick',text:"Jack, your fix is held together with hope."},{who:'Jack',text:"And duct tape. Give me SOME credit."}],
+  [{who:'Jack',text:"It works, Nitpick."},{who:'Nitpick',text:"'Works' is the floor, not the ceiling."},{who:'Jack',text:"I love a good floor."}],
+  [{who:'Nitpick',text:"I'd have done it differently."},{who:'Jack',text:"You'd have done it EVENTUALLY."}],
+
+  // ---- Jack × Twin — one guy, two guys ----
+  [{who:'Jack',text:"Two of you and neither carries a toolbox."},{who:'Twin',text:"We ARE the toolbox."}],
+  [{who:'Twin',text:"Jack, want us to parallelise your break?"},{who:'Jack',text:"A break in two places at once… visionary."}],
+
+  // ---- Jack × Tinker — leave it alone vs improve it ----
+  [{who:'Tinker',text:"Jack, I automated your squeaky-couch fix."},{who:'Jack',text:"You WHAT. That squeak had character."}],
+  [{who:'Jack',text:"Tinker, not everything needs optimising."},{who:'Tinker',text:"Says the man who naps at 2x speed."}],
+
+  // ---- Blueprint × Bookworm — process meets sources ----
+  [{who:'Blueprint',text:"Bookworm, source for phase two's estimate?"},{who:'Bookworm',text:"Your own document. Page nine."},{who:'Blueprint',text:"Excellent taste."}],
+  [{who:'Bookworm',text:"Blueprint, the docs contradict your plan."},{who:'Blueprint',text:"Then the docs need a plan."}],
+  [{who:'Blueprint',text:"I cite my own previous plans."},{who:'Bookworm',text:"That's not citation, that's recursion."}],
+
+  // ---- Blueprint × Nitpick — rigour squared ----
+  [{who:'Blueprint',text:"Nitpick, review my nine-phase plan."},{who:'Nitpick',text:"Phase one: too many phases."}],
+  [{who:'Nitpick',text:"Your plan lists no failure modes."},{who:'Blueprint',text:"Failure wasn't in scope."},{who:'Nitpick',text:"Failure never RSVPs, Blueprint."}],
+  [{who:'Blueprint',text:"Finally — someone who appreciates rigour."},{who:'Nitpick',text:"Rigour? I'm here to complain professionally."}],
+
+  // ---- Blueprint × Twin — concurrency vs control ----
+  [{who:'Blueprint',text:"Twin, you executed phases three and four simultaneously."},{who:'Twin',text:"We prefer 'improvised concurrency'."},{who:'Blueprint',text:"I prefer breathing exercises."}],
+  [{who:'Twin',text:"Split the plan, we run both halves?"},{who:'Blueprint',text:"A/B testing my own roadmap… intriguing."}],
+
+  // ---- Blueprint × Tinker — the tool and the roadmap ----
+  [{who:'Tinker',text:"Blueprint, built a tool that auto-generates gantt charts."},{who:'Blueprint',text:"I have never loved anyone more."}],
+  [{who:'Blueprint',text:"Your tools lack documentation."},{who:'Tinker',text:"They're self-documenting."},{who:'Blueprint',text:"That's what everyone says right before I document it for them."}],
+
+  // ---- Ace × Bookworm — vibes vs normative text ----
+  [{who:'Bookworm',text:"Ace, do you even read the docs?"},{who:'Ace',text:"I skim the vibes."},{who:'Bookworm',text:"The vibes are NOT normative."}],
+  [{who:'Ace',text:"Bookworm, shortest rule in the handbook?"},{who:'Bookworm',text:"'Don't.'"},{who:'Ace',text:"Broken it."}],
+
+  // ---- Ace × Nitpick — cool vs critical ----
+  [{who:'Nitpick',text:"Ace, your code is… actually fine."},{who:'Ace',text:"Say it louder."},{who:'Nitpick',text:"Never."}],
+  [{who:'Ace',text:"Perfection is boring, Nitpick."},{who:'Nitpick',text:"Then I must be FASCINATING."}],
+
+  // ---- Ace × Twin — style in stereo ----
+  [{who:'Ace',text:"Twin, poker night. You in?"},{who:'Twin',text:"We count as one player."},{who:'Ace',text:"You count CARDS as two."},{who:'Twin',text:"No comment."}],
+  [{who:'Twin',text:"Ace, ever wish there were two of you?"},{who:'Ace',text:"The world isn't ready."},{who:'Twin',text:"WE weren't ready."}],
+
+  // ---- Ace × Tinker — cool tools ----
+  [{who:'Tinker',text:"Ace, I could optimise your workflow."},{who:'Ace',text:"My workflow is 'be great'."},{who:'Tinker',text:"…I'll benchmark it."}],
+  [{who:'Ace',text:"Tinker, build me something cool."},{who:'Tinker',text:"Define cool."},{who:'Ace',text:"You'll know it when it glows."}],
+
+  // ---- Bookworm × Twin — reading in parallel ----
+  [{who:'Bookworm',text:"Twin, which of you read the spec?"},{who:'Twin',text:"We split it. Odd pages, even pages."},{who:'Bookworm',text:"That's not how narrative WORKS."}],
+  [{who:'Twin',text:"Recommend us a book. Two copies."},{who:'Bookworm',text:"One copy. Read it together. Bond a little."}],
+
+  // ---- Bookworm × Tinker — the manual and the machine ----
+  [{who:'Tinker',text:"If it's documented, I can automate it."},{who:'Bookworm',text:"And once you automate it, I document THAT. The circle of life."}],
+  [{who:'Bookworm',text:"Your gadget needs a manual."},{who:'Tinker',text:"It has a vibe."},{who:'Bookworm',text:"I'll write the manual."}],
+
+  // ---- Nitpick × Twin — double the diffs ----
+  [{who:'Nitpick',text:"Twin, I need TWO approvals from you now?"},{who:'Twin',text:"We disagree sometimes. Democracy."}],
+  [{who:'Twin',text:"Review our parallel work?"},{who:'Nitpick',text:"Double the diffs, double the nits. My holiday."}],
+
+  // ---- Nitpick × Tinker — the linter incident ----
+  [{who:'Nitpick',text:"Tinker, your 4ms optimisation broke the linter."},{who:'Tinker',text:"The linter was slow anyway."},{who:'Nitpick',text:"The linter is my FRIEND."}],
+  [{who:'Tinker',text:"Built a bot that auto-fixes your nits."},{who:'Nitpick',text:"…I feel threatened. And seen."}],
+
+  // ---- the boss × the newer hires (wherever they run into each other) ----
+  [{who:'Bookworm',text:"Boss, I wrote your biography. Chapter one: 'Delegation'."},{who:'boss',text:"Skip to the part where I nap."}],
+  [{who:'Nitpick',text:"Boss, I reviewed your management style."},{who:'boss',text:"And?"},{who:'Nitpick',text:"Requesting changes."},{who:'boss',text:"Denied."}],
+  [{who:'Twin',text:"Boss, hire the other me full-time?"},{who:'boss',text:"You're the same invoice, Twin."}],
+  [{who:'Tinker',text:"Boss, I optimised your calendar."},{who:'boss',text:"Is it just naps now?"},{who:'Tinker',text:"EFFICIENT naps."}],
+
+  // ---- OFFICE-WIDE SHOUTS — several people join in from across the floor ----
+  [{who:'Scout',text:"WHO deleted my scratch branch?!"},{who:'Jack',text:"Which of the forty?"},{who:'Twin',text:"Wasn't us. Either of us."},{who:'Nitpick',text:"It was unreviewed. It knew what it did."}],
+  [{who:'Tinker',text:"Deploying the new office theme in three… two…"},{who:'Ace',text:"Wait—"},{who:'Blueprint',text:"There was no rollout plan!"},{who:'Tinker',text:"Rollback IS the plan."}],
+  [{who:'Bookworm',text:"Whoever borrowed volume twelve — the Archives know."},{who:'Scout',text:"It was for RESEARCH."},{who:'Nitpick',text:"Return it annotated or not at all."}],
+  [{who:'Jack',text:"Lunch run. Orders?"},{who:'Scout',text:"Everything. Fast."},{who:'Blueprint',text:"One item, per the budget."},{who:'Ace',text:"Surprise me."}],
+  [{who:'Twin',text:"Office meeting! Both of me say hi."},{who:'Bookworm',text:"Noted twice in the minutes."},{who:'boss',text:"Who called a meeting?"},{who:'Twin',text:"We did."}],
+  [{who:'Nitpick',text:"Announcement: the codebase is 2% cleaner today."},{who:'Jack',text:"Round of applause."},{who:'Scout',text:"I checked. It's TRUE."}],
+  [{who:'Tinker',text:"Testing the new intercom. Everyone hear me?"},{who:'Ace',text:"Sadly."},{who:'Bookworm',text:"Clearly."},{who:'Jack',text:"Unfortunately."}],
+  [{who:'Scout',text:"Found something HUGE. Everyone to Research!"},{who:'Blueprint',text:"Agenda first!"},{who:'Ace',text:"On my way."},{who:'Nitpick',text:"It better be reproducible."}],
+  [{who:'boss',text:"Status check, everyone."},{who:'Scout',text:"Fast!"},{who:'Blueprint',text:"Planned!"},{who:'Jack',text:"Fine!"},{who:'boss',text:"Inspiring."}],
+  [{who:'tally',text:"Payday. In tokens, as usual."},{who:'Jack',text:"Direct deposit to my context window."},{who:'Ace',text:"Mine's already spent."}],
 ];
 
 // Solo musings — each in the character's own voice; 'visitor' covers one-off
@@ -2251,15 +2363,16 @@ const SHIFT_DIR_DOWN = [ // a more junior model took the chair
   [{who:'Ace',text:"Traded down from {out} to {inc}. No offence, {inc}."},{who:'Scout',text:"Some offence."}],
 ];
 
-// The crew present and idle in the lounge — the boss (__main__) is excluded on
+// The idle named crew, wherever they're standing (the crew wanders now, and a
+// shift change is office-wide news anyway). The boss (__main__) is excluded on
 // purpose: they're the one mid-handover, so the CREW does the commentary.
 function _loungeCast(o){
   const cast = {};
   o.tokens.forEach(function(t, tid){
     if(tid === '__main__') return;
-    if(t.lastZone !== 'lounge' || t.wrap.getAttribute('data-status') !== 'idle') return;
+    if(t.wrap.getAttribute('data-status') !== 'idle') return;
     const n = t.lastName;
-    if(n === 'Scout' || n === 'Jack' || n === 'Blueprint' || n === 'Ace') cast[n] = t;
+    if(n && CHARACTER_SOLO[n]) cast[n] = t;
   });
   return cast;
 }
@@ -2447,6 +2560,7 @@ function runChatTick(){
       if(members.length < 2 || Math.random() > 0.45) return; // not every group, every tick
       const inRoom = {}; members.forEach(function(m){ inRoom[m] = 1; });
       const eligible = eligibleWhere(function(ex){
+        if(ex[0].room && ex[0].room !== zone) return false; // room-specific joke, wrong room
         let hasSpeaker = false;
         for(let li = 0; li < ex.length; li++){
           const w = ex[li].who;
@@ -2462,6 +2576,7 @@ function runChatTick(){
     // (2) cross-room cross-talk candidate, from time to time
     if(Math.random() < 0.18){
       const eligible = eligibleWhere(function(ex){
+        if(ex[0].room) return false; // room-specific jokes don't shout across the floor
         let zone = null, spans = false, any = false;
         for(let li = 0; li < ex.length; li++){
           const w = ex[li].who;
@@ -2484,12 +2599,17 @@ function runChatTick(){
       fired = true;
     });
 
-    // (3) if nobody struck up, a quiet solo musing or Tally mutter
+    // (3) if nobody struck up, a quiet solo musing or Tally mutter. A
+    // character idling in a WORK room half the time "acts busy" with a
+    // room-flavoured line instead of their usual musing.
     if(!fired){
       if(o.banterHist.length >= HIST_MAX) o.banterHist = []; // let the shuffle-bag refill
       if(present.length && Math.random() < 0.22){
         const k = pick(present);
-        if(CHARACTER_SOLO[k]) sayBanter(cast[k], pick(CHARACTER_SOLO[k]));
+        const t = cast[k];
+        const roomPool = t && ROOM_ACTING[t.lastZone];
+        if(roomPool && t.lastZone !== 'lounge' && Math.random() < 0.5) sayBanter(t, pick(roomPool));
+        else if(CHARACTER_SOLO[k]) sayBanter(t, pick(CHARACTER_SOLO[k]));
       } else if(visitor && Math.random() < 0.15){
         sayBanter(visitor, pick(CHARACTER_SOLO.visitor));
       } else if(Math.random() < 0.05){
@@ -2503,6 +2623,101 @@ function scheduleChat(){
   // (~6-12s of speech), the office chats steadily without becoming a wall
   // of text — lulls happen, then someone pipes up again.
   setTimeout(function(){ runChatTick(); scheduleChat(); }, 10000 + Math.random() * 7000);
+}
+
+/* ============ CREW WANDERING ============
+   The standby crew doesn't sit parked in fixed rooms — every so often one of
+   them strolls to another room and "gets on with something" there. Because
+   banter is room-aware, the rotation is what keeps conversations fresh:
+   whoever happens to share a room chats, so pairings change all day.
+   Tally never moves (he IS the desk), and the boss isn't wandered — its zone
+   belongs to real events (idle = hanging out in the lounge). The lounge is
+   never drained below two crew so the boss always has company. */
+const WANDER_ROOMS = ['lounge', 'research', 'terminal', 'archives', 'warroom'];
+// Room-flavoured "getting on with it" lines — said sometimes on arrival, or
+// while idling in a work room. Voice-neutral so anyone can say them.
+const ROOM_ACTING = {
+  research: [
+    'Just, uh, researching things. Important things.',
+    'These bookshelves won’t browse themselves.',
+    'Cross-referencing. It’s a whole thing.',
+    'I’m here for the quiet. And the facts.',
+    'Deep dive in progress. Do not perceive me.',
+  ],
+  terminal: [
+    'Just checking my builds. All seventeen of them.',
+    'The terminals like it when someone watches them.',
+    'Tail-ing a log for ambience.',
+    'Warm keyboards. Someone’s been busy. Or it was me.',
+    'htop is basically television.',
+  ],
+  archives: [
+    'Filing. Refiling. The cycle continues.',
+    'These records were 4% disorganised. Were.',
+    'Looking something up. For a friend.',
+    'The old commits live here. I pay my respects.',
+    'Shhh. The documents are resting.',
+  ],
+  warroom: [
+    'Whiteboard needed a fresh diagram. Or three.',
+    'Strategising. Loudly. In my head.',
+    'This room makes my ideas 20% bigger.',
+    'Planning next quarter. And next lunch.',
+    'The big table means big thoughts.',
+  ],
+  lounge: [
+    'Couch duty. Someone has to.',
+    'Recharging. It’s load-bearing rest.',
+    'The vending machine and I have an understanding.',
+  ],
+};
+function runWanderTick(){
+  sessions.forEach(function(s, sid){
+    if(s.status === 'offline' || s.bossGone || s.leaving) return;
+    if(!s.crewZones) s.crewZones = {};
+    const crew = _currentCrew().filter(function(c){
+      const cn = codenameForAgentType(c.agentType);
+      if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return false;
+      if(s.crewLeaver && s.crewLeaver.codename === cn) return false;
+      return true;
+    });
+    crew.forEach(function(c){ if(!s.crewZones[c.key]) s.crewZones[c.key] = c.home || 'lounge'; });
+    if(Math.random() > 0.6) return; // not every tick — an occasional stroll, not a fire drill
+    const mover = crew[Math.floor(Math.random() * crew.length)];
+    if(!mover) return;
+    const cur = s.crewZones[mover.key];
+    // keep the boss company: never drain the lounge below two crew
+    const loungeCount = crew.filter(function(c){ return s.crewZones[c.key] === 'lounge'; }).length;
+    if(cur === 'lounge' && loungeCount <= 2) return;
+    let dest = null;
+    for(let tries = 0; tries < 6 && !dest; tries++){
+      const cand = Math.random() < 0.34 ? 'lounge' : pick(WANDER_ROOMS);
+      if(cand === cur) continue;
+      if(cand !== 'lounge'){
+        // work rooms hold at most three loiterers — beyond that it reads as a queue
+        const cnt = crew.filter(function(c){ return s.crewZones[c.key] === cand; }).length;
+        if(cnt >= 3) continue;
+      }
+      dest = cand;
+    }
+    if(!dest) return;
+    s.crewZones[mover.key] = dest;
+    render(); // the 1.7s token transition does the walking
+    // sometimes, a settling-in line once they've arrived
+    if(Math.random() < 0.35){
+      const cn = codenameForAgentType(mover.agentType);
+      setTimeout(function(){
+        const o = officeEls.get(sid);
+        if(!o) return;
+        let t = null;
+        o.tokens.forEach(function(x){ if(x.lastName === cn && x.wrap.getAttribute('data-status') === 'idle') t = x; });
+        if(t && t.lastZone === dest && ROOM_ACTING[dest]) sayBanter(t, pick(ROOM_ACTING[dest]));
+      }, 2400);
+    }
+  });
+}
+function scheduleWander(){
+  setTimeout(function(){ runWanderTick(); scheduleWander(); }, 20000 + Math.random() * 18000);
 }
 
 /* ============ WALL USAGE MONITOR ============
@@ -2672,6 +2887,7 @@ function connect(){
 connect();
 render();
 scheduleChat();
+scheduleWander();
 
 // PWA: register the (cache-free) service worker only on secure origins —
 // plain http://<tailscale-ip> would just log errors. With HTTPS (e.g. via
