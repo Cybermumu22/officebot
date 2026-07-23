@@ -257,6 +257,13 @@
   .is-walking .hand-r{animation:legStepL .34s ease-in-out infinite;}
 
   .token-led{position:absolute; top:-2px; right:-2px; width:7px; height:7px; border-radius:50%; background:var(--st); box-shadow:0 0 5px var(--st); animation:tokenLedBlink 1.6s ease-in-out infinite; z-index:3;}
+  /* reaction FX — tiny bursts anchored INSIDE the token wrap so they follow
+     a walking avatar: confetti pixels on a clean finish, a "!" on failure,
+     a "✓" on a handback. Self-removing (tokenFx) after ~1.5s. */
+  .tok-fx{position:absolute; left:50%; top:-4px; width:0; height:0; pointer-events:none; z-index:6;}
+  .tok-fx span{position:absolute; left:-1px; top:0; width:3px; height:3px; opacity:0; animation:fxPop 1.1s ease-out forwards;}
+  .tok-fx .fx-mark{width:auto; height:auto; background:none !important; font:bold 13px 'VT323',monospace; line-height:1; text-shadow:0 0 5px currentColor;}
+  @keyframes fxPop{0%{transform:translate(0,0); opacity:1;} 100%{transform:translate(var(--dx,0), var(--dy,-18px)); opacity:0;}}
   [data-status="active"] .token-led{animation-duration:.6s;}
   [data-status="offline"] .token-led{animation:none; opacity:.15;}
   @keyframes tokenLedBlink{0%,100%{opacity:1;} 50%{opacity:.3;}}
@@ -1096,6 +1103,49 @@ function displayName(entity){
   return entity.modelNickname || entity.codename || entity.avatar.name;
 }
 
+// ---- reaction FX ----
+// Small one-shot bursts anchored inside a token's wrap (so they ride along
+// with a walking avatar): 'confetti' celebrates a cleanly finished turn,
+// 'grump' (red !) marks a failed tool, 'check' (green ✓) marks a handback.
+function tokenFx(t, kind){
+  if(!t || !t.wrap) return;
+  const holder = document.createElement('div');
+  holder.className = 'tok-fx';
+  if(kind === 'confetti'){
+    const colors = ['#f59e0b', '#22d3ee', '#ec4899', '#10b981', '#a78bfa', '#f87171', '#fde68a'];
+    for(let i = 0; i < 7; i++){
+      const sp = document.createElement('span');
+      sp.style.background = colors[i % colors.length];
+      sp.style.setProperty('--dx', (Math.random() * 40 - 20).toFixed(0) + 'px');
+      sp.style.setProperty('--dy', (-12 - Math.random() * 24).toFixed(0) + 'px');
+      sp.style.animationDelay = (Math.random() * 0.18).toFixed(2) + 's';
+      holder.appendChild(sp);
+    }
+  } else {
+    const sp = document.createElement('span');
+    sp.className = 'fx-mark';
+    sp.textContent = kind === 'check' ? '✓' : '!';
+    sp.style.color = kind === 'check' ? '#34d399' : '#f87171';
+    sp.style.setProperty('--dy', '-16px');
+    holder.appendChild(sp);
+  }
+  t.wrap.appendChild(holder);
+  setTimeout(function(){ holder.remove(); }, 1600);
+}
+// The boss occasionally acknowledges a hand-back — a quick review, in voice.
+const BOSS_PRAISE = [
+  'Good hustle, {n}.', 'Clean handoff, {n}.', "That's why {n} is on payroll.",
+  '{n} delivers. Noted.', 'Reviewed. {n} did fine work.',
+];
+// Fire an fx on a token slightly AFTER handleEvent's render pass, so the
+// token element definitely exists and carries its latest state.
+function _fxFor(sid, aid, kind){
+  setTimeout(function(){
+    const o = officeEls.get(sid);
+    if(o) tokenFx(o.tokens.get(aid || '__main__'), kind);
+  }, 80);
+}
+
 // A bubble is said once, then fades — after `ms` it clears (only if it hasn't
 // changed since). Fixes the "stuck bubble" bug: previously only IDLE bubbles
 // faded (armIdleFade), so the last words of a turn — a "Done with X." after a
@@ -1189,6 +1239,7 @@ function handleEvent(evt){
       break;
     case 'PostToolUse':
       target.status = 'calm';
+      if(!aid) s._didWork = true; // real work happened this turn → confetti-worthy Stop
       // The speechSent gate attaches a given quote to exactly ONE event —
       // if this happens to be the event that got it, show it rather than
       // silently consuming it (else that line would never appear anywhere).
@@ -1203,6 +1254,7 @@ function handleEvent(evt){
     case 'PostToolUseFailure':
       target.status = 'error';
       target.bubble = (evt.tool_name || 'That') + ' didn’t work.';
+      _fxFor(sid, aid, 'grump'); // a little red "!" flare over their head
       chatLog(displayName(target), target.bubble, 'error');
       // failure keeps the error bubble, but any attached speech still
       // reaches the dialogue feed so the line isn't lost
@@ -1214,6 +1266,17 @@ function handleEvent(evt){
       // small-talk with whoever else (including the boss) is parked there.
       target.status = 'done'; target.zone = 'lounge'; target.bubble = pick(HANDBACK_LINES);
       chatLog(displayName(target), target.bubble, 'handback');
+      _fxFor(sid, aid, 'check'); // green ✓ over the returning worker
+      // sometimes the boss reviews the hand-back out loud
+      if(aid && Math.random() < 0.3){
+        (function(cn){
+          setTimeout(function(){
+            const o2 = officeEls.get(sid);
+            const bt = o2 && o2.tokens.get('__main__');
+            if(bt) sayBanter(bt, pick(BOSS_PRAISE).replace('{n}', cn));
+          }, 1600);
+        })(target.codename || 'the crew');
+      }
       if(aid){
         target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, 6000);
         // Settling to idle DROPS the bubble — someone who isn't talking
@@ -1231,6 +1294,7 @@ function handleEvent(evt){
       // (armIdleFade) — never a permanent bubble, and never a filler
       // "Standing by." over someone who isn't talking.
       target.status = 'idle'; target.zone = 'lounge';
+      if(s._didWork){ _fxFor(sid, null, 'confetti'); s._didWork = false; } // turn wrapped cleanly 🎉
       if(evt._speech){
         target.bubble = cleanSpeech(evt._speech, 220);
         target.speechBubble = true;
@@ -2228,11 +2292,8 @@ const TALLY_USAGE_MID = [
   [{who:'tally',text:'{pct}% used, {reset} till a fresh window. Books are tidy.'}],
   [{who:'tally',text:'Halfway ledger looks fine, boss. {pct}%.'},{who:'boss',text:'Fine is my favourite number.'}],
 ];
-const TALLY_USAGE_LOW = [
-  [{who:'tally',text:'Barely {pct}% used, boss. The books look beautiful.'},{who:'boss',text:'Frugal is my middle name.'}],
-  [{who:'tally',text:'Quiet window — {pct}%. I could frame this ledger page.'}],
-  [{who:'tally',text:'{pct}% spent. At this rate we retire rich, boss.'},{who:'boss',text:'Rich in what, exactly?'},{who:'tally',text:'Unspent tokens.'}],
-];
+// (the old TALLY_USAGE_LOW pool is gone — low usage isn't worth a remark;
+// Tally only speaks on band crossings and rare high-burn ambience now)
 function sayStaffLine(o, text){
   const el = o.root.querySelector('.staff-bubble');
   if(!el) return;
@@ -2624,10 +2685,27 @@ function runChatTick(){
       }
       // limit lifted (window/week reset) — the whole office drifts back in
       if(s) reopenOffice(sid);
-      if(Math.random() < 0.06){
-        const pool = pct >= 75 ? TALLY_USAGE_HIGH : pct >= 40 ? TALLY_USAGE_MID : TALLY_USAGE_LOW;
+      // Tally's meter commentary — only when it MATTERS (he used to pipe up
+      // at random every few minutes, sometimes with the same line twice; the
+      // user called it nagging). He now speaks when usage CLIMBS into a new
+      // band (40% / 75% / 90%), plus a very rare ambient remark at already-
+      // high usage — and never the same line twice in a row, never more
+      // often than once a minute (5 min for ambient).
+      const band = pct >= 90 ? 3 : pct >= 75 ? 2 : pct >= 40 ? 1 : 0;
+      if(o.tallyBand == null) o.tallyBand = band;
+      const sinceTally = Date.now() - (o.tallyUsageAt || 0);
+      let tallySpeaks = false;
+      if(band > o.tallyBand && sinceTally > 60000) tallySpeaks = true;                 // crossed up into a new band
+      else if(band >= 2 && sinceTally > 300000 && Math.random() < 0.02) tallySpeaks = true; // rare high-burn ambient
+      o.tallyBand = band; // tracked both directions, so a window reset re-arms the crossing
+      if(tallySpeaks){
+        const pool = band >= 2 ? TALLY_USAGE_HIGH : TALLY_USAGE_MID;
+        let li = Math.floor(Math.random() * pool.length);
+        if(pool.length > 1 && li === o.tallyLastLine) li = (li + 1) % pool.length; // no repeats
+        o.tallyLastLine = li;
+        o.tallyUsageAt = Date.now();
         const reset = _usageData.block.resetInMs != null ? fmtDur(_usageData.block.resetInMs) : 'soon';
-        const ex = pick(pool).map(function(line){
+        const ex = pool[li].map(function(line){
           return { who: line.who, text: line.text.replace('{pct}', pct).replace('{reset}', reset) };
         });
         playCastExchange(o, ex, cast);
