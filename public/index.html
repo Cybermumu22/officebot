@@ -656,12 +656,20 @@ function zoneToPos(zoneKey, index, count){
   // clamp + 44px tier step guarantee it (see .token-bubble CSS).
   // Same-tier neighbours are 2 slots apart, and 2 spacings must exceed a
   // bubble's full width even on a phone floor (~28pp ≥ 92px at 340px wide).
-  const spacing = Math.min(zoneKey === 'lounge' ? 16 : 14, 72 / (count - 1));
+  // Clamp the group to the room's OWN mat, not a global floor band — the old
+  // global 14..86 clamp shoved edge-anchored rooms' occupants sideways:
+  // Research (anchor x:15) had its pair pushed to 14/28 (one ON the mat's
+  // right border) and a third visitor to x:42 — standing in the corridor.
+  const m = ROOM_MATS[zoneKey];
+  const pad = 3.5; // keeps badges/nameplates off the mat border
+  const lo = m ? Math.max(4, z.x - m.w / 2 + pad) : 14;
+  const hi = m ? Math.min(96, z.x + m.w / 2 - pad) : 86;
+  const spacing = Math.min(zoneKey === 'lounge' ? 16 : 14, (hi - lo) / (count - 1));
   const totalWidth = spacing * (count - 1);
   // Clamp the GROUP, not each slot — clamping slots individually squashed
   // the two edge-most occupants together and their same-tier bubbles touched
   // (caught on a 390px viewport: planning room at x22 with 3 people).
-  const startX = clamp(z.x - totalWidth / 2, 14, 86 - totalWidth);
+  const startX = clamp(z.x - totalWidth / 2, lo, hi - totalWidth);
   const x = startX + index * spacing;
   // Stagger sign is tied to the bubble tier (tier = idx % 2, see render()):
   // even/tier-0 occupants stand LOWER, odd/tier-1 ones HIGHER, so the body
