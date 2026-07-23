@@ -801,10 +801,14 @@ const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line st
 // docs-reader in Research (that's where the bookshelves are), the reviewer
 // with the file cabinets in Archives, the tooling/exec pair in Terminal, and
 // the social core in the lounge keeping the boss company.
+// Balanced so every work room has a PAIR and the lounge holds three total:
+// Research: Scout+Bookworm · Archives: Blueprint+Nitpick (process meets
+// review — rigour squared) · Terminal: Twin+Tinker · Lounge: Jack+Ace + the
+// boss (who idles there, counting as the third). Wandering rotates from here.
 const REGULAR_CREW = [
   { key: 'crew-explore', agentType: 'Explore',           home: 'research' }, // Scout    — recon = research
   { key: 'crew-general', agentType: 'general-purpose',   home: 'lounge' },   // Jack
-  { key: 'crew-plan',    agentType: 'Plan',              home: 'lounge' },   // Blueprint
+  { key: 'crew-plan',    agentType: 'Plan',              home: 'archives' }, // Blueprint — plans get filed; pairs with Nitpick
   { key: 'crew-claude',  agentType: 'claude',            home: 'lounge' },   // Ace
   { key: 'crew-guide',   agentType: 'claude-code-guide', home: 'research' }, // Bookworm — manuals live on the shelves
   { key: 'crew-review',  agentType: 'code-reviewer',     home: 'archives' }, // Nitpick  — reviews the filed records
