@@ -1,0 +1,42 @@
+{
+  "name": "officebot",
+  "version": "1.0.0",
+  "description": "A live pixel-art 'office' dashboard for your Claude Code sessions — watch your agents work, delegate, and clock out, with usage tracking. Zero dependencies, fully local.",
+  "bin": {
+    "officebot": "cli.js"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node cli.js start",
+    "setup": "node cli.js setup",
+    "demo": "node cli.js demo"
+  },
+  "files": [
+    "cli.js",
+    "server.js",
+    "snapshot.js",
+    "demo.js",
+    "public/index.html",
+    "public/avatars.js",
+    "public/manifest.json",
+    "public/sw.js",
+    "public/icon-192.png",
+    "public/icon-512.png",
+    "README.md",
+    "ARCHITECTURE.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "dashboard",
+    "hooks",
+    "visualization",
+    "agents",
+    "observability"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}

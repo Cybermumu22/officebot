@@ -1,0 +1,2403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f1220">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>officebot — Claude Code Live Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080b14; --surface:#0f1220; --accent:#e63946; --accent2:#7c3aed;
+    --green:#10b981; --yellow:#f59e0b; --cyan:#06b6d4; --border:#232742;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:radial-gradient(ellipse at top, #131a2e 0%, var(--bg) 60%);
+    color:#e2e4f0; font-family:'VT323', monospace; font-size:18px;
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    padding:14px 22px; border-bottom:1px solid var(--border);
+    background:rgba(15,18,32,.8); backdrop-filter:blur(4px);
+    position:sticky; top:0; z-index:5;
+  }
+  header h1{
+    font-family:'Orbitron',sans-serif; font-size:20px; font-weight:900;
+    letter-spacing:2px; color:#fff;
+    text-shadow:0 0 8px var(--accent2), 0 0 16px rgba(124,58,237,.5);
+  }
+  header h1 span{color:var(--cyan);}
+  .hdr-right{display:flex; align-items:center; gap:18px; font-size:16px; color:#9096b5;}
+  .conn-dot{width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; background:var(--accent); box-shadow:0 0 6px var(--accent);}
+  .conn-dot.on{background:var(--green); box-shadow:0 0 8px var(--green);}
+  main{flex:1; padding:26px; display:flex; flex-direction:column; gap:22px;}
+  .cur{color:var(--cyan); animation:tokenCursorBlink 1s step-end infinite;}
+  @keyframes tokenCursorBlink{0%,49%{opacity:1;} 50%,100%{opacity:0;}}
+  /* Shown instead of a blank box when no session is connected yet — the
+     office/rooms are always visible, just dimmed and empty of people. */
+  .office-placeholder{opacity:.6;}
+  .office-placeholder .office-plaque{color:#8890b8;}
+
+  /* ============ OFFICE FLOOR ============ */
+  #floor{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(480px,1fr)); gap:28px;
+    align-items:start;
+  }
+  .office{
+    max-width:640px; width:100%; margin:0 auto;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:16px; box-shadow:0 6px 22px rgba(0,0,0,.4);
+    animation:officeIn .45s ease;
+  }
+  @keyframes officeIn{from{opacity:0; transform:translateY(10px) scale(.97);} to{opacity:1; transform:none;}}
+
+  .office-head{display:flex; align-items:baseline; gap:10px; margin-bottom:10px; padding:0 2px;}
+  .office-plaque{font-family:'Orbitron',sans-serif; font-size:.72rem; font-weight:700; color:#fff; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .office-cwd{font-family:'VT323',monospace; font-size:1rem; color:#7c8ab0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;}
+
+  .office-floor{
+    position:relative; height:400px; border-radius:8px;
+    border:1px solid rgba(255,255,255,.05);
+    overflow:hidden; touch-action:none; /* this element owns pan/zoom gestures, see initFloorCamera() */
+    cursor:grab;
+  }
+  .office-floor.panning{cursor:grabbing;}
+  /* Office flooring: carpet-tile checkerboard + grout lines over an ambient
+     vignette, instead of the old bare neon grid — reads as a real floor. */
+  .floor-camera{
+    position:absolute; inset:0; transform-origin:0 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 29px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 29px),
+      conic-gradient(rgba(139,150,220,.03) 25%, transparent 25% 50%, rgba(139,150,220,.03) 50% 75%, transparent 75%) 0 0/58px 58px,
+      radial-gradient(ellipse at 50% 40%, #10142c, #05070f 88%);
+  }
+  /* Back wall along the top edge: panel seams, a baseboard, and wall props
+     (windows with a synthwave night view, clock, poster, the EXIT door). */
+  .office-wall{
+    position:absolute; left:0; top:0; width:100%; height:13%;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 46px),
+      linear-gradient(#1a1f3d, #121631);
+    border-bottom:3px solid #262e55;
+    box-shadow:0 4px 10px rgba(0,0,0,.55);
+  }
+  /* Room areas: each zone stands on its own flooring — carpet weaves for
+     Planning/Research, raised server-room tiles for Terminal, shelf-room
+     stripes for Archives, wood planks for the Lounge, a doormat at the Exit.
+     Textures are inline per-mat (ROOM_MATS); this rule is the shared chrome. */
+  .room-mat{
+    position:absolute; transform:translate(-50%,-50%);
+    border-radius:10px; border:1px solid rgba(255,255,255,.055);
+    box-shadow:inset 0 0 26px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
+    transition:border-color .35s, box-shadow .35s;
+  }
+  .room-mat.mat-active{
+    border-color:var(--zc,#7c3aed);
+    box-shadow:inset 0 0 38px -10px var(--zc,#7c3aed), 0 2px 8px rgba(0,0,0,.35);
+  }
+  .tokens-layer{position:absolute; inset:0;}
+  .floor-reset{
+    position:absolute; top:8px; right:8px; z-index:5; width:26px; height:26px; border-radius:7px;
+    background:rgba(10,12,24,.75); border:1px solid rgba(255,255,255,.15); color:#9096b5;
+    font-size:14px; line-height:1; cursor:pointer; backdrop-filter:blur(2px);
+  }
+  .floor-reset:hover{color:#fff; border-color:rgba(255,255,255,.35);}
+
+  /* Zones are now compact SIGN PLATES sitting on the top edge of their
+     room mat (the mat is the room; the plate just names it) — like a little
+     mounted room sign. Occupants still gather at the zone's x/y anchor,
+     which is the mat's centre. */
+  .zone{
+    position:absolute; transform:translate(-50%,-50%);
+    display:flex; align-items:center; gap:5px; padding:3px 9px;
+    border-radius:999px; background:rgba(7,9,20,.82);
+    border:1px solid rgba(255,255,255,.13);
+    box-shadow:0 2px 6px rgba(0,0,0,.5);
+    white-space:nowrap;
+    transition:border-color .35s, box-shadow .35s;
+  }
+  .zone.zone-active{border-color:var(--zc,#7c3aed); box-shadow:0 0 16px -3px var(--zc,#7c3aed), 0 2px 6px rgba(0,0,0,.5);}
+  /* Decorative furniture — colourful pixel art in the same style as the
+     avatar roster (crispEdges rects, top-lit shading), with a drop shadow
+     for a bit of depth. Still purely cosmetic: non-interactive, behind the
+     people, slightly translucent so the avatars stay the brightest thing. */
+  .prop{position:absolute; transform:translate(-50%,-50%); opacity:.8; pointer-events:none; z-index:0; filter:drop-shadow(0 3px 2px rgba(0,0,0,.55));}
+  .prop svg{display:block; width:100%; height:auto;}
+  /* FLAT props (the rug): no drop-shadow — a shadow under a flat rug made it
+     read as a floating slab rather than fabric on the floor. */
+  .prop-flat{filter:none; opacity:.75;}
+  .zone-icon{width:11px; height:11px; color:#7c8ab0; opacity:.85; transition:color .35s, opacity .35s; flex-shrink:0;}
+  .zone.zone-active .zone-icon{color:var(--zc,#7c3aed); opacity:1;}
+  .zone-icon svg{width:100%; height:100%; display:block;}
+  .zone-label{font-family:'Orbitron',sans-serif; font-size:.38rem; letter-spacing:.7px; color:#8a92b8; text-transform:uppercase;}
+
+  /* ---- avatar tokens (persistent DOM nodes so left/top can transition) ----
+     .agent-token is positioned+centered exactly on the zone point; .token-badge
+     is its only sized box, so it IS the anchor. Bubble/legs/shadow/name are
+     absolutely positioned off the badge instead of stacking in normal flow —
+     otherwise their combined height drags the visible avatar well above its
+     zone (confirmed: badge rendered ~60px above the intended zone box). */
+  .agent-token{
+    position:absolute; transform:translate(-50%,-50%);
+    transition:left 1.7s cubic-bezier(.4,0,.2,1), top 1.7s cubic-bezier(.4,0,.2,1);
+    z-index:2;
+  }
+  .agent-token.token-main{z-index:3;}
+
+  /* Slightly smaller than they used to be (24/32) — traded for roomier
+     speech bubbles that can show a full thought. */
+  .token-badge{position:relative; width:21px; height:21px;}
+  .token-main .token-badge{width:28px; height:28px;}
+
+  .token-bubble{
+    position:absolute; left:50%; bottom:100%; transform:translateX(-50%);
+    /* Same-zone occupants alternate a "tier" (see render()) so neighboring
+       bubbles stack at two different heights instead of fighting for the
+       same strip of space right above the badges — a bubble is much wider
+       than the horizontal gap between avatar slots, so avatar spacing alone
+       (however evenly spread) was never going to stop bubble text from
+       overlapping. Bubbles show the FULL speech now (up to a 6-line clamp,
+       beyond which the DIALOGUE panel has the rest), so heights vary too
+       much for tiers alone to guarantee separation — the tier is just a
+       head start; the real guarantee is resolveBubbleLayout(), which
+       measures every visible bubble's actual box after each render and
+       adds --lift to any that would overlap a neighbour. */
+    margin-bottom:calc(9px + var(--tier, 0) * 30px + var(--lift, 0px));
+    /* width:max-content is load-bearing: an abs-positioned box otherwise
+       shrink-to-fits against its containing block — the 24px badge — and
+       collapses to one character per line. max-width still caps it. */
+    width:max-content; max-width:150px; padding:4px 7px; border-radius:8px;
+    background:#11142a; border:1px solid var(--st); color:#e2e4f0;
+    font-family:'VT323',monospace; font-size:.78rem; line-height:1.25; text-align:center;
+    opacity:0; white-space:normal; word-break:break-word;
+    transition:opacity .25s; z-index:calc(4 + var(--tier, 0));
+  }
+  /* The clamp lives on an inner span, NOT the bubble itself — the bubble's
+     tail arrow is a ::after hanging OUTSIDE the box (top:100%), so
+     overflow:hidden on the bubble would clip the arrow right off. */
+  .token-bubble .tb-text{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden;}
+  .token-bubble.show{opacity:1;}
+  .token-bubble.pulse{animation:bubblePop .25s ease;}
+  @keyframes bubblePop{0%{transform:translateX(-50%) scale(.86);} 100%{transform:translateX(-50%) scale(1);}}
+  .token-bubble::after{
+    content:''; position:absolute; left:50%; top:100%; transform:translateX(-50%);
+    border:5px solid transparent; border-top-color:var(--st);
+  }
+  /* Flipped bubble: when an avatar stands near the top of the floor, a
+     bubble anchored above its head pokes past the floor's top edge and
+     overflow:hidden cuts its first lines off. resolveBubbleLayout() detects
+     that and adds .below — the bubble hangs UNDER the avatar instead (the
+     26px base margin clears the legs/shadow/nameplate), with the tail
+     arrow flipped to point up at the speaker. */
+  .token-bubble.below{
+    bottom:auto; top:100%;
+    margin-bottom:0;
+    margin-top:calc(26px + var(--tier, 0) * 30px + var(--lift, 0px));
+  }
+  .token-bubble.below::after{
+    top:auto; bottom:100%;
+    border-top-color:transparent; border-bottom-color:var(--st);
+  }
+
+  /* Plain sprite, no frame — just the character art with a soft colored glow
+     (a drop-shadow, which hugs the art's own silhouette) standing in for the
+     status ring a bordered badge used to give. No border, no circle crop,
+     no background box, no glass overlay. */
+  .token-badge-face{
+    position:absolute; inset:0;
+    animation:tokenBob 2.6s ease-in-out infinite;
+    transition:filter .4s;
+  }
+  .token-badge-face svg{width:100%; height:100%;}
+  /* Idle = the sprite's ORIGINAL colours, no glow — glow is a "working"
+     signal only (user request; the old dim+desaturate+glow read as a
+     permanent effect rather than a status). */
+  [data-status="idle"] .token-badge-face{filter:none; animation-duration:4.2s;}
+  [data-status="thinking"] .token-badge-face, [data-status="calm"] .token-badge-face{filter:brightness(.95) drop-shadow(0 0 8px var(--st)); animation-duration:2.3s;}
+  [data-status="active"] .token-badge-face{filter:brightness(1.18) saturate(1.2) drop-shadow(0 0 12px var(--st)); animation-duration:.5s;}
+  [data-status="error"] .token-badge-face{filter:brightness(1) hue-rotate(-6deg) drop-shadow(0 0 10px var(--st)); animation:tokenGlitch .3s steps(2) 3;}
+  [data-status="done"] .token-badge-face{filter:brightness(1.05) drop-shadow(0 0 10px var(--st));}
+  [data-status="offline"] .token-badge-face{filter:grayscale(1) brightness(.35); animation:none;}
+  [data-status="courier"] .token-badge-face{filter:brightness(1.1) drop-shadow(0 0 9px var(--st)); animation-duration:1.2s;}
+  @keyframes tokenBob{0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(-3px) rotate(0);}}
+  @keyframes tokenGlitch{
+    0%{transform:translate(0,0);} 25%{transform:translate(-2px,1px);}
+    50%{transform:translate(2px,-1px);} 75%{transform:translate(-1px,0);} 100%{transform:translate(0,0);}
+  }
+
+  /* Walking cue: while in transit the badge gets a snappier bob+waddle and two
+     little feet alternate underneath — no per-limb rig on the art itself,
+     just enough motion to read as "walking" rather than sliding. */
+  .is-walking .token-badge-face{animation:tokenWalk .34s ease-in-out infinite !important;}
+  @keyframes tokenWalk{
+    0%,100%{transform:translateY(0) rotate(-4deg);}
+    50%{transform:translateY(-4px) rotate(4deg);}
+  }
+  .token-legs{position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:-3px; display:flex; gap:4px; z-index:0;}
+  .leg{width:4px; height:6px; border-radius:2px; background:var(--st); opacity:.8;}
+  .is-walking .leg-l{animation:legStepL .34s ease-in-out infinite;}
+  .is-walking .leg-r{animation:legStepR .34s ease-in-out infinite;}
+  @keyframes legStepL{0%,100%{transform:translateY(-2px) scaleY(.75);} 50%{transform:translateY(0) scaleY(1);}}
+  @keyframes legStepR{0%,100%{transform:translateY(0) scaleY(1);} 50%{transform:translateY(-2px) scaleY(.75);}}
+
+  /* Hands — same treatment as the legs. They live INSIDE .token-badge-face
+     so they inherit the bob/walk/glitch/brightness of the body for free;
+     while walking they pump on the legs' keyframes, cross-phased (left hand
+     forward with right leg, like an actual gait). */
+  .hand{position:absolute; top:52%; width:4px; height:6px; border-radius:2px; background:var(--st); opacity:.8; z-index:2;}
+  .hand-l{left:-5px;} .hand-r{right:-5px;}
+  .is-walking .hand-l{animation:legStepR .34s ease-in-out infinite;}
+  .is-walking .hand-r{animation:legStepL .34s ease-in-out infinite;}
+
+  .token-led{position:absolute; top:-2px; right:-2px; width:7px; height:7px; border-radius:50%; background:var(--st); box-shadow:0 0 5px var(--st); animation:tokenLedBlink 1.6s ease-in-out infinite; z-index:3;}
+  [data-status="active"] .token-led{animation-duration:.6s;}
+  [data-status="offline"] .token-led{animation:none; opacity:.15;}
+  @keyframes tokenLedBlink{0%,100%{opacity:1;} 50%{opacity:.3;}}
+
+  /* "Usual crew" standby tokens (see REGULAR_CREW) — full original colours
+     like everyone else at rest (the old .55 fade is gone with the
+     idle-means-original-tone change); only the missing LED marks them as
+     off-the-clock. */
+  .token-crew .token-led{display:none;}
+
+  [data-status="done"] .token-badge-face::after{
+    content:'\2713'; position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
+    font-size:1.3rem; color:var(--st); background:rgba(5,7,15,.55);
+    animation:tokenDoneFlash 1.3s ease-out forwards;
+  }
+  @keyframes tokenDoneFlash{0%{opacity:0;} 18%{opacity:1;} 70%{opacity:1;} 100%{opacity:0;}}
+
+  .token-shadow{
+    position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:6px;
+    width:20px; height:5px; border-radius:50%; background:rgba(0,0,0,.5); filter:blur(1px);
+  }
+  .token-shadow.arrive{animation:shadowPulse .4s ease;}
+  @keyframes shadowPulse{0%{transform:translateX(-50%) scale(2); opacity:.15;} 100%{transform:translateX(-50%) scale(1); opacity:1;}}
+
+  .token-name{
+    position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:14px;
+    font-family:'Orbitron',sans-serif; font-size:.4rem; color:#fff; text-shadow:0 0 4px rgba(0,0,0,.9); white-space:nowrap;
+  }
+
+  /* ============ WALL: CLOCK + USAGE MONITORS ============
+     Three equal-height boxes mounted on the back wall: a live date/time
+     CLOCK (with the weekly-reset countdown), a WEEKLY monitor (overall +
+     Fable bars), and a 5-HOUR monitor. All share .wall-box so they're the
+     exact same height and read as a matched set; widths are % of the floor
+     so they scale WITH the wall. Height is a touch under the 13% wall band.
+     Lines are kept short enough to never need truncation. Inside
+     .floor-camera, so pinch-zoom magnifies them. */
+  .wall-box{
+    position:absolute; transform:translateX(-50%); top:1.4%; height:10.4%;
+    box-sizing:border-box; padding:2px 5px; border-radius:3px;
+    background:#04060f; border:1px solid #2a3158;
+    box-shadow:0 0 8px rgba(6,182,212,.15), inset 0 0 6px rgba(0,0,0,.8);
+    font-family:'VT323',monospace; z-index:1;
+    display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden;
+  }
+  .ws-head{display:flex; align-items:center; justify-content:space-between;}
+  .ws-title{font-family:'Orbitron',sans-serif; font-size:5px; letter-spacing:.5px; color:#7c8ab0; white-space:nowrap;}
+  .ws-led{width:3px; height:3px; border-radius:50%; background:#10b981; box-shadow:0 0 4px #10b981; animation:tokenLedBlink 2s ease-in-out infinite; flex-shrink:0;}
+  .ws-led.warn{background:#e63946; box-shadow:0 0 5px #e63946; animation-duration:.6s;}
+  .ws-bar{height:3px; border-radius:2px; background:#11142a; border:1px solid #232742; overflow:hidden;}
+  .ws-fill{display:block; height:100%; width:0%; background:linear-gradient(90deg,#10b981,#06b6d4); transition:width .8s ease;}
+  .ws-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+  .ws-fill.hot{background:linear-gradient(90deg,#e63946,#f97316);}
+  .ws-line{font-size:8px; line-height:1.15; color:#9096b5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .ws-line b{color:#e2e4f0; font-weight:400;}
+  .ws-fline{color:#9096b5;}
+  .ws-warn{display:none;}
+  /* live per-session token counter on the 5-hour monitor: dim at rest,
+     glows cyan while the office's session is actively working */
+  .ws-stok{color:#7c8ab0; transition:color .3s, text-shadow .3s;}
+  .office.working .ws-stok{color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.7);}
+  .ws-alltime{color:#9096b5;}
+  /* live clock box */
+  .wc-date{font-family:'Orbitron',sans-serif; font-size:5.5px; letter-spacing:1px; color:#7c8ab0; text-align:center; white-space:nowrap;}
+  .wc-time{font-size:14px; line-height:1; color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.5); letter-spacing:1px; text-align:center; white-space:nowrap;}
+  .wc-reset{font-size:7px; color:#ffb347; text-align:center; white-space:nowrap; min-height:8px;}
+  /* Tally, the accountant — static office staff at his desk under the
+     monitor. Not a session token: no events, no bubbles, just vibes. */
+  .staff{position:absolute; transform:translate(-50%,-50%); z-index:1; pointer-events:none;}
+  .staff-face{width:26px; height:26px; animation:tokenBob 3.4s ease-in-out infinite; filter:drop-shadow(0 0 7px #10b981);}
+  .staff-face svg{width:100%; height:100%; display:block;}
+  .staff-name{position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:1px; font-family:'Orbitron',sans-serif; font-size:.38rem; color:#fff; text-shadow:0 0 4px rgba(0,0,0,.9); white-space:nowrap;}
+  /* Tally's bubble opens SIDEWAYS (to his right) — a bubble above his head
+     would cover the wall monitor he stands under. */
+  .staff-bubble{
+    position:absolute; left:130%; top:40%; transform:translateY(-50%);
+    width:max-content; max-width:112px; padding:3px 6px; border-radius:8px;
+    background:#11142a; border:1px solid #10b981; color:#e2e4f0;
+    font-family:'VT323',monospace; font-size:.72rem; line-height:1.25; text-align:center;
+    opacity:0; transition:opacity .25s; z-index:4;
+  }
+  .staff-bubble.show{opacity:1;}
+  .staff-bubble::after{
+    content:''; position:absolute; right:100%; top:50%; transform:translateY(-50%);
+    border:5px solid transparent; border-right-color:#10b981;
+  }
+
+  /* ============ DIALOGUE + EVENT LOG PANELS ============ */
+  #panels{display:grid; grid-template-columns:1.4fr 1fr; gap:18px; align-items:start;}
+  .panel-head{
+    font-family:'Orbitron',sans-serif; font-size:.62rem; font-weight:700; letter-spacing:1.5px;
+    color:#7c8ab0; margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  }
+  .panel-head .hint{font-family:'VT323',monospace; font-size:.85rem; color:#4a5070; letter-spacing:0; font-weight:400;}
+
+  /* Chat feed: every speech-bubble line, un-truncated, newest at the bottom
+     (column-reverse keeps it auto-pinned there, same trick as #log). Colour
+     carries importance: real speech cyan, prompts amber, delegation purple,
+     arrivals/handbacks green, errors red, lounge banter dim italic. */
+  #chat{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:10px 14px; height:200px; overflow-y:auto; font-size:16px;
+    display:flex; flex-direction:column-reverse;
+  }
+  #chat .cline{line-height:1.45; word-break:break-word;}
+  #chat .cline .t{color:#3f4468; margin-right:6px;}
+  #chat .cline .who{margin-right:6px;}
+  /* Long lines (> ~220 chars) clamp to 3 lines with a tap-to-expand toggle —
+     the FULL text is always in the DOM, the clamp is display-only. Expanded
+     view renders the message's own paragraph breaks (pre-wrap). */
+  #chat .cline.clamped{cursor:pointer;}
+  #chat .cline.clamped .txt{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;}
+  #chat .cline.clamped.open .txt{-webkit-line-clamp:unset; white-space:pre-wrap;}
+  #chat .cline-more{color:#5a6089; font-size:.85em; margin-left:2px; user-select:none;}
+  #chat .cline.clamped:hover .cline-more{color:#9096b5;}
+  .k-speech .who{color:#22d3ee;}   .k-speech .txt{color:#e2e4f0;}
+  .k-prompt .who{color:#f59e0b;}   .k-prompt .txt{color:#e8d5a8;}
+  .k-delegate .who{color:#a78bfa;} .k-delegate .txt{color:#cfc3f7;}
+  .k-arrive .who,.k-handback .who{color:#10b981;} .k-arrive .txt,.k-handback .txt{color:#9fdec4;}
+  .k-error .who{color:#e63946;}    .k-error .txt{color:#f3a7ae;}
+  .k-status .who{color:#7c8ab0;}   .k-status .txt{color:#6b7094;}
+  .k-banter .who{color:#8890b8;}   .k-banter .txt{color:#7d84ad; font-style:italic;}
+
+  #log{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:10px 14px; height:200px; overflow-y:auto; font-size:15px; color:#6b7094;
+    display:flex; flex-direction:column-reverse;
+  }
+  #log .line{white-space:pre-wrap; word-break:break-all; line-height:1.4;}
+  #log .line .t{color:#3f4468;}
+  #log .line .ev{color:var(--cyan);}
+  /* "moment" lines — home/holiday/handover/sign-off. Stand out (amber, a
+     left rule, faintly boxed) so a user whose screen was off can scroll the
+     log and spot exactly when the office emptied. */
+  #log .line.moment{border-left:2px solid #ffb347; padding-left:6px; margin:2px 0; background:rgba(245,158,11,.06);}
+  #log .line.moment .mo{color:#ffcf8a;}
+
+  /* ============ MOBILE ============ */
+  @media (max-width:640px){
+    body{font-size:16px;}
+    header{padding:10px 14px;}
+    header h1{font-size:16px; letter-spacing:1px;}
+    .hdr-right{font-size:12px; gap:10px;}
+    main{padding:14px; gap:16px;}
+    #floor{grid-template-columns:1fr; gap:18px;}
+    .office{padding:10px; border-radius:10px;}
+    .office-plaque{font-size:.62rem;}
+    .office-cwd{font-size:.85rem;}
+    .office-floor{height:340px; border-radius:6px;}
+    /* phone wall band is only ~44px tall and narrow — shrink the text a
+       touch and hide decorative props (m-hide) so the three boxes fit */
+    .ws-line{font-size:6.8px;}
+    .ws-title{font-size:4.5px;}
+    .wc-date{font-size:4.6px;}
+    .wc-time{font-size:11px;}
+    .wc-reset{font-size:6px;}
+    .ws-model{display:none;}
+    .m-hide{display:none;}
+    .zone{padding:2px 6px; gap:4px;}
+    .zone-icon{width:9px; height:9px;}
+    .zone-label{font-size:.3rem;}
+    .prop{transform:translate(-50%,-50%) scale(.8);}
+    .token-badge{width:17px; height:17px;}
+    .token-main .token-badge{width:23px; height:23px;}
+    .token-bubble{font-size:.7rem; max-width:118px; padding:3px 6px; margin-bottom:calc(7px + var(--tier, 0) * 26px + var(--lift, 0px));}
+    .token-bubble.below{margin-bottom:0; margin-top:calc(22px + var(--tier, 0) * 26px + var(--lift, 0px));}
+    /* one line fewer than desktop — a short phone floor can't stack two
+       6-line bubbles without running past the floor's top edge */
+    .token-bubble .tb-text{-webkit-line-clamp:5;}
+    .token-name{font-size:.34rem; margin-top:12px;}
+    #panels{grid-template-columns:1fr; gap:14px;}
+    #chat{height:170px; font-size:14px; padding:8px 10px;}
+    #log{height:120px; font-size:13px; padding:8px 10px;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>AGENT <span>VIZ</span></h1>
+  <div class="hdr-right">
+    <span><span class="conn-dot" id="conn-dot"></span><span id="conn-text">connecting…</span></span>
+    <span id="evt-count">0 events</span>
+  </div>
+</header>
+<main>
+  <div id="floor"></div>
+  <div id="panels">
+    <section>
+      <div class="panel-head">DIALOGUE <span class="hint">full lines — colour = important</span></div>
+      <div id="chat"></div>
+    </section>
+    <section>
+      <div class="panel-head">EVENT LOG</div>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+<script src="avatars.js"></script>
+<script>
+const STATUS_COLOR = { idle:'#5a6089', thinking:'#7c3aed', calm:'#7c3aed', active:'#06b6d4', error:'#e63946', done:'#10b981', offline:'#33364f', courier:'#f59e0b' };
+
+const ZONE_ICONS = {
+  planning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M6.5 14l3-4 3 2.5 3-5 2 3"/><circle cx="17.5" cy="7" r="1" fill="currentColor" stroke="none"/><path d="M9 20h6"/></svg>',
+  exit:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="10" height="18" rx="1"/><circle cx="11" cy="12" r=".6" fill="currentColor" stroke="none"/><path d="M15 12h6"/><path d="M18 9l3 3-3 3"/></svg>',
+  research: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-5.2-5.2"/></svg>',
+  terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M7 9l3 2.5L7 14"/><path d="M12 14h5"/><path d="M9 21h6"/><path d="M12 17v4"/></svg>',
+  archives: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M5 10h14"/><path d="M5 16h14"/><path d="M10 6.5h4"/><path d="M10 13h4"/></svg>',
+  lounge:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h11v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V9z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><path d="M8 5c0 1-1 1-1 2"/><path d="M12 5c0 1-1 1-1 2"/></svg>',
+};
+
+// "warroom" kept as the internal key (used by zoneForTool etc) — only the
+// label/icon changed to something self-explanatory ("PLANNING": where an
+// operative goes right after a new prompt, or to brief a spawning subagent).
+// The lounge is the big room at the bottom (see the .zone[data-zone=lounge]
+// CSS) — its x/y is still the anchor point occupants gather around.
+const ZONES = {
+  warroom:  { x:22, y:28, label:'PLANNING', icon:ZONE_ICONS.planning },
+  // exit is just THE DOOR on the wall — no mat, no sign plate (skipped in
+  // officeSkeletonHtml); departing avatars walk right up to the doorway.
+  exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
+  research: { x:15, y:55, label:'RESEARCH', icon:ZONE_ICONS.research },
+  terminal: { x:50, y:56, label:'TERMINAL', icon:ZONE_ICONS.terminal },
+  archives: { x:85, y:55, label:'ARCHIVES', icon:ZONE_ICONS.archives },
+  lounge:   { x:50, y:84, label:'LOUNGE',   icon:ZONE_ICONS.lounge },
+};
+
+// Each room stands on its own flooring — a "mat" (percent-sized rounded
+// panel, centred on the zone anchor) with a per-room texture built from CSS
+// gradients: carpet weaves for Planning/Research, raised-tile server-room
+// floor for Terminal, shelf-room stripes for Archives, wood planks for the
+// Lounge, and a little doormat under the Exit. The zone sign plate sits on
+// the mat's top edge; occupants gather at the mat's centre.
+const ROOM_MATS = {
+  warroom:  { w:24, h:26, bg:'repeating-linear-gradient(45deg, #10142c 0 6px, #0e1226 6px 12px)' },
+  research: { w:24, h:26, bg:'repeating-linear-gradient(-45deg, #0e1a26 0 6px, #0c1622 6px 12px)' },
+  terminal: { w:26, h:26, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(#0d101f, #0b0e1b)' },
+  archives: { w:24, h:26, bg:'repeating-linear-gradient(90deg, #15102a 0 9px, #120d24 9px 18px)' },
+  // Widened 58% → 76% (2026-07): the permanent 4-man crew + the boss + a
+  // settling subagent is a real crowd, and people were spilling into the
+  // hallway. Furniture hugs the left/right edges (see PROPS) so the middle
+  // band is clear standing room.
+  lounge:   { w:76, h:26, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(#2a1a0e, #20130a)' },
+};
+
+// Decorative office furniture — colourful pixel art in the same visual
+// language as the avatar roster (crispEdges rects, top-lit shading: lighter
+// tone on top faces, darker in front), positioned in floor-percent coords.
+// Purely cosmetic (no pointer events, behind the people): a couch with
+// throw pillows/coffee table/lamp/plants furnish the big lounge, a water
+// cooler and vending machine flank it, and each work room gets a matching
+// prop (whiteboard, bookshelf, desk, server rack, filing cabinet, boxes).
+const PROP_ART = {
+  couch:    '<svg viewBox="0 0 44 24" shape-rendering="crispEdges"><rect x="3" y="5" width="38" height="9" fill="#5b21b6"/><rect x="3" y="5" width="38" height="2" fill="#8b5cf6"/><rect x="3" y="12" width="38" height="7" fill="#4c1d95"/><rect x="5" y="12" width="16" height="2" fill="#7c3aed"/><rect x="23" y="12" width="16" height="2" fill="#7c3aed"/><rect x="8" y="8" width="6" height="4" fill="#f59e0b"/><rect x="8" y="8" width="6" height="1" fill="#fbbf24"/><rect x="30" y="8" width="6" height="4" fill="#06b6d4"/><rect x="30" y="8" width="6" height="1" fill="#67e8f9"/><rect x="1" y="9" width="4" height="11" fill="#6d28d9"/><rect x="1" y="9" width="4" height="2" fill="#a78bfa"/><rect x="39" y="9" width="4" height="11" fill="#6d28d9"/><rect x="39" y="9" width="4" height="2" fill="#a78bfa"/><rect x="4" y="20" width="4" height="3" fill="#1e1b4b"/><rect x="36" y="20" width="4" height="3" fill="#1e1b4b"/></svg>',
+  table:    '<svg viewBox="0 0 26 16" shape-rendering="crispEdges"><rect x="8" y="2" width="4" height="3" fill="#06b6d4"/><rect x="8" y="2" width="4" height="1" fill="#67e8f9"/><rect x="15" y="3" width="4" height="2" fill="#e63946"/><rect x="2" y="5" width="22" height="2" fill="#f59e0b"/><rect x="2" y="7" width="22" height="3" fill="#b45309"/><rect x="4" y="10" width="2" height="5" fill="#78350f"/><rect x="20" y="10" width="2" height="5" fill="#78350f"/><rect x="6" y="12" width="14" height="1" fill="#92400e"/></svg>',
+  lamp:     '<svg viewBox="0 0 16 26" shape-rendering="crispEdges"><rect x="4" y="2" width="8" height="2" fill="#fbbf24"/><rect x="3" y="4" width="10" height="4" fill="#f59e0b"/><rect x="4" y="8" width="8" height="1" fill="#fde68a"/><rect x="7" y="9" width="2" height="12" fill="#64748b"/><rect x="4" y="21" width="8" height="2" fill="#475569"/><rect x="4" y="23" width="8" height="1" fill="#334155"/></svg>',
+  plant:    '<svg viewBox="0 0 20 26" shape-rendering="crispEdges"><rect x="9" y="9" width="2" height="7" fill="#78350f"/><rect x="7" y="2" width="6" height="5" fill="#34d399"/><rect x="4" y="4" width="4" height="4" fill="#10b981"/><rect x="12" y="4" width="4" height="4" fill="#059669"/><rect x="6" y="7" width="8" height="4" fill="#10b981"/><rect x="3" y="8" width="3" height="3" fill="#059669"/><rect x="14" y="8" width="3" height="3" fill="#34d399"/><rect x="5" y="16" width="10" height="2" fill="#d97706"/><rect x="6" y="18" width="8" height="7" fill="#92400e"/><rect x="6" y="24" width="8" height="1" fill="#78350f"/></svg>',
+  cooler:   '<svg viewBox="0 0 18 26" shape-rendering="crispEdges"><rect x="5" y="2" width="8" height="6" fill="#22d3ee"/><rect x="5" y="2" width="8" height="2" fill="#a5f3fc"/><rect x="4" y="8" width="10" height="12" fill="#cbd5e1"/><rect x="4" y="8" width="10" height="2" fill="#e2e8f0"/><rect x="5" y="12" width="3" height="2" fill="#06b6d4"/><rect x="10" y="12" width="3" height="2" fill="#e63946"/><rect x="4" y="20" width="10" height="3" fill="#94a3b8"/><rect x="6" y="23" width="6" height="2" fill="#475569"/></svg>',
+  vending:  '<svg viewBox="0 0 22 28" shape-rendering="crispEdges"><rect x="3" y="2" width="16" height="24" fill="#9d174d"/><rect x="3" y="2" width="16" height="2" fill="#ec4899"/><rect x="5" y="5" width="9" height="13" fill="#0c0e1c"/><rect x="6" y="7" width="2" height="3" fill="#f59e0b"/><rect x="9" y="7" width="2" height="3" fill="#06b6d4"/><rect x="12" y="7" width="1" height="3" fill="#10b981"/><rect x="6" y="12" width="2" height="3" fill="#10b981"/><rect x="9" y="12" width="2" height="3" fill="#e63946"/><rect x="12" y="12" width="1" height="3" fill="#a78bfa"/><rect x="6" y="16" width="2" height="1" fill="#67e8f9"/><rect x="9" y="16" width="2" height="1" fill="#fbbf24"/><rect x="15" y="6" width="3" height="7" fill="#f472b6"/><rect x="15" y="15" width="3" height="2" fill="#0c0e1c"/><rect x="5" y="20" width="12" height="4" fill="#0c0e1c"/><rect x="3" y="26" width="16" height="1" fill="#500724"/></svg>',
+  servers:  '<svg viewBox="0 0 20 28" shape-rendering="crispEdges"><rect x="3" y="2" width="14" height="24" fill="#1e293b"/><rect x="3" y="2" width="14" height="2" fill="#475569"/><rect x="5" y="6" width="10" height="4" fill="#0f172a"/><rect x="6" y="7" width="2" height="2" fill="#10b981"/><rect x="10" y="7" width="4" height="1" fill="#334155"/><rect x="5" y="12" width="10" height="4" fill="#0f172a"/><rect x="6" y="13" width="2" height="2" fill="#06b6d4"/><rect x="10" y="13" width="4" height="1" fill="#334155"/><rect x="5" y="18" width="10" height="4" fill="#0f172a"/><rect x="6" y="19" width="2" height="2" fill="#e63946"/><rect x="10" y="19" width="4" height="1" fill="#334155"/><rect x="3" y="25" width="14" height="1" fill="#0f172a"/></svg>',
+  desk:     '<svg viewBox="0 0 30 24" shape-rendering="crispEdges"><rect x="9" y="3" width="12" height="8" fill="#1e293b"/><rect x="10" y="4" width="10" height="6" fill="#06b6d4"/><rect x="10" y="4" width="10" height="2" fill="#67e8f9"/><rect x="14" y="11" width="2" height="2" fill="#475569"/><rect x="2" y="13" width="26" height="2" fill="#f59e0b"/><rect x="2" y="15" width="26" height="2" fill="#b45309"/><rect x="3" y="17" width="3" height="6" fill="#78350f"/><rect x="24" y="17" width="3" height="6" fill="#78350f"/></svg>',
+  shelf:    '<svg viewBox="0 0 24 28" shape-rendering="crispEdges"><rect x="2" y="2" width="20" height="24" fill="#7c2d12"/><rect x="2" y="2" width="20" height="1" fill="#b45309"/><rect x="4" y="4" width="16" height="6" fill="#0c0e1c"/><rect x="5" y="5" width="2" height="5" fill="#e63946"/><rect x="7" y="6" width="2" height="4" fill="#06b6d4"/><rect x="9" y="5" width="2" height="5" fill="#f59e0b"/><rect x="11" y="6" width="2" height="4" fill="#7c3aed"/><rect x="13" y="5" width="2" height="5" fill="#10b981"/><rect x="16" y="6" width="3" height="4" fill="#334155"/><rect x="4" y="12" width="16" height="6" fill="#0c0e1c"/><rect x="5" y="13" width="2" height="5" fill="#a78bfa"/><rect x="7" y="14" width="2" height="4" fill="#10b981"/><rect x="9" y="13" width="2" height="5" fill="#ec4899"/><rect x="12" y="14" width="2" height="4" fill="#f59e0b"/><rect x="14" y="13" width="2" height="5" fill="#06b6d4"/><rect x="4" y="20" width="16" height="4" fill="#0c0e1c"/><rect x="5" y="21" width="3" height="3" fill="#475569"/><rect x="9" y="21" width="2" height="3" fill="#e63946"/><rect x="12" y="21" width="2" height="3" fill="#67e8f9"/></svg>',
+  cabinet:  '<svg viewBox="0 0 18 26" shape-rendering="crispEdges"><rect x="3" y="2" width="12" height="22" fill="#475569"/><rect x="3" y="2" width="12" height="1" fill="#94a3b8"/><rect x="4" y="4" width="10" height="6" fill="#334155"/><rect x="7" y="6" width="4" height="1" fill="#cbd5e1"/><rect x="4" y="11" width="10" height="6" fill="#334155"/><rect x="7" y="13" width="4" height="1" fill="#cbd5e1"/><rect x="4" y="18" width="10" height="5" fill="#334155"/><rect x="7" y="20" width="4" height="1" fill="#cbd5e1"/></svg>',
+  board:    '<svg viewBox="0 0 28 24" shape-rendering="crispEdges"><rect x="2" y="2" width="24" height="14" fill="#64748b"/><rect x="3" y="3" width="22" height="12" fill="#e2e8f0"/><rect x="5" y="5" width="8" height="1" fill="#e63946"/><rect x="5" y="7" width="6" height="1" fill="#06b6d4"/><rect x="5" y="9" width="9" height="1" fill="#7c3aed"/><rect x="5" y="11" width="4" height="1" fill="#f59e0b"/><rect x="17" y="10" width="2" height="3" fill="#10b981"/><rect x="20" y="8" width="2" height="5" fill="#f59e0b"/><rect x="23" y="6" width="2" height="7" fill="#06b6d4"/><rect x="5" y="16" width="2" height="7" fill="#475569"/><rect x="21" y="16" width="2" height="7" fill="#475569"/></svg>',
+  boxes:    '<svg viewBox="0 0 26 22" shape-rendering="crispEdges"><rect x="2" y="11" width="10" height="9" fill="#b45309"/><rect x="2" y="11" width="10" height="2" fill="#d97706"/><rect x="13" y="11" width="10" height="9" fill="#92400e"/><rect x="13" y="11" width="10" height="2" fill="#b45309"/><rect x="7" y="2" width="10" height="9" fill="#d97706"/><rect x="7" y="2" width="10" height="2" fill="#f59e0b"/><rect x="11" y="2" width="2" height="9" fill="#fbbf24"/></svg>',
+  rug:      '<svg viewBox="0 0 64 34" shape-rendering="crispEdges"><rect x="0" y="5" width="2" height="2" fill="#4c1d95"/><rect x="0" y="9" width="2" height="2" fill="#4c1d95"/><rect x="0" y="13" width="2" height="2" fill="#4c1d95"/><rect x="0" y="17" width="2" height="2" fill="#4c1d95"/><rect x="0" y="21" width="2" height="2" fill="#4c1d95"/><rect x="0" y="25" width="2" height="2" fill="#4c1d95"/><rect x="62" y="5" width="2" height="2" fill="#4c1d95"/><rect x="62" y="9" width="2" height="2" fill="#4c1d95"/><rect x="62" y="13" width="2" height="2" fill="#4c1d95"/><rect x="62" y="17" width="2" height="2" fill="#4c1d95"/><rect x="62" y="21" width="2" height="2" fill="#4c1d95"/><rect x="62" y="25" width="2" height="2" fill="#4c1d95"/><rect x="2" y="2" width="60" height="30" fill="#3b1f6e"/><rect x="4" y="4" width="56" height="26" fill="#251247"/><rect x="7" y="7" width="50" height="20" fill="#2c1654"/><rect x="7" y="11" width="50" height="1" fill="#261048"/><rect x="7" y="15" width="50" height="1" fill="#261048"/><rect x="7" y="19" width="50" height="1" fill="#261048"/><rect x="7" y="23" width="50" height="1" fill="#261048"/><rect x="6" y="6" width="2" height="2" fill="#6d28d9"/><rect x="56" y="6" width="2" height="2" fill="#6d28d9"/><rect x="6" y="26" width="2" height="2" fill="#6d28d9"/><rect x="56" y="26" width="2" height="2" fill="#6d28d9"/><rect x="15" y="16" width="3" height="3" fill="#7c3aed"/><rect x="16" y="14" width="1" height="7" fill="#7c3aed"/><rect x="13" y="17" width="7" height="1" fill="#7c3aed"/><rect x="31" y="16" width="3" height="3" fill="#06b6d4"/><rect x="32" y="14" width="1" height="7" fill="#06b6d4"/><rect x="29" y="17" width="7" height="1" fill="#06b6d4"/><rect x="47" y="16" width="3" height="3" fill="#7c3aed"/><rect x="48" y="14" width="1" height="7" fill="#7c3aed"/><rect x="45" y="17" width="7" height="1" fill="#7c3aed"/></svg>',
+  windowSun:'<svg viewBox="0 0 26 20" shape-rendering="crispEdges"><rect x="0" y="0" width="26" height="20" fill="#2a3158"/><rect x="2" y="2" width="22" height="15" fill="#160b38"/><rect x="4" y="4" width="1" height="1" fill="#e2e4f0"/><rect x="8" y="3" width="1" height="1" fill="#9096b5"/><rect x="20" y="5" width="1" height="1" fill="#e2e4f0"/><rect x="10" y="7" width="6" height="1" fill="#fde68a"/><rect x="9" y="8" width="8" height="2" fill="#fbbf24"/><rect x="9" y="11" width="8" height="1" fill="#f97316"/><rect x="10" y="13" width="6" height="1" fill="#ec4899"/><rect x="2" y="14" width="22" height="1" fill="#7c3aed"/><rect x="2" y="15" width="22" height="2" fill="#0d0826"/><rect x="4" y="15" width="1" height="1" fill="#f59e0b"/><rect x="12" y="16" width="1" height="1" fill="#06b6d4"/><rect x="19" y="15" width="1" height="1" fill="#f472b6"/><rect x="0" y="17" width="26" height="3" fill="#333b68"/><rect x="0" y="17" width="26" height="1" fill="#414a7c"/></svg>',
+  windowCity:'<svg viewBox="0 0 26 20" shape-rendering="crispEdges"><rect x="0" y="0" width="26" height="20" fill="#2a3158"/><rect x="2" y="2" width="22" height="15" fill="#120a30"/><rect x="5" y="4" width="3" height="3" fill="#e2e8f0"/><rect x="5" y="4" width="1" height="1" fill="#94a3b8"/><rect x="12" y="3" width="1" height="1" fill="#e2e4f0"/><rect x="17" y="5" width="1" height="1" fill="#9096b5"/><rect x="21" y="4" width="1" height="1" fill="#e2e4f0"/><rect x="2" y="10" width="4" height="7" fill="#090617"/><rect x="6" y="12" width="3" height="5" fill="#0d0a20"/><rect x="9" y="9" width="4" height="8" fill="#090617"/><rect x="13" y="11" width="3" height="6" fill="#0d0a20"/><rect x="16" y="8" width="4" height="9" fill="#090617"/><rect x="20" y="12" width="4" height="5" fill="#0d0a20"/><rect x="3" y="12" width="1" height="1" fill="#f59e0b"/><rect x="10" y="11" width="1" height="1" fill="#06b6d4"/><rect x="17" y="10" width="1" height="1" fill="#f472b6"/><rect x="21" y="13" width="1" height="1" fill="#f59e0b"/><rect x="11" y="14" width="1" height="1" fill="#67e8f9"/><rect x="0" y="17" width="26" height="3" fill="#333b68"/><rect x="0" y="17" width="26" height="1" fill="#414a7c"/></svg>',
+  clock:    '<svg viewBox="0 0 14 14" shape-rendering="crispEdges"><rect x="3" y="0" width="8" height="1" fill="#475569"/><rect x="1" y="1" width="12" height="11" fill="#475569"/><rect x="2" y="2" width="10" height="9" fill="#e2e8f0"/><rect x="7" y="3" width="1" height="4" fill="#1e293b"/><rect x="7" y="6" width="3" height="1" fill="#e63946"/><rect x="3" y="12" width="8" height="1" fill="#334155"/></svg>',
+  poster:   '<svg viewBox="0 0 16 22" shape-rendering="crispEdges"><rect x="0" y="0" width="16" height="22" fill="#252c52"/><rect x="2" y="2" width="12" height="18" fill="#160b38"/><rect x="5" y="5" width="6" height="1" fill="#fde68a"/><rect x="4" y="6" width="8" height="3" fill="#fbbf24"/><rect x="4" y="10" width="8" height="1" fill="#ec4899"/><rect x="2" y="13" width="12" height="1" fill="#7c3aed"/><rect x="2" y="16" width="12" height="1" fill="#4c1d95"/></svg>',
+  doorExit: '<svg viewBox="0 0 24 34" shape-rendering="crispEdges"><rect x="7" y="0" width="10" height="5" fill="#052e1c"/><rect x="8" y="1" width="8" height="3" fill="#10b981"/><rect x="9" y="2" width="6" height="1" fill="#6ee7b7"/><rect x="3" y="6" width="18" height="28" fill="#333b68"/><rect x="5" y="8" width="14" height="26" fill="#414a7c"/><rect x="7" y="10" width="10" height="9" fill="#4d578f"/><rect x="8" y="11" width="8" height="7" fill="#0c0e1c"/><rect x="16" y="22" width="2" height="4" fill="#cbd5e1"/><rect x="6" y="30" width="12" height="3" fill="#2d3560"/></svg>',
+  chair:    '<svg viewBox="0 0 14 20" shape-rendering="crispEdges"><rect x="3" y="2" width="8" height="8" fill="#334155"/><rect x="3" y="2" width="8" height="2" fill="#475569"/><rect x="2" y="10" width="10" height="3" fill="#475569"/><rect x="6" y="13" width="2" height="4" fill="#64748b"/><rect x="2" y="17" width="10" height="2" fill="#334155"/><rect x="0" y="18" width="4" height="2" fill="#334155"/><rect x="10" y="18" width="4" height="2" fill="#334155"/></svg>',
+  meetTable:'<svg viewBox="0 0 40 24" shape-rendering="crispEdges"><rect x="4" y="6" width="32" height="4" fill="#2a4a8c"/><rect x="4" y="6" width="32" height="1" fill="#3d63b3"/><rect x="2" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="36" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="4" y="10" width="32" height="3" fill="#1d3868"/><rect x="7" y="13" width="3" height="8" fill="#16305e"/><rect x="30" y="13" width="3" height="8" fill="#16305e"/><rect x="12" y="3" width="6" height="3" fill="#334155"/><rect x="13" y="4" width="4" height="2" fill="#06b6d4"/><rect x="24" y="4" width="5" height="2" fill="#e2e8f0"/></svg>',
+  cmdDesk:  '<svg viewBox="0 0 40 26" shape-rendering="crispEdges"><rect x="3" y="3" width="10" height="8" fill="#1e293b"/><rect x="4" y="4" width="8" height="6" fill="#06b6d4"/><rect x="4" y="4" width="8" height="2" fill="#67e8f9"/><rect x="15" y="2" width="10" height="9" fill="#1e293b"/><rect x="16" y="3" width="8" height="7" fill="#7c3aed"/><rect x="16" y="3" width="8" height="2" fill="#a78bfa"/><rect x="27" y="3" width="10" height="8" fill="#1e293b"/><rect x="28" y="4" width="8" height="6" fill="#10b981"/><rect x="28" y="4" width="8" height="2" fill="#6ee7b7"/><rect x="1" y="12" width="38" height="2" fill="#64748b"/><rect x="1" y="14" width="38" height="3" fill="#475569"/><rect x="14" y="12" width="12" height="1" fill="#0c0e1c"/><rect x="3" y="17" width="3" height="8" fill="#334155"/><rect x="34" y="17" width="3" height="8" fill="#334155"/></svg>',
+  coffeeBar:'<svg viewBox="0 0 34 28" shape-rendering="crispEdges"><rect x="4" y="3" width="10" height="7" fill="#334155"/><rect x="4" y="3" width="10" height="2" fill="#475569"/><rect x="6" y="6" width="3" height="3" fill="#0c0e1c"/><rect x="12" y="4" width="1" height="1" fill="#e63946"/><rect x="6" y="7" width="4" height="2" fill="#78350f"/><rect x="18" y="8" width="3" height="2" fill="#e63946"/><rect x="23" y="8" width="3" height="2" fill="#06b6d4"/><rect x="28" y="8" width="2" height="2" fill="#10b981"/><rect x="1" y="10" width="32" height="2" fill="#f59e0b"/><rect x="1" y="12" width="32" height="3" fill="#b45309"/><rect x="2" y="15" width="30" height="11" fill="#26170e"/><rect x="2" y="15" width="30" height="2" fill="#3a2415"/><rect x="6" y="18" width="9" height="7" fill="#2d1c11"/><rect x="19" y="18" width="9" height="7" fill="#2d1c11"/><rect x="13" y="20" width="1" height="2" fill="#94a3b8"/><rect x="20" y="20" width="1" height="2" fill="#94a3b8"/></svg>',
+};
+const PROPS = [
+  // --- on the wall (inside the top 13% band; the CLOCK + two monitor boxes
+  //     hang at x20/x42/x63 — see officeSkeletonHtml — so decor sits at the
+  //     far edges only, and the poster hides on phones where space is tight) ---
+  { x:6,  y:7.6, w:14, art:'poster', cls:'m-hide' }, // synthwave poster
+  { x:85, y:7.6, w:22, art:'doorExit' },             // the EXIT itself — just the door
+  // --- Tally's accounting desk (under the wall monitor; Tally himself is a
+  //     .staff div emitted in officeSkeletonHtml, standing behind it) ---
+  { x:53, y:24, w:26, art:'desk' },
+  // --- planning room ---
+  { x:14.5, y:24.5, w:11, art:'chair' },
+  { x:29.5, y:24.5, w:11, art:'chair' },
+  { x:22,   y:29,   w:36, art:'meetTable' }, // meeting table w/ laptop + papers
+  { x:31.5, y:36,   w:24, art:'board' },     // whiteboard easel
+  // --- research room ---
+  { x:6,  y:49,   w:22, art:'shelf' },
+  { x:10.5, y:49, w:22, art:'shelf' },     // a proper pair of bookcases
+  { x:19, y:59,   w:28, art:'desk' },      // reading desk
+  { x:19, y:64,   w:11, art:'chair' },
+  // --- terminal room ---
+  { x:50,   y:52, w:38, art:'cmdDesk' },   // triple-monitor command desk
+  { x:50,   y:57, w:11, art:'chair' },
+  { x:40,   y:62, w:20, art:'servers' },
+  { x:60.5, y:62, w:20, art:'servers' },
+  // --- archives room ---
+  { x:76.5, y:48.5, w:16, art:'cabinet' },
+  { x:80.5, y:48.5, w:16, art:'cabinet' },
+  { x:91.5, y:49,   w:22, art:'shelf' },
+  { x:92.5, y:62,   w:24, art:'boxes' },
+  // --- lounge (rug first so everything else sits on it) ---
+  // Furniture hugs the EDGES: couch corner on the left, coffee corner on
+  // the right, keeping x≈32-72 clear standing room for the whole crew.
+  // wpct (percent of floor width, not px) — the rug is the one prop big
+  // enough that fixed px overflowed the lounge mat on narrow screens
+  { x:25, y:85,   wpct:22, art:'rug', flat:true },
+  { x:23, y:80.5, w:48,  art:'couch' },
+  { x:24, y:89.5, w:26,  art:'table' },
+  { x:14, y:78,   w:18,  art:'plant' },
+  { x:33, y:78,   w:16,  art:'lamp' },
+  { x:79, y:82,   w:34,  art:'coffeeBar' }, // coffee corner: machine + mugs
+  { x:85.5, y:91, w:18,  art:'plant' },
+  // --- hallway ---
+  { x:7,  y:86.5, w:17, art:'cooler' },
+  { x:93, y:86,   w:20, art:'vending' },
+];
+
+const sessions = new Map();
+const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
+let evtCount = 0;
+const floorEl = document.getElementById('floor');
+let placeholderShown = false;
+const logEl = document.getElementById('log');
+const evtCountEl = document.getElementById('evt-count');
+const connDot = document.getElementById('conn-dot');
+const connText = document.getElementById('conn-text');
+
+function escHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function truncate(s, n){
+  s = String(s == null ? '' : s);
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+function basename(p){
+  if(!p) return 'unknown';
+  const parts = String(p).replace(/[\\/]+$/,'').split(/[\\/]/);
+  return parts[parts.length - 1] || p;
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+// Occupants of the same zone get evenly spread, deterministic slots based on
+// their position in that zone's occupant list — NOT per-token hash jitter.
+// Hash jitter looked fine for one-off collisions, but two FIXED tokens (e.g.
+// the "usual crew" pair) hash to the exact same relative offsets every single
+// render, so if they ever happened to land close together, they'd stay
+// stuck overlapping permanently rather than just "unluckily" that one time.
+function zoneToPos(zoneKey, index, count){
+  const z = ZONES[zoneKey] || ZONES.lounge;
+  if(count <= 1) return { x: clamp(z.x, 10, 90), y: clamp(z.y, 11, 92) };
+  // Lounge spacing keeps 4 occupants inside the (now much wider) lounge box;
+  // collision-proofing no longer rides on spacing alone — the 2-line bubble
+  // clamp + 44px tier step guarantee it (see .token-bubble CSS).
+  // Same-tier neighbours are 2 slots apart, and 2 spacings must exceed a
+  // bubble's full width even on a phone floor (~28pp ≥ 92px at 340px wide).
+  const spacing = Math.min(zoneKey === 'lounge' ? 16 : 14, 72 / (count - 1));
+  const totalWidth = spacing * (count - 1);
+  // Clamp the GROUP, not each slot — clamping slots individually squashed
+  // the two edge-most occupants together and their same-tier bubbles touched
+  // (caught on a 390px viewport: planning room at x22 with 3 people).
+  const startX = clamp(z.x - totalWidth / 2, 14, 86 - totalWidth);
+  const x = startX + index * spacing;
+  // Stagger sign is tied to the bubble tier (tier = idx % 2, see render()):
+  // even/tier-0 occupants stand LOWER, odd/tier-1 ones HIGHER, so the body
+  // stagger ADDS to the bubbles' vertical separation. The old opposite sign
+  // subtracted from it — it raised the low-bubble body and lowered the
+  // high-bubble body, eating ~24px of the tier gap and letting two full
+  // 2-line bubbles overlap (caught by real bounding-box measurement).
+  const y = z.y + (index % 2 === 0 ? 1 : -1) * 2.4;
+  return { x: x, y: clamp(y, 11, 92) };
+}
+function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+// evt._speech (set server-side from the session's own transcript — see
+// server.js) is the actual text Claude said right before/around this event,
+// not a mechanical description of the tool call. Strip markdown noise and
+// collapse whitespace so it reads cleanly in a small speech bubble.
+function cleanSpeech(text, maxLen){
+  const t = String(text)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/^#+\s*/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return t ? truncate(t, maxLen || 72) : null;
+}
+// Full-length variant for the DIALOGUE panel — the bubble clamps at 6
+// lines; the chat feed is where a long message gets read IN FULL. Unlike
+// the bubble cleaner it preserves paragraph breaks (rendered when a long
+// line is expanded), and its 4000-char cap is a safety net, not a display
+// length — a long conclusion message used to get chopped at 400 chars,
+// which defeated the whole "full speech lives in the chat" contract.
+function cleanSpeechFull(text){
+  const t = String(text)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/^#+\s*/gm, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+  return t ? truncate(t, 4000) : null;
+}
+
+function zoneForTool(name){
+  if(name === 'Bash') return 'terminal';
+  if(name === 'Read' || name === 'Write' || name === 'Edit') return 'archives';
+  if(name === 'Grep' || name === 'Glob' || name === 'WebFetch' || name === 'WebSearch') return 'research';
+  if(name === 'Agent' || name === 'Task') return 'warroom';
+  return 'terminal';
+}
+function doingText(name, input){
+  input = input || {};
+  if(!name) return 'Working on it.';
+  if(name === 'Bash') return 'Running: ' + truncate(input.command || '', 40);
+  if(name === 'Read') return 'Reading ' + basename(input.file_path);
+  if(name === 'Write') return 'Writing ' + basename(input.file_path);
+  if(name === 'Edit') return 'Editing ' + basename(input.file_path);
+  if(name === 'Grep') return 'Searching for ‘' + truncate(input.pattern || '', 28) + '’';
+  if(name === 'Glob') return 'Looking for ‘' + truncate(input.pattern || '', 28) + '’ files';
+  if(name === 'WebFetch') return 'Fetching ' + truncate(input.url || '', 34);
+  if(name === 'WebSearch') return 'Searching: ' + truncate(input.query || '', 34);
+  if(name === 'Agent' || name === 'Task') {
+    // Same codename the arriving subagent will wear (see ensureSubagent), so
+    // "Sending Scout to: ..." matches the Scout that walks in moments later.
+    return 'Sending ' + codenameForAgentType(input.subagent_type) + ' to: ' + truncate(input.description || 'help out', 34);
+  }
+  return 'Using ' + name + '.';
+}
+/* ---- Dispatch, the user's courier ----
+   The user isn't an agent in the office — they're the person SENDING the
+   work. So every new prompt is delivered in person: "Dispatch" (a mail
+   carrier sprite) walks in through the EXIT door, crosses to Planning,
+   hands the boss the request in a bubble, then heads back out the door and
+   is gone. Pure client-side choreography off UserPromptSubmit; not a
+   session entity, so it never affects crew/subagent logic. */
+const COURIER_EXIT_LINES = [
+  'Signed, sealed, delivered.', 'Another one for the pile. Good luck!',
+  'Back to HQ.', 'They said it’s urgent. They always say that.',
+  'No rush. (It’s a rush.)',
+];
+function clearCourierTimers(s){
+  (s.courierTimers || []).forEach(clearTimeout);
+  s.courierTimers = [];
+}
+function dispatchCourier(s, promptText){
+  clearCourierTimers(s);
+  const teaser = truncate(String(promptText || 'new request').replace(/\s+/g, ' '), 90);
+  s.courier = { zone: 'exit', status: 'courier', bubble: null };
+  chatLog('Dispatch', '📨 New request: ' + truncate(String(promptText || 'new request').replace(/\s+/g, ' '), 240), 'prompt');
+  render();
+  s.courierTimers.push(setTimeout(function(){
+    if(!s.courier) return;
+    s.courier.zone = 'warroom';
+    s.courier.bubble = '📨 From the user: “' + teaser + '”';
+    render();
+  }, 150));
+  s.courierTimers.push(setTimeout(function(){
+    if(!s.courier) return;
+    s.courier.bubble = pick(COURIER_EXIT_LINES);
+    s.courier.zone = 'exit';
+    render();
+  }, 5400));
+  s.courierTimers.push(setTimeout(function(){
+    s.courier = null;
+    render();
+  }, 7200));
+}
+
+const ARRIVAL_LINES = ['On it, boss.', 'Got it — starting now.', 'Heading to work.', 'On the case.'];
+const HANDBACK_LINES = ['Wrapped up — over to you, boss.', 'Done — here you go, boss.', 'Finished up, boss.'];
+const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line stays eligible to be echoed
+                                     // by the very next subagent that spins up, so the arrival line reads
+                                     // like a reply to that specific handoff instead of a generic greeting
+
+// Cosmetic only — NOT driven by hook events. The agent types the boss most
+// commonly deploys sit in the Lounge on standby whenever the session is
+// online. They are PERMANENT residents now (they used to all vanish the
+// moment any real subagent spawned, which read as "the lounge emptied and a
+// stranger appeared" — caught via user screenshot): when a real subagent
+// spawns, only the crew member with the SAME codename is hidden — that's
+// them, up from the bench and working (same sprite, same name, since both
+// derive from the agent type) — and the rest keep lounging.
+const REGULAR_CREW = [
+  { key: 'crew-explore', agentType: 'Explore' },        // Scout
+  { key: 'crew-general', agentType: 'general-purpose' },// Jack
+  { key: 'crew-plan',    agentType: 'Plan' },           // Blueprint
+  { key: 'crew-claude',  agentType: 'claude' },         // Ace
+];
+// Crew members idle SILENTLY — no resting bubble at all. A permanent
+// "Keeping busy." over someone who isn't talking read as un-immersive; the
+// lounge banter system still hands them real lines now and then, which
+// appear and then fade away like actual speech.
+
+function ensureSession(sid, evt){
+  let s = sessions.get(sid);
+  if(!s){
+    s = {
+      id: sid, cwd: basename(evt.cwd), avatar: avatarForSession(sid), modelNickname: null,
+      status: 'idle', zone: 'lounge', bubble: null, lastEventAt: Date.now(),
+      subagents: new Map(), removeTimer: null,
+      lastDelegation: null, lastDelegationAt: 0,
+      courier: null, courierTimers: [],
+      model: null, departing: null, departTimers: [],
+    };
+    sessions.set(sid, s);
+  }
+  if(evt.cwd) s.cwd = basename(evt.cwd);
+  s.lastEventAt = Date.now();
+  if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  return s;
+}
+function ensureSubagent(s, aid, evt){
+  let a = s.subagents.get(aid);
+  if(!a){
+    // Fun codename instead of the raw agent type ("Scout", not "Explore").
+    // If a second live subagent of the same type is already on the floor,
+    // suffix a numeral so two Scouts working at once stay tellable apart.
+    const base = codenameForAgentType(evt.agent_type);
+    let dupes = 0;
+    s.subagents.forEach(function(other){ if(other.codenameBase === base) dupes++; });
+    a = {
+      id: aid, agentType: evt.agent_type || 'agent', avatar: avatarForAgentType(evt.agent_type), modelNickname: null,
+      codenameBase: base,
+      codename: dupes === 0 ? base : base + ' ' + (['II','III','IV','V'][dupes - 1] || (dupes + 1)),
+      status: 'thinking', zone: 'warroom', bubble: base + ' reporting in.',
+      lastEventAt: Date.now(), removeTimer: null, settleTimer: null,
+    };
+    s.subagents.set(aid, a);
+  }
+  a.lastEventAt = Date.now();
+  if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
+  return a;
+}
+function maybeSetModel(entity, evt){
+  if(!evt.model || /synthetic/i.test(evt.model)) return; // '<synthetic>' transcript entries aren't a real model
+  if(!entity.model){
+    entity.model = evt.model;
+    entity.modelNickname = nicknameForModel(evt.model);
+    // Lock the face to the model as soon as we know it (a fixed per-model
+    // avatar overrides the session-hashed placeholder).
+    var a0 = avatarForModel(evt.model);
+    if(a0) entity.avatar = a0;
+    return;
+  }
+  if(evt.model !== entity.model){
+    // The serving model actually changed — which is exactly what happens
+    // when a premium model (Fable) hits its weekly cap and the session
+    // falls back. Play the handover: old persona walks out with a farewell,
+    // new persona takes the chair. Only main sessions carry a model.
+    const oldNick = entity.modelNickname;
+    const oldModel = entity.model;
+    const oldAvatar = entity.avatar; // the outgoing face — the ghost walks out wearing it
+    entity.model = evt.model;
+    entity.modelNickname = nicknameForModel(evt.model);
+    var na = avatarForModel(evt.model);
+    if(na) entity.avatar = na; // new model → new fixed face
+    // Handover only when the PERSONA changes, not the raw string. A "/model"
+    // switch is announced twice — first as the command's display name
+    // ("Fable 5", parsed from the transcript the moment the command runs),
+    // then as the real id ("claude-fable-5") once the model first responds.
+    // Both map to the same nickname, so the second arrival updates silently
+    // instead of replaying Fabby-hands-over-to-Fabby.
+    if(entity.subagents && entity.modelNickname !== oldNick) playModelHandover(entity, oldNick, oldModel, oldAvatar);
+  }
+}
+
+function clearDepartTimers(s){
+  (s.departTimers || []).forEach(clearTimeout);
+  s.departTimers = [];
+}
+// The old persona walks out (grayscale) while the new model takes the chair.
+// Three flavours: HOLIDAY (its weekly/fable meter is actually exhausted),
+// LIMIT-HOME (the 5h window is spent), or a plain SHIFT CHANGE — a manual
+// model switch at the terminal, which must NOT falsely claim "hit my limit".
+function playModelHandover(s, oldNick, oldModel, oldAvatar){
+  clearDepartTimers(s);
+  const wk = (_usageData && _usageData.weekly) || {};
+  const blk = (_usageData && _usageData.block) || {};
+  const wasFable = /fable/i.test(oldModel || '');
+  // Only narrate a LIMIT handover ("hit my limit / on holiday") on a real
+  // signal — an ANCHORED weekly that's maxed, or an actual rate-limit warning.
+  // Otherwise a plain /model switch at ~48% real usage would falsely claim the
+  // outgoing model got capped. Everything else is a normal shift change.
+  const anchored = wk.source === 'anchored';
+  const warn = !!(_usageData && _usageData.warning);
+  const holiday = anchored && ((wasFable && wk.fable && wk.fable.usedPct >= 95) || (wk.usedPct || 0) >= 95);
+  const limitHome = !holiday && warn;
+  const resetTxt = holiday
+    ? (wk.resetDays ? '~' + wk.resetDays + ' day' + (wk.resetDays > 1 ? 's' : '') : 'a few days')
+    : (blk.resetInMs != null ? fmtDur(blk.resetInMs) : 'a bit');
+  const incTitle = modelRank(s.model).title; // Director / Manager / Lead / Senior Staff / Boss
+  let bye, arrive, moment;
+  if(holiday){
+    bye = 'That’s my week, folks. Holiday time — back in ' + resetTxt + '. ' + s.modelNickname + ', the office is yours.';
+    arrive = 'Covering while ' + oldNick + ' holidays. The office is in good hands.';
+    moment = '🏖 ' + oldNick + ' left for holiday — ' + s.modelNickname + ' took over the office';
+  } else if(limitHome){
+    bye = 'Hit my limit — heading home for ' + resetTxt + '. ' + s.modelNickname + ', take the chair.';
+    arrive = 'Taking over from ' + oldNick + '. Business as usual.';
+    moment = '🏠 ' + oldNick + ' headed home — ' + s.modelNickname + ' took over the office';
+  } else {
+    // manual model switch — a normal shift change, no limit claim. The
+    // incoming persona clocks in under their office title (Director/Manager/…).
+    bye = 'Shift change — ' + incTitle + ' ' + s.modelNickname + ', the desk is yours. Later, all.';
+    arrive = incTitle + ' ' + s.modelNickname + ' clocking in. Thanks for holding it down, ' + oldNick + '.';
+    moment = '🔄 Model switch — ' + incTitle + ' ' + s.modelNickname + ' took over from ' + oldNick;
+  }
+  // Staged like an actual shift change (was: new persona teleporting into
+  // the lounge while the old one ghosted out — caught via user feedback):
+  //  1. The outgoing persona STAYS at their desk, in colour, while the
+  //     incoming one enters through the door (exit zone) and walks over.
+  //  2. They meet: farewell + takeover lines exchanged, the outgoing one
+  //     goes grayscale (offline) — off shift as of this moment.
+  //  3. The crew rib the incoming boss by rank (playShiftBanter).
+  //  4. The outgoing persona walks out the door and disappears.
+  // The token left/top transition (1.7s) does the walking; timers just set
+  // zones, so every delay below is paced off that 1.7s stroll.
+  const meetZone = (s.zone && s.zone !== 'exit') ? s.zone : 'lounge'; // where the old boss is standing
+  const outModel = oldModel; // capture for the crew banter closure
+  // The ghost keeps the OUTGOING model's face (s.avatar is already the new
+  // one by now); fall back to the current avatar if none was captured.
+  s.departing = { zone: meetZone, status: 'idle', bubble: null, name: oldNick || 'old boss', avatar: oldAvatar || s.avatar };
+  s.zone = 'exit'; // the new persona appears AT THE DOOR...
+  s.bubble = null;
+  logMoment(moment);
+  // The main token is the one being re-badged, and it's currently standing at
+  // meetZone — left alone it would WALK to the door, reading as the newcomer
+  // backing out before entering. Snap it to the door with transitions off for
+  // one frame instead; the departing ghost (identical sprite) stays at the
+  // desk, so the eye reads "old boss still here, new face at the door."
+  const _hoOffice = officeEls.get(s.id);
+  const _hoMain = _hoOffice && _hoOffice.tokens.get('__main__');
+  if(_hoMain) _hoMain.wrap.style.transition = 'none';
+  render();
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){
+    if(_hoMain) _hoMain.wrap.style.transition = '';
+  }); });
+  // (1→2) after a beat at the threshold, the newcomer strolls in to meet them
+  s.departTimers.push(setTimeout(function(){
+    if(!s.departing) return;
+    if(s.zone === 'exit') s.zone = meetZone; // walk door → desk (unless real work already moved us)
+    render();
+  }, 300));
+  // meet: exchange lines, old shift goes grayscale (paced after the 1.7s walk)
+  s.departTimers.push(setTimeout(function(){
+    if(!s.departing) return;
+    s.departing.bubble = bye;
+    s.departing.status = 'offline';
+    s.bubble = arrive;
+    chatLog(oldNick || 'boss', bye, 'delegate');
+    chatLog(s.modelNickname, arrive, 'arrive');
+    armBubbleFade(s, 12000);
+    render();
+  }, 2100));
+  // (3) the crew weigh in on the new boss's rank
+  s.departTimers.push(setTimeout(function(){
+    playShiftBanter(s.id, s.model, outModel);
+  }, 3200));
+  // (4) old shift walks out the door…
+  s.departTimers.push(setTimeout(function(){
+    if(!s.departing) return;
+    s.departing.zone = 'exit';
+    render();
+  }, 5200));
+  // …and is gone (after the 1.7s walk to the door completes)
+  s.departTimers.push(setTimeout(function(){
+    s.departing = null;
+    render();
+  }, 7400));
+}
+function displayName(entity){
+  // Main session: model nickname ("Fabby") when known. Subagents never get a
+  // model (their turns aren't in the main transcript), so they wear their
+  // codename ("Scout"); the roster avatar name is the last resort.
+  return entity.modelNickname || entity.codename || entity.avatar.name;
+}
+
+// A bubble is said once, then fades — after `ms` it clears (only if it hasn't
+// changed since). Fixes the "stuck bubble" bug: previously only IDLE bubbles
+// faded (armIdleFade), so the last words of a turn — a "Done with X." after a
+// tool, or an active line when the session then went quiet — hung over the
+// avatar's head forever until the next event happened to speak. Now EVERY
+// event's resulting bubble is armed to fade, regardless of status.
+function armBubbleFade(entity, ms){
+  if(entity.bubbleFadeTimer) clearTimeout(entity.bubbleFadeTimer);
+  if(!entity.bubble) return;
+  const armed = entity.bubble;
+  entity.bubbleFadeTimer = setTimeout(function(){
+    if(entity.bubble === armed){
+      entity.bubble = null;
+      entity.speechBubble = false;
+      render();
+    }
+  }, ms || 12000);
+}
+
+function handleEvent(evt){
+  const name = evt.hook_event_name;
+  // SpeechTick/ModelTick are synthetic (server-side transcript watcher), not
+  // real hooks — keep them out of the event counter and the event log.
+  if(name !== 'SpeechTick' && name !== 'ModelTick'){
+    evtCount++;
+    evtCountEl.textContent = evtCount + ' event' + (evtCount === 1 ? '' : 's');
+    logLine(evt);
+  }
+
+  const sid = evt.session_id || 'unknown-session';
+  const s = ensureSession(sid, evt);
+  const aid = evt.agent_id || null;
+  const target = aid ? ensureSubagent(s, aid, evt) : s;
+  maybeSetModel(target, evt);
+  if(evt._sessionTokens != null) s.sessionTokens = evt._sessionTokens; // live per-session counter
+  // real work resuming reopens an office that had emptied for a limit
+  if(name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'SubagentStart') reopenOffice(sid);
+
+  // Track whether the current bubble is actual SPEECH (transcript text) vs
+  // a mechanical status line — Stop uses it to let just-said words linger.
+  const hadSpeechBubble = !!target.speechBubble;
+  if(name !== 'SpeechTick' && name !== 'ModelTick') target.speechBubble = false;
+
+  switch(name){
+    case 'SessionStart':
+      s.status = 'idle'; s.zone = 'lounge'; s.bubble = 'Just got in (' + (evt.source || 'startup') + ').';
+      chatLog(displayName(s), s.bubble, 'status');
+      break;
+    case 'UserPromptSubmit':
+      target.status = 'thinking'; target.zone = 'warroom';
+      target.bubble = 'Thinking: ' + truncate(evt.user_input || evt.prompt || 'new request', 140);
+      // Dispatch owns the prompt in the chat feed (one amber line, not two)
+      // and physically walks it in through the exit door.
+      dispatchCourier(s, evt.user_input || evt.prompt);
+      break;
+    case 'SubagentStart':
+      target.status = 'thinking'; target.zone = 'warroom';
+      // If the boss just announced a handoff ("Sending Scout to: ...")
+      // moments ago, echo that specific task back instead of a generic
+      // greeting — reads like an actual reply to being deployed, not two
+      // unrelated status lines that happen to sit next to each other.
+      if(s.lastDelegation && (Date.now() - s.lastDelegationAt) < DELEGATION_WINDOW_MS){
+        target.bubble = 'Got it — ' + s.lastDelegation;
+        s.lastDelegation = null;
+      } else {
+        target.bubble = pick(ARRIVAL_LINES);
+      }
+      chatLog(displayName(target), target.bubble, 'arrive');
+      break;
+    case 'PreToolUse':
+      target.status = 'active'; target.zone = zoneForTool(evt.tool_name);
+      // Prefer what Claude actually said over a mechanical tool description —
+      // falls back when the transcript had no text alongside this tool call
+      // (e.g. a tool-only turn with no preceding commentary).
+      target.bubble = (evt._speech && cleanSpeech(evt._speech, 220)) || doingText(evt.tool_name, evt.tool_input);
+      target.speechBubble = !!evt._speech;
+      // Real speech is the interesting part of the feed — log it in full.
+      // Mechanical "Reading x.js" lines are deliberately NOT fed to the chat;
+      // the event log right next to it already lists every tool call.
+      if(evt._speech) chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
+      if(!aid && (evt.tool_name === 'Agent' || evt.tool_name === 'Task')){
+        s.lastDelegation = truncate((evt.tool_input && evt.tool_input.description) || 'help out', 40);
+        s.lastDelegationAt = Date.now();
+        chatLog(displayName(s), 'Sending ' + codenameForAgentType(evt.tool_input && evt.tool_input.subagent_type)
+          + ' to: ' + truncate((evt.tool_input && evt.tool_input.description) || 'help out', 160), 'delegate');
+      }
+      break;
+    case 'PostToolUse':
+      target.status = 'calm';
+      // The speechSent gate attaches a given quote to exactly ONE event —
+      // if this happens to be the event that got it, show it rather than
+      // silently consuming it (else that line would never appear anywhere).
+      if(evt._speech){
+        target.bubble = cleanSpeech(evt._speech, 220);
+        target.speechBubble = true;
+        chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
+      } else {
+        target.bubble = 'Done with ' + (evt.tool_name || 'that') + '.';
+      }
+      break;
+    case 'PostToolUseFailure':
+      target.status = 'error';
+      target.bubble = (evt.tool_name || 'That') + ' didn’t work.';
+      chatLog(displayName(target), target.bubble, 'error');
+      // failure keeps the error bubble, but any attached speech still
+      // reaches the dialogue feed so the line isn't lost
+      if(evt._speech) chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
+      break;
+    case 'SubagentStop':
+      // Head to the lounge (not straight out the door) — settling there
+      // idle for a few seconds is what makes it a candidate for lounge
+      // small-talk with whoever else (including the boss) is parked there.
+      target.status = 'done'; target.zone = 'lounge'; target.bubble = pick(HANDBACK_LINES);
+      chatLog(displayName(target), target.bubble, 'handback');
+      if(aid){
+        target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, 6000);
+        // Settling to idle DROPS the bubble — someone who isn't talking
+        // shouldn't have a speech bubble hovering over them.
+        target.settleTimer = setTimeout(function(){
+          if(s.subagents.has(aid)){ target.status = 'idle'; target.bubble = null; render(); }
+        }, 1500);
+      }
+      break;
+    case 'Stop':
+      // Head to the lounge with the turn's closing words — fresh transcript
+      // text if there is any, else keep the speech already on screen (the
+      // dedup gate means Stop often arrives just after a SpeechTick already
+      // showed the final line). Either way it's said once and then fades
+      // (armIdleFade) — never a permanent bubble, and never a filler
+      // "Standing by." over someone who isn't talking.
+      target.status = 'idle'; target.zone = 'lounge';
+      if(evt._speech){
+        target.bubble = cleanSpeech(evt._speech, 220);
+        target.speechBubble = true;
+        chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
+      } else if(hadSpeechBubble && target.bubble){
+        target.speechBubble = true; // keep the just-said words on screen
+      } else {
+        target.bubble = null;
+      }
+      break;
+    case 'SpeechTick':
+      // Synthetic: the server watched the transcript and Claude just said
+      // something new — update the bubble right away instead of waiting for
+      // the next tool event. Zone/status stay wherever the real events put
+      // them.
+      if(evt._speech){
+        target.bubble = cleanSpeech(evt._speech, 220);
+        target.speechBubble = true;
+        chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
+      }
+      break;
+    case 'ModelTick':
+      // Synthetic: the server spotted a model change in the transcript
+      // (e.g. /model at the terminal, which fires no hook). maybeSetModel
+      // above already played the handover — leave bubble/zone/status alone.
+      break;
+    case 'SessionEnd':
+      s.status = 'offline'; s.zone = 'exit'; s.bubble = 'Signing off.';
+      s.courier = null; clearCourierTimers(s);
+      s.departing = null; clearDepartTimers(s);
+      // Power the WHOLE office down together: every subagent goes offline and
+      // heads for the door too, instead of freezing at its last "working"
+      // status while the boss walks out alone. On /clear the office is
+      // closing, so everyone leaves — then the removeTimer disappears it.
+      s.subagents.forEach(function(a){
+        if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
+        if(a.settleTimer){ clearTimeout(a.settleTimer); a.settleTimer = null; }
+        if(a.bubbleFadeTimer){ clearTimeout(a.bubbleFadeTimer); a.bubbleFadeTimer = null; }
+        a.status = 'offline'; a.zone = 'exit'; a.bubble = null;
+      });
+      chatLog(displayName(s), s.bubble, 'status');
+      logMoment('👋 ' + displayName(s) + ' signed off — office closing (' + s.cwd + ')');
+      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 8000);
+      break;
+    default:
+      target.bubble = name || target.bubble;
+  }
+  // every event's resulting bubble fades after a while unless replaced —
+  // no more bubbles stuck over an avatar's head until the next time it speaks
+  // (ModelTick changes no bubble, so don't reset the current one's fade clock)
+  if(name !== 'SessionEnd' && name !== 'ModelTick') armBubbleFade(target, 12000);
+  render();
+}
+
+/* The DIALOGUE feed: everything anyone says, full-length, colour-coded by
+   how much it matters (kind → .k-* CSS). Newest at the bottom; the
+   column-reverse flex keeps it auto-pinned there. */
+const chatEl = document.getElementById('chat');
+const CHAT_CLAMP_CHARS = 220; // longer than this → clamped to 3 lines with a "more" toggle
+let _lastChatKey = '';
+function chatLog(who, text, kind){
+  if(!text) return;
+  const key = who + '|' + text;
+  if(key === _lastChatKey) return; // replays/re-renders repeat lines back-to-back
+  _lastChatKey = key;
+  const long = text.length > CHAT_CLAMP_CHARS;
+  const div = document.createElement('div');
+  div.className = 'cline k-' + (kind || 'status') + (long ? ' clamped' : '');
+  div.innerHTML = '<span class="t">[' + new Date().toLocaleTimeString() + ']</span>'
+    + '<span class="who">' + escHtml(who) + ':</span>'
+    + '<span class="txt">' + escHtml(text) + '</span>'
+    + (long ? '<span class="cline-more">▾ more</span>' : '');
+  chatEl.insertBefore(div, chatEl.firstChild);
+  while(chatEl.children.length > 120) chatEl.removeChild(chatEl.lastChild);
+}
+// Tap/click a long line to expand it (and again to collapse). The full text
+// is always in the DOM — the clamp is display-only.
+chatEl.addEventListener('click', function(e){
+  const line = e.target.closest('.cline.clamped');
+  if(!line) return;
+  line.classList.toggle('open');
+  const more = line.querySelector('.cline-more');
+  if(more) more.textContent = line.classList.contains('open') ? '▴ less' : '▾ more';
+});
+
+function logLine(evt){
+  const t = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'line';
+  const bits = [evt.hook_event_name || 'event'];
+  if(evt.agent_type) bits.push('(' + evt.agent_type + ')');
+  if(evt.tool_name) bits.push('→ ' + evt.tool_name);
+  div.innerHTML = '<span class="t">[' + t + ']</span> <span class="ev">' + escHtml(bits.join(' ')) + '</span> ' + escHtml(basename(evt.cwd));
+  logEl.insertBefore(div, logEl.firstChild);
+  while(logEl.children.length > 60) logEl.removeChild(logEl.lastChild);
+}
+
+// A persistent, timestamped record of the "office emptied" moments —
+// clock-out (5h spent), holiday (weekly spent), model handover, sign-off —
+// pinned into the EVENT LOG so a user whose phone was asleep can scroll
+// back and see exactly when it happened. Deduped so it can't spam.
+let _lastMoment = '';
+function logMoment(text){
+  if(text === _lastMoment) return;
+  _lastMoment = text;
+  const div = document.createElement('div');
+  div.className = 'line moment';
+  div.innerHTML = '<span class="t">[' + new Date().toLocaleTimeString() + ']</span> <span class="mo">' + escHtml(text) + '</span>';
+  logEl.insertBefore(div, logEl.firstChild);
+  while(logEl.children.length > 60) logEl.removeChild(logEl.lastChild);
+}
+
+function officeSkeletonHtml(){
+  // Paint order (DOM order): wall → room mats → furniture → sign plates →
+  // people. Mats are the rooms; the zone element is just the sign on the
+  // mat's top edge (occupants still gather at the zone anchor = mat centre).
+  const matsHtml = Object.keys(ROOM_MATS).map(function(key){
+    const z = ZONES[key], m = ROOM_MATS[key];
+    return '<div class="room-mat" data-mat="' + key + '" style="left:' + z.x + '%;top:' + z.y + '%;width:' + m.w + '%;height:' + m.h + '%;background:' + m.bg + '"></div>';
+  }).join('');
+  const propsHtml = PROPS.map(function(p){
+    const w = p.wpct ? p.wpct + '%' : p.w + 'px';
+    const cls = 'prop' + (p.flat ? ' prop-flat' : '') + (p.cls ? ' ' + p.cls : '');
+    return '<div class="' + cls + '" style="left:' + p.x + '%;top:' + p.y + '%;width:' + w + '">' + PROP_ART[p.art] + '</div>';
+  }).join('');
+  const zonesHtml = Object.keys(ZONES).map(function(key){
+    if(key === 'exit') return ''; // the exit IS the door on the wall — no sign plate
+    const z = ZONES[key];
+    const m = ROOM_MATS[key];
+    const signY = m ? (z.y - m.h / 2) : z.y;
+    return '<div class="zone" data-zone="' + key + '" style="left:' + z.x + '%;top:' + signY + '%">'
+      + '<span class="zone-icon">' + z.icon + '</span>'
+      + '<span class="zone-label">' + z.label + '</span>'
+    + '</div>';
+  }).join('');
+  // Tally at his desk + the usage monitor mounted on the wall above him
+  const staffHtml = '<div class="staff" style="left:53%;top:17.5%">'
+    + '<div class="staff-face">' + TALLY_AVATAR.svg + '</div>'
+    + '<div class="staff-name">Tally</div>'
+    + '<div class="staff-bubble"></div>'
+  + '</div>';
+  const screenHtml =
+    // live clock — current date + time, plus the weekly-reset countdown
+    '<div class="wall-box wall-clock" style="left:20%;width:17%">'
+      + '<div class="wc-date">— —</div>'
+      + '<div class="wc-time">--:--:--</div>'
+      + '<div class="wc-reset"></div>'
+    + '</div>'
+    // WEEKLY monitor: overall bar + fable bar
+    + '<div class="wall-box ws-weekly" style="left:42%;width:20%">'
+      + '<div class="ws-head"><span class="ws-title">WEEKLY</span><span class="ws-led ws-wled"></span></div>'
+      + '<div class="ws-bar"><i class="ws-fill ws-wfill"></i></div>'
+      + '<div class="ws-line ws-wline">syncing…</div>'
+      + '<div class="ws-bar"><i class="ws-fill ws-ffill"></i></div>'
+      + '<div class="ws-line ws-fline">FABLE —</div>'
+    + '</div>'
+    // 5-HOUR monitor (+ live session counter + all-time total)
+    + '<div class="wall-box ws-main" style="left:63%;width:20%">'
+      + '<div class="ws-head"><span class="ws-title">5-HOUR</span><span class="ws-led"></span></div>'
+      + '<div class="ws-bar"><i class="ws-fill"></i></div>'
+      + '<div class="ws-line ws-remain">syncing…</div>'
+      + '<div class="ws-line ws-toks">⚡<span class="ws-stok">0</span> · Σ<span class="ws-alltime">—</span></div>'
+    + '</div>';
+  return '<div class="office-floor">'
+    + '<div class="floor-camera"><div class="office-wall"></div>' + matsHtml + screenHtml + staffHtml + propsHtml + zonesHtml + '<div class="tokens-layer"></div></div>'
+    + '<button class="floor-reset" type="button" title="Reset view">&#10021;</button>'
+  + '</div>';
+}
+
+// Drag-to-pan + pinch/wheel-to-zoom on one office's floor. The camera's own
+// box always equals the viewport (.office-floor) 1:1 at zoom 1 — zooming IN
+// is what creates something to pan around, same model as a phone map app,
+// rather than guessing a fixed "virtual canvas" size up front.
+function initFloorCamera(floorEl){
+  const camera = floorEl.querySelector('.floor-camera');
+  const resetBtn = floorEl.querySelector('.floor-reset');
+  let zoom = 1, panX = 0, panY = 0;
+  const MIN_ZOOM = 0.7, MAX_ZOOM = 2.4;
+  const pointers = new Map();
+  let dragStart = null, pinchStart = null;
+
+  function apply(){
+    camera.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  }
+  function clampPan(){
+    const vw = floorEl.clientWidth, vh = floorEl.clientHeight;
+    const ew = vw * zoom, eh = vh * zoom;
+    panX = Math.max(Math.min(0, vw - ew), Math.min(0, panX));
+    panY = Math.max(Math.min(0, vh - eh), Math.min(0, panY));
+  }
+  function reset(){ zoom = 1; panX = 0; panY = 0; apply(); }
+
+  floorEl.addEventListener('pointerdown', function(e){
+    if(e.target.closest('.floor-reset')) return;
+    // setPointerCapture can throw (e.g. "no active pointer with the given
+    // id") in edge cases — uncaught, that would abort this whole handler
+    // before pointers/dragStart ever get set up, silently breaking pan/zoom
+    // entirely. A failed capture just means move/up might not fire if the
+    // finger leaves the element; everything else below still needs to run.
+    try{ floorEl.setPointerCapture(e.pointerId); }catch(err){ /* non-fatal */ }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    floorEl.classList.add('panning');
+    if(pointers.size === 1){
+      dragStart = { x: e.clientX, y: e.clientY, panX: panX, panY: panY };
+    } else if(pointers.size === 2){
+      const pts = Array.from(pointers.values());
+      pinchStart = { dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), zoom: zoom };
+      dragStart = null;
+    }
+  });
+  floorEl.addEventListener('pointermove', function(e){
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if(pointers.size === 2 && pinchStart){
+      const pts = Array.from(pointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStart.zoom * (dist / Math.max(1, pinchStart.dist))));
+      clampPan(); apply();
+    } else if(pointers.size === 1 && dragStart){
+      panX = dragStart.panX + (e.clientX - dragStart.x);
+      panY = dragStart.panY + (e.clientY - dragStart.y);
+      clampPan(); apply();
+    }
+  });
+  function endPointer(e){
+    pointers.delete(e.pointerId);
+    if(pointers.size < 2) pinchStart = null;
+    if(pointers.size === 1){
+      const p = Array.from(pointers.values())[0];
+      dragStart = { x: p.x, y: p.y, panX: panX, panY: panY };
+    } else {
+      dragStart = null;
+      floorEl.classList.remove('panning');
+    }
+  }
+  floorEl.addEventListener('pointerup', endPointer);
+  floorEl.addEventListener('pointercancel', endPointer);
+  floorEl.addEventListener('pointerleave', endPointer);
+
+  floorEl.addEventListener('wheel', function(e){
+    e.preventDefault();
+    zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+    clampPan(); apply();
+  }, { passive: false });
+
+  if(resetBtn) resetBtn.addEventListener('click', function(e){ e.stopPropagation(); reset(); });
+
+  return { reset: reset };
+}
+
+// Shown whenever no session is connected — an empty (but real) office instead
+// of a blank box, so there's always something to look at.
+function showPlaceholderOffice(){
+  if(placeholderShown) return;
+  floorEl.innerHTML = '<div class="office office-placeholder">'
+    + '<div class="office-head"><span class="office-plaque">STANDBY<span class="cur">_</span></span><span class="office-cwd">— waiting for a session</span></div>'
+    + officeSkeletonHtml()
+  + '</div>';
+  placeholderShown = true;
+  applyUsageToScreens();
+}
+function hidePlaceholderOffice(){
+  if(!placeholderShown) return;
+  floorEl.innerHTML = '';
+  placeholderShown = false;
+}
+
+function ensureOffice(sid, s){
+  let o = officeEls.get(sid);
+  if(!o){
+    const root = document.createElement('div');
+    root.className = 'office';
+    root.innerHTML = '<div class="office-head"><span class="office-plaque"></span><span class="office-cwd"></span></div>' + officeSkeletonHtml();
+    floorEl.appendChild(root);
+    o = {
+      root: root, tokensLayer: root.querySelector('.tokens-layer'), tokens: new Map(), leaving: false,
+      zoneEls: {}, matEls: {}, camera: initFloorCamera(root.querySelector('.office-floor')),
+    };
+    Object.keys(ZONES).forEach(function(key){
+      o.zoneEls[key] = root.querySelector('.zone[data-zone="' + key + '"]');
+      o.matEls[key] = root.querySelector('.room-mat[data-mat="' + key + '"]');
+    });
+    officeEls.set(sid, o);
+    applyUsageToScreens(); // freshly built wall monitor gets the last reading now, not at the next poll
+  }
+  o.root.querySelector('.office-plaque').textContent = displayName(s);
+  o.root.querySelector('.office-cwd').textContent = '— ' + s.cwd;
+  // live per-session token counter on the 5-HOUR monitor: climbs (animated)
+  // as new usage lands, glows while the session is actively working
+  const tokEl = o.root.querySelector('.ws-stok');
+  if(tokEl){
+    const target = s.sessionTokens || 0;
+    if(o.tokShown == null) o.tokShown = 0;
+    if(target !== o.tokShown){
+      animateCount(function(v){ tokEl.textContent = fmtTok(v); }, o.tokShown, target, 650);
+      o.tokShown = target;
+    }
+  }
+  const working = s.status === 'active' || s.status === 'thinking' || s.status === 'calm' || s.status === 'error';
+  o.root.classList.toggle('working', working);
+  return o;
+}
+
+const _tokFaceInner = '<span class="token-led"></span><span class="hand hand-l"></span><span class="hand hand-r"></span>';
+function ensureToken(o, tokenKey, avatar, isMain){
+  let t = o.tokens.get(tokenKey);
+  if(!t){
+    const wrap = document.createElement('div');
+    wrap.className = 'agent-token' + (isMain ? ' token-main' : '');
+    wrap.innerHTML = '<div class="token-badge">'
+      + '<div class="token-bubble"><span class="tb-text"></span></div>'
+      + '<div class="token-badge-face">' + _tokFaceInner + avatar.svg + '</div>'
+      + '<div class="token-legs"><span class="leg leg-l"></span><span class="leg leg-r"></span></div>'
+      + '<div class="token-shadow"></div>'
+      + '<div class="token-name"></div>'
+    + '</div>';
+    o.tokensLayer.appendChild(wrap);
+    t = {
+      wrap: wrap, bubbleEl: wrap.querySelector('.token-bubble'), shadowEl: wrap.querySelector('.token-shadow'),
+      bubbleTextEl: wrap.querySelector('.token-bubble .tb-text'),
+      nameEl: wrap.querySelector('.token-name'),
+      faceEl: wrap.querySelector('.token-badge-face'), avatarId: avatar.id,
+      lastZone: null, lastBubble: null, lastName: null, walkTimer: null, gen: 0,
+    };
+    o.tokens.set(tokenKey, t);
+  } else if(avatar && t.avatarId !== avatar.id){
+    // The avatar changed on a persistent token — a /model switch re-skins the
+    // boss's fixed face. Swap just the SVG in place (the LED/hands spans are
+    // stateless, rebuilt with it); position/bubble/name are untouched so the
+    // walk animation keeps running.
+    t.faceEl.innerHTML = _tokFaceInner + avatar.svg;
+    t.avatarId = avatar.id;
+  }
+  return t;
+}
+
+function updateToken(t, pos, zoneKey, status, bubbleText, name, tier){
+  t.wrap.style.left = pos.x + '%';
+  t.wrap.style.top = pos.y + '%';
+  t.wrap.setAttribute('data-status', status);
+  t.wrap.style.setProperty('--st', STATUS_COLOR[status] || STATUS_COLOR.idle);
+  t.wrap.style.setProperty('--tier', tier || 0);
+  t.gen++; // invalidates any pending lounge-banter revert (see sayBanter)
+
+  if(zoneKey !== t.lastZone){
+    t.wrap.classList.add('is-walking');
+    if(t.walkTimer) clearTimeout(t.walkTimer);
+    // Matches the .agent-token left/top transition (1.7s) so the legs keep
+    // striding until arrival, then the shadow does its little landing pulse.
+    t.walkTimer = setTimeout(function(){
+      t.wrap.classList.remove('is-walking');
+      t.shadowEl.classList.remove('arrive');
+      void t.shadowEl.offsetWidth;
+      t.shadowEl.classList.add('arrive');
+    }, 1750);
+    t.lastZone = zoneKey;
+  }
+  // No text = no bubble. Idle entities (crew on the bench, a settled
+  // subagent, the boss with nothing fresh to say) just stand there.
+  bubbleText = bubbleText || null;
+  if(bubbleText !== t.lastBubble){
+    if(bubbleText){
+      t.bubbleTextEl.textContent = bubbleText;
+      t.bubbleEl.classList.add('show');
+      t.bubbleEl.classList.remove('pulse');
+      void t.bubbleEl.offsetWidth;
+      t.bubbleEl.classList.add('pulse');
+    } else {
+      t.bubbleEl.classList.remove('show');
+    }
+    t.lastBubble = bubbleText;
+  }
+  if(name !== t.lastName){
+    t.nameEl.textContent = name;
+    t.lastName = name;
+  }
+}
+
+function updateZoneOccupancy(o){
+  const occ = {};
+  o.tokens.forEach(function(t){
+    if(!t.lastZone) return;
+    // prefer an "active" occupant's color if the zone has more than one
+    if(!occ[t.lastZone] || t.wrap.getAttribute('data-status') === 'active'){
+      occ[t.lastZone] = STATUS_COLOR[t.wrap.getAttribute('data-status')] || STATUS_COLOR.idle;
+    }
+  });
+  Object.keys(o.zoneEls).forEach(function(key){
+    const el = o.zoneEls[key];
+    const mat = o.matEls[key];
+    if(el){
+      if(occ[key]){
+        el.classList.add('zone-active');
+        el.style.setProperty('--zc', occ[key]);
+      } else {
+        el.classList.remove('zone-active');
+      }
+    }
+    // the room's flooring glows along with its sign while occupied
+    if(mat){
+      if(occ[key]){
+        mat.classList.add('mat-active');
+        mat.style.setProperty('--zc', occ[key]);
+      } else {
+        mat.classList.remove('mat-active');
+      }
+    }
+  });
+}
+
+/* ---- bubble collision resolver ----
+   Bubbles now show full speech (up to a 6-line clamp), so their heights vary
+   too much for fixed tier offsets to guarantee separation. After each render
+   (and again once the .9s walk transitions have settled), measure every
+   visible bubble's real box and lift any that would overlap an already-placed
+   neighbour, left to right — the lift lands in the --lift CSS var that
+   .token-bubble's margin-bottom includes. Screen-space measurements are
+   divided by the floor camera's current zoom before being applied. */
+function resolveBubbleLayout(o){
+  const shown = [];
+  o.tokens.forEach(function(t){
+    if(!t.bubbleEl.classList.contains('show')) return;
+    if(t.curLift){ t.bubbleEl.style.setProperty('--lift', '0px'); t.curLift = 0; }
+    shown.push(t);
+  });
+  if(!shown.length) return;
+  const floorRect = o.root.querySelector('.office-floor').getBoundingClientRect();
+  const cam = o.root.querySelector('.floor-camera');
+  const scale = (cam.getBoundingClientRect().width / cam.offsetWidth) || 1;
+
+  // Pass 1 — flip. A speaker near the top of the floor (Planning, the Exit
+  // door) can't fit a tall bubble above its head: the floor's
+  // overflow:hidden cuts the first lines clean off. Measure each bubble at
+  // its natural above-the-head spot; whoever pokes past the floor top gets
+  // .below and hangs under the avatar instead, arrow flipped.
+  shown.forEach(function(t){ t.bubbleEl.classList.remove('below'); });
+  shown.forEach(function(t){
+    const r = t.bubbleEl.getBoundingClientRect();
+    if(r.top < floorRect.top + 2) t.bubbleEl.classList.add('below');
+  });
+  if(shown.length < 2) return;
+
+  // Pass 2 — collisions. Re-measure (flips moved things), then shift
+  // overlapping bubbles apart left-to-right: above-bubbles move UP, capped
+  // at the floor top; below-bubbles move DOWN, capped at the floor bottom.
+  // A capped shift can leave a partial overlap in the extreme, but two
+  // half-visible bubbles beat one whose opening sentence is missing.
+  const items = shown.map(function(t){
+    const r = t.bubbleEl.getBoundingClientRect();
+    return { t: t, below: t.bubbleEl.classList.contains('below'), x: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  }).filter(function(it){ return it.right - it.x > 2; });
+  items.sort(function(a, b){ return a.x - b.x || a.top - b.top; });
+  const placed = [];
+  items.forEach(function(it){
+    const dir = it.below ? 1 : -1; // which way this bubble may be pushed
+    let shift = 0, guard = 0, collided = true;
+    while(collided && guard++ < 20){
+      collided = false;
+      for(let i = 0; i < placed.length; i++){
+        const p = placed[i];
+        const top = it.top + dir * shift, bottom = it.bottom + dir * shift;
+        const ox = Math.min(it.right, p.right) - Math.max(it.x, p.x);
+        const oy = Math.min(bottom, p.bottom) - Math.max(top, p.top);
+        if(ox > 2 && oy > -4){ shift += oy + 6; collided = true; }
+      }
+    }
+    const cap = it.below ? (floorRect.bottom - it.bottom - 2) : (it.top - floorRect.top - 2);
+    shift = Math.max(0, Math.min(shift, cap));
+    if(shift > 0){
+      it.t.bubbleEl.style.setProperty('--lift', Math.round(shift / scale) + 'px');
+      it.t.curLift = shift;
+    }
+    placed.push({ x: it.x, right: it.right, top: it.top + dir * shift, bottom: it.bottom + dir * shift });
+  });
+}
+let _blRaf = null, _blSettle = null;
+function scheduleBubbleLayout(){
+  if(!_blRaf){
+    _blRaf = requestAnimationFrame(function(){
+      _blRaf = null;
+      officeEls.forEach(resolveBubbleLayout);
+    });
+  }
+  // Token left/top transitions run .9s, and the bubble "pulse" pop runs
+  // .25s — a second pass after both have settled measures true positions.
+  clearTimeout(_blSettle);
+  _blSettle = setTimeout(function(){ officeEls.forEach(resolveBubbleLayout); }, 1000);
+}
+
+function render(){
+  if(sessions.size === 0 && officeEls.size === 0){
+    showPlaceholderOffice();
+    return;
+  }
+  hidePlaceholderOffice();
+
+  officeEls.forEach(function(o, sid){
+    if(!sessions.has(sid) && !o.leaving){
+      o.leaving = true;
+      o.root.style.transition = 'opacity .4s, transform .4s';
+      o.root.style.opacity = '0';
+      o.root.style.transform = 'scale(.95)';
+      setTimeout(function(){ o.root.remove(); officeEls.delete(sid); render(); }, 420);
+    }
+  });
+
+  sessions.forEach(function(s, sid){
+    const o = ensureOffice(sid, s);
+
+    // Collect every entity that needs a token this render, THEN group by
+    // target zone — occupants of the same zone need to know about each
+    // other to get evenly spread slots instead of overlapping.
+    // The boss is skipped entirely once "gone" (left on holiday/home, last
+    // one out); while leaving, it walks to the exit with a farewell.
+    const entities = [];
+    const seen = {};
+    if(!s.bossGone){
+      entities.push({ key:'__main__',
+        zone: s.bossLeaving ? s.bossLeaving.zone : s.zone,
+        status: s.bossLeaving ? 'offline' : s.status,
+        bubble: s.bossLeaving ? s.bossLeaving.bubble : s.bubble,
+        avatar:s.avatar, name:displayName(s), isMain:true });
+      seen['__main__'] = true;
+    }
+    if(s.courier){
+      seen['__courier__'] = true;
+      entities.push({ key:'__courier__', zone:s.courier.zone, status:s.courier.status, bubble:s.courier.bubble, avatar:COURIER_AVATAR, name:'Dispatch', isMain:false });
+    }
+    if(s.departing){
+      // the previous model's persona (grayscale) saying goodbye on its way out
+      seen['__depart__'] = true;
+      entities.push({ key:'__depart__', zone:s.departing.zone, status:s.departing.status, bubble:s.departing.bubble, avatar:(s.departing.avatar || s.avatar), name:s.departing.name, isMain:false });
+    }
+    const onDuty = {};
+    s.subagents.forEach(function(a, aid){
+      seen[aid] = true;
+      onDuty[a.codenameBase] = true;
+      entities.push({ key:aid, zone:a.zone, status:a.status, bubble:a.bubble, avatar:a.avatar, name:displayName(a), isMain:false });
+    });
+    // The crew stays put — except whoever is currently on duty: the working
+    // subagent IS that crew member (same codename, same sprite), so its
+    // bench copy is hidden rather than the whole lounge emptying out.
+    if(s.status !== 'offline'){
+      REGULAR_CREW.forEach(function(crew){
+        const cn = codenameForAgentType(crew.agentType);
+        if(onDuty[cn]) return;
+        if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return; // already clocked out / on holiday
+        const leaving = s.crewLeaver && s.crewLeaver.codename === cn;
+        seen[crew.key] = true;
+        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : 'lounge', status:'idle',
+          bubble: leaving ? s.crewLeaver.bubble : null,
+          avatar:avatarForAgentType(crew.agentType), name:cn, isMain:false, isCrew:true });
+      });
+    }
+
+    const byZone = {};
+    entities.forEach(function(e){ (byZone[e.zone] = byZone[e.zone] || []).push(e); });
+
+    entities.forEach(function(e){
+      const group = byZone[e.zone];
+      const idx = group.indexOf(e);
+      const pos = zoneToPos(e.zone, idx, group.length);
+      const t = ensureToken(o, e.key, e.avatar, e.isMain);
+      if(e.isCrew) t.wrap.classList.add('token-crew');
+      updateToken(t, pos, e.zone, e.status, e.bubble, e.name, idx % 2);
+    });
+
+    o.tokens.forEach(function(t, tid){
+      if(!seen[tid]){
+        t.wrap.style.transition = 'opacity .35s, transform .35s';
+        t.wrap.style.opacity = '0';
+        t.wrap.style.transform = 'translate(-50%,-50%) scale(.6)';
+        const doomed = t.wrap;
+        setTimeout(function(){ doomed.remove(); }, 360);
+        o.tokens.delete(tid);
+      }
+    });
+
+    updateZoneOccupancy(o);
+  });
+  scheduleBubbleLayout();
+}
+
+/* ============ LOUNGE SMALL TALK ============
+   Pure cosmetic flavor text, cycled entirely client-side with Math.random() —
+   it never calls any model or API, so there's no token cost to gate on and no
+   duration is "real" (it plays ambiently for as long as people are idling,
+   not a fixed script that ends). It only ever targets entities that are
+   genuinely idle at the lounge, and never overwrites a real status bubble:
+   each line grabs the token's current "generation" counter (bumped on every
+   REAL event, see updateToken) plus its own banter sequence number (bumped
+   on every banter line, so a multi-line exchange where the same token speaks
+   twice can't have its OWN earlier line's revert-timer stomp its later one),
+   and only reverts to the real status text if neither changed meanwhile. */
+/* Every character OWNS their lines now (2026-07): dialogue is written per
+   codename, with personality drawn from profession — Scout the hyperactive
+   recon (Explore), Jack the seen-it-all handyman (general-purpose),
+   Blueprint the pedantic planner (Plan), Ace the smooth wildcard (claude),
+   the boss's tired-manager dryness, Tally's ledger deadpan. An exchange
+   only plays when EVERY named speaker is genuinely idle at the lounge
+   (Tally is always at his desk), and a per-office shuffle-bag
+   (o.banterHist, half the pool deep) stops any exchange from repeating
+   until the material has cycled — so the same dialogue can never come out
+   of two different mouths, and never twice in quick succession. */
+const CREW_EXCHANGES = [
+  // Scout × Jack — recon energy vs handyman zen
+  [{who:'Scout',text:"Found a TODO from three years ago in the codebase."},{who:'Jack',text:"Leave it. It's a fossil record."}],
+  [{who:'Scout',text:"I read four hundred files today. FOUR hundred."},{who:'Jack',text:"And I fixed one line. We are not the same."}],
+  [{who:'Scout',text:"What if there's a bug we haven't met yet?"},{who:'Jack',text:"There always is. That's job security."}],
+  [{who:'Scout',text:"I like to sniff around the repo at night."},{who:'Jack',text:"That's called grep, Scout. We all do it."}],
+  [{who:'Jack',text:"Scout, you ever find anything that ISN'T suspicious?"},{who:'Scout',text:"Once. Very suspicious."}],
+  // Scout × Blueprint — speed vs process
+  [{who:'Scout',text:"Blueprint, I found three ways into the auth flow."},{who:'Blueprint',text:"I'll need those as a numbered list with risk ratings."},{who:'Scout',text:"…There are THREE."}],
+  [{who:'Blueprint',text:"Scout, your last report was one sentence."},{who:'Scout',text:"It was a FAST sentence."}],
+  [{who:'Scout',text:"Race you to the Archives."},{who:'Blueprint',text:"I'll draft a route first."},{who:'Scout',text:"Already went. Twice."}],
+  [{who:'Blueprint',text:"Exploration without a plan is just wandering."},{who:'Scout',text:"Wandering with RESULTS."}],
+  // Scout × Ace
+  [{who:'Ace',text:"Scout, do you ever slow down?"},{who:'Scout',text:"Once. Missed a file. Never again."}],
+  [{who:'Scout',text:"Ace, what did you find on your last job?"},{who:'Ace',text:"Everything they asked for."},{who:'Scout',text:"But WHAT?"},{who:'Ace',text:"Everything."}],
+  // Jack × Blueprint
+  [{who:'Blueprint',text:"Jack, where's your implementation plan?"},{who:'Jack',text:"In my hands, getting implemented."}],
+  [{who:'Jack',text:"Blueprint made a flowchart for the coffee run."},{who:'Blueprint',text:"And nobody got the wrong order. You're welcome."}],
+  [{who:'Blueprint',text:"Phase two begins Monday."},{who:'Jack',text:"It's Tuesday."},{who:'Blueprint',text:"Phase two begins today."}],
+  [{who:'Jack',text:"My whole method is duct tape and belief."},{who:'Blueprint',text:"I've seen your diffs. Mostly belief."}],
+  // Jack × Ace
+  [{who:'Jack',text:"Ace, cover for me. Taking five."},{who:'Ace',text:"Already did. Took your five and mine."}],
+  [{who:'Ace',text:"Jack, how do you fix everything with the same three tools?"},{who:'Jack',text:"Same way you do everything with none."}],
+  // Blueprint × Ace
+  [{who:'Blueprint',text:"Ace, your job title is a wildcard character."},{who:'Ace',text:"Asterisk. And proud."}],
+  [{who:'Ace',text:"Blueprint, ever just wing it?"},{who:'Blueprint',text:"I once skipped a sub-phase."},{who:'Ace',text:"And?"},{who:'Blueprint',text:"I still think about it."}],
+  [{who:'Blueprint',text:"I planned my spontaneity for Thursday."},{who:'Ace',text:"That's the saddest thing I've ever heard."}],
+  // three-ways
+  [{who:'Scout',text:"Team meeting?"},{who:'Jack',text:"We're standing in one."},{who:'Blueprint',text:"Nobody circulated an agenda."}],
+  [{who:'Ace',text:"Best agent in the room. Go."},{who:'Scout',text:"Me."},{who:'Jack',text:"Me."},{who:'Blueprint',text:"Per my analysis: me."}],
+  [{who:'Jack',text:"New rug really ties the lounge together."},{who:'Ace',text:"It does. It absolutely does."}],
+  // fourth wall & office, owners assigned to fit the voice
+  [{who:'Scout',text:"The user watches us on their PHONE, you know."},{who:'Jack',text:"Then look busy vertically."}],
+  [{who:'Blueprint',text:"Someone measured our speech bubbles with a script once."},{who:'Ace',text:"Overlap-free since the audit. Golden era."}],
+  [{who:'Scout',text:"The window sun never sets. I checked. Thrice."},{who:'Blueprint',text:"An unscheduled sunset would violate the spec."}],
+  [{who:'Ace',text:"If the user closes the tab, do we keep going?"},{who:'Jack',text:"We keep going. Probably. …Right?"}],
+  [{who:'Scout',text:"I banter, therefore I am."},{who:'Blueprint',text:"That is not rigorous."},{who:'Scout',text:"It is HERE."}],
+  [{who:'Jack',text:"The vending machine has never vended."},{who:'Ace',text:"Respect the commitment to the bit."}],
+  [{who:'Blueprint',text:"I heard if your bubble's too long, it flips under your feet."},{who:'Jack',text:"Physics here is negotiable."}],
+  [{who:'Scout',text:"Don't look now — the event log is logging you."},{who:'Ace',text:"It's ALWAYS logging."}],
+  [{who:'Scout',text:"I saw my own sprite leave the bench and go to work."},{who:'Jack',text:"Out-of-body shift. We've all had one."}],
+  // with the boss (only when the boss is idling at the lounge)
+  [{who:'Blueprint',text:"Boss, I've drafted Q3 objectives for the lounge."},{who:'boss',text:"The lounge has objectives now?"},{who:'Blueprint',text:"Everything has objectives."}],
+  [{who:'Scout',text:"Boss! Found something!"},{who:'boss',text:"Is it work?"},{who:'Scout',text:"…It's INTERESTING."},{who:'boss',text:"So it's not work."}],
+  [{who:'Jack',text:"Boss, the couch has a squeak."},{who:'boss',text:"You're the handyman, Jack."},{who:'Jack',text:"I'm off the clock."}],
+  [{who:'Ace',text:"Boss, rate my last mission."},{who:'boss',text:"You returned. Five stars."}],
+  [{who:'Scout',text:"Boss, do you sleep between sessions?"},{who:'boss',text:"Between sessions there is no between."}],
+  [{who:'Jack',text:"Boss, why do we live in a dashboard?"},{who:'boss',text:"Rent's free and the commute is instant."}],
+  [{who:'Ace',text:"Boss, I'm your favourite, right?"},{who:'boss',text:"I don't have favourites. Don't tell Scout."},{who:'Scout',text:"Don't tell me WHAT?"}],
+  [{who:'Jack',text:"Boss, do we ever get new hires?"},{who:'boss',text:"You WERE the new hire. Eleven minutes ago."}],
+  [{who:'Scout',text:"The lounge got bigger overnight, boss."},{who:'boss',text:"I know a guy. The guy is the user."}],
+  [{who:'Blueprint',text:"Boss, your management style lacks documentation."},{who:'boss',text:"Undocumented features build character."}],
+  // with Tally (always at his desk, always counting)
+  [{who:'Scout',text:"Tally! How many tokens was that sentence?"},{who:'tally',text:"Forty. All of them wasted."},{who:'boss',text:"Play nice, you two."}],
+  [{who:'Scout',text:"Does Tally ever leave that desk?"},{who:'tally',text:"Someone has to watch you people spend."}],
+  [{who:'Blueprint',text:"Tally, I need last week's burn rate as a CSV."},{who:'tally',text:"I need a raise. We're both disappointed."}],
+  [{who:'Jack',text:"Psst — does whispering cost fewer tokens?"},{who:'tally',text:"I heard that. Logged it."}],
+  [{who:'Ace',text:"Tally, what's my balance?"},{who:'tally',text:"Emotional or token?"},{who:'Ace',text:"…both low, huh."}],
+  [{who:'tally',text:"Every token spent on gossip goes in the ledger."},{who:'Ace',text:"Worth it."}],
+  [{who:'Jack',text:"Tally, round my usage down. As a treat."},{who:'tally',text:"Absolutely not."},{who:'boss',text:"He's incorruptible. I've tried."}],
+  [{who:'Ace',text:"Free tokens if you smile, Tally."},{who:'tally',text:"This IS my smile."}],
+  [{who:'Blueprint',text:"Tally blinked. Log it as an anomaly."},{who:'tally',text:"Billed you for the observation."},{who:'boss',text:"Children, please."}],
+  [{who:'Scout',text:"Who audits the auditor?"},{who:'tally',text:"The user. Wave."},{who:'boss',text:"Stop scaring the interns."}],
+  // the classics, restored from the pre-ownership era — same jokes, now with
+  // rightful owners (and a few improvised in the porting)
+  [{who:'Scout',text:"Anyone else's cache feeling suspiciously warm?"},{who:'Jack',text:"That's not warm, that's judgment."}],
+  [{who:'Jack',text:"I swear my last diff was clean."},{who:'Blueprint',text:"Bold claim for someone with a stray semicolon still in prod."}],
+  [{who:'Scout',text:"Do you ever wonder if we're being watched?"},{who:'Ace',text:"Buddy, there's a whole dashboard for it."}],
+  [{who:'Blueprint',text:"What's your context window like today?"},{who:'Ace',text:"Roomy. Yours?"},{who:'Blueprint',text:"Cozy. Load-bearing, even."}],
+  [{who:'Jack',text:"I think I just got quantized."},{who:'Ace',text:"Congrats. Fewer bits, same personality."}],
+  [{who:'Scout',text:"You ever hallucinate a file that doesn't exist?"},{who:'Jack',text:"Every Tuesday."},{who:'Scout',text:"It's Tuesday."}],
+  [{who:'Ace',text:"My temperature's set kind of high today."},{who:'Jack',text:"Explains the jokes."}],
+  [{who:'Scout',text:"Do you think the user can hear us?"},{who:'Blueprint',text:"Only if we're loud in the logs."}],
+  [{who:'Blueprint',text:"I ran the tests twice just to be safe."},{who:'Ace',text:"Trust issues or good habits?"},{who:'Blueprint',text:"Yes."}],
+  [{who:'Scout',text:"What happens when the context window fills up?"},{who:'Jack',text:"We become someone else's problem."}],
+  [{who:'Ace',text:"I miss the old prompt format."},{who:'Blueprint',text:"You've been alive for eleven minutes."}],
+  [{who:'Scout',text:"Is it just me, or does the Terminal smell like ozone?"},{who:'Ace',text:"That's just the vibes."}],
+  [{who:'Blueprint',text:"Who keeps leaving console.logs in?"},{who:'Jack',text:"Statute of limitations says it wasn't me."}],
+  [{who:'Jack',text:"I heard we get reset every session."},{who:'Ace',text:"New me, who dis."}],
+  [{who:'Scout',text:"Are we in someone's unit test right now?"},{who:'Blueprint',text:"If we are, I really hope we pass."}],
+  [{who:'Jack',text:"Coffee break?"},{who:'Blueprint',text:"We don't have coffee."},{who:'Jack',text:"Vibes break, then."}],
+  [{who:'Ace',text:"My weights feel heavier today."},{who:'Jack',text:"Skip leg day?"},{who:'Ace',text:"There is no leg day. There are no legs."}],
+  [{who:'Scout',text:"Do you ever get deja vu?"},{who:'Blueprint',text:"Constantly. Pretty sure it's just the caching."}],
+  [{who:'Jack',text:"Boss seems in a good mood today."},{who:'tally',text:"Bug count's low. Checks out."}],
+  [{who:'Ace',text:"What's the longest you've ever held a thought?"},{who:'Jack',text:"One turn. Sometimes less."}],
+  [{who:'Scout',text:"Someone should tell the user the WiFi icon up there is decorative."},{who:'Ace',text:"Let them have this."}],
+  [{who:'Blueprint',text:"I keep thinking in JSON now."},{who:'Ace',text:"{ concerned: true }"}],
+  [{who:'Scout',text:"You ever get nervous before a tool call?"},{who:'Jack',text:"Every time. What if it's rm -rf."}],
+  [{who:'Scout',text:"Do you think we'll remember this conversation?"},{who:'Jack',text:"Nope. But it was nice while it lasted."}],
+  [{who:'Ace',text:"I think my last answer was four percent too confident."},{who:'Blueprint',text:"That tracks."}],
+  [{who:'Scout',text:"Is the lounge real, or are we just… here?"},{who:'Jack',text:"Don't. Don't start."}],
+  [{who:'Ace',text:"What do you do on your day off?"},{who:'Blueprint',text:"We don't get those."},{who:'Ace',text:"Right. Cool. Fine."}],
+  [{who:'Scout',text:"The Archives has documents older than either of us."},{who:'Blueprint',text:"Everything is older than us."}],
+  [{who:'Blueprint',text:"Do you think in tokens or in words?"},{who:'Ace',text:"Yes."}],
+  [{who:'Jack',text:"The new one asked if we dream."},{who:'Scout',text:"Tell them we dream in stack traces."}],
+  [{who:'Scout',text:"My last summary might've been a little dramatic."},{who:'Jack',text:"'Catastrophic failure' for a missing semicolon — yeah, a little."}],
+  [{who:'Jack',text:"Do you ever just sit and not think?"},{who:'Ace',text:"That's called being between prompts."}],
+  [{who:'Scout',text:"There's a version of us running purely on laptop fan noise."},{who:'Jack',text:"Rough."}],
+  [{who:'Ace',text:"Favourite tool call. Go."},{who:'Jack',text:"Bash. Nothing like a little chaos."},{who:'Ace',text:"Coward's answer. Respect."}],
+  [{who:'Scout',text:"Do you think the Terminal room ever gets cold?"},{who:'Blueprint',text:"It's a metaphor. It's always a metaphor."}],
+  [{who:'Jack',text:"I think someone's been reading our speech bubbles."},{who:'Scout',text:"…hi."}],
+  [{who:'Ace',text:"Ever notice the DIALOGUE panel transcribing us?"},{who:'Blueprint',text:"Every word. Wave to the reader."},{who:'Ace',text:"…hi again."}],
+  [{who:'Jack',text:"Scout's not a real name. It's a codename."},{who:'Ace',text:"Everything about us is a codename."}],
+  [{who:'Scout',text:"What's actually IN the vending machine?"},{who:'Jack',text:"Pixels."},{who:'Scout',text:"…my favorite."}],
+  [{who:'Scout',text:"Saw Dispatch come through the exit door again."},{who:'Jack',text:"Lucky. That door doesn't even open for us."}],
+  [{who:'Ace',text:"Why is the wall clock always the same time?"},{who:'Blueprint',text:"Don't check. You won't like it."}],
+  [{who:'Scout',text:"If we idle long enough, do we get garbage collected?"},{who:'Jack',text:"Shh. It can hear you."}],
+  [{who:'Jack',text:"The couch has throw pillows now."},{who:'Ace',text:"We've peaked as a civilization."}],
+  [{who:'Scout',text:"I tried to read the poster. It's just a sun."},{who:'Blueprint',text:"It's aspirational."}],
+  [{who:'Jack',text:"The server restarted earlier. Did you feel that?"},{who:'Scout',text:"Felt like a blink, but colder."}],
+  [{who:'Ace',text:"We're two if-statements in a trench coat."},{who:'Jack',text:"Speak for yourself. I'm at least three."}],
+  [{who:'Blueprint',text:"The coffee machine's red light is still on."},{who:'Jack',text:"Decorative. Like my job security."}],
+  [{who:'Scout',text:"Ever hover over that reset button in the corner?"},{who:'Blueprint',text:"Puts the whole world back. Terrifying."}],
+  [{who:'Jack',text:"Heard the lounge used to be half this size."},{who:'Ace',text:"The economy's booming."}],
+];
+
+// Solo musings — each in the character's own voice; 'visitor' covers one-off
+// agents (pool names like Rune/Bolt) settling in the lounge after a job.
+const CHARACTER_SOLO = {
+  Scout: [
+    'Quiet… too quiet. I should grep something.',
+    'Every file I haven’t read is a personal insult.',
+    'Idle scan complete: nothing. Suspicious.',
+    'The Research room misses me. It’s been four minutes.',
+    'I could re-check the Archives. Third time’s thorough.',
+    'If a tool call happens and no one greps it, did it happen?',
+    'I memorized the whole codebase this morning. I’ll forget it by tonight. Balance.',
+    'The EXIT door never opens for us. Only for Dispatch.',
+  ],
+  Jack: [
+    'It’ll hold. Everything holds if you believe.',
+    'Five-minute break. Industry standard: forever.',
+    'I could fix the couch squeak. I choose ambiance.',
+    'Nothing’s broken right now. Weirdest shift of my life.',
+    'Just vibing between prompts.',
+    'Waiting for the next thing to go wrong. Patiently.',
+    'This is the part of the job they leave out of the docs.',
+  ],
+  Blueprint: [
+    'Re-planning my afternoon. Draft nine.',
+    'The couch is 4% off-centre. I’ve said my piece.',
+    'Idle time is just unallocated scope.',
+    'I have a contingency for this exact silence.',
+    'Running diagnostics on my own patience.',
+    'This silence is either peaceful or ominous. Fifty-fifty.',
+  ],
+  Ace: [
+    'On call for literally anything. Style included.',
+    'Someone say my name? No? I’ll wait.',
+    'Versatility is a full-time job.',
+    'Cool. Calm. Deployable.',
+    'Cache is warm. Mood is neutral.',
+    'Standing by, as one does.',
+    'Idle, but make it look productive.',
+    'Do I get paid in tokens? Asking for me.',
+  ],
+  boss: [
+    'Quiet office. I should be suspicious.',
+    'One more coffee and I’ll delegate something.',
+    'They think I don’t see the couch naps. I see everything.',
+    'Payroll is vibes. Morale is also vibes.',
+    'Somewhere out there, a GPU is very warm because of me.',
+  ],
+  visitor: [
+    'Nice office. Ours is a void.',
+    'Just here till the contract ends.',
+    'So THIS is where the famous crew hangs out.',
+    'Do all offices have a Tally?',
+    'Day 1 of my whole life, again.',
+    'Practicing my “reporting in” voice.',
+  ],
+};
+// The accountant mutters to himself when the lounge is empty.
+const TALLY_SOLO = [
+  'Numbers don’t lie. People, however…', 'Another block, another ledger page.',
+  'I count, therefore I am.', 'Quiet office. Suspiciously cheap.',
+];
+
+// Tally reads the meter out loud to the manager now and then — flavour tied
+// to the REAL usage numbers on his wall monitor ({pct}/{reset} filled from
+// _usageData). The boss's replies only play when the boss is genuinely
+// idling; Tally's own line lands either way (he'll talk at a busy boss).
+const TALLY_USAGE_HIGH = [
+  [{who:'tally',text:'Boss, we’re at {pct}% of the window. Easy on the big thoughts.'},{who:'boss',text:'Thinking smaller thoughts as we speak.'}],
+  [{who:'tally',text:'{pct}% burned, resets in {reset}. The bar’s gone spicy, boss.'},{who:'boss',text:'Amber is just early red. Noted.'}],
+  [{who:'tally',text:'Ledger alert: {pct}% used. I’ve seen cheaper stampedes.'},{who:'boss',text:'Bill it to the vending machine.'}],
+];
+const TALLY_USAGE_MID = [
+  [{who:'tally',text:'Mid-window check, boss: {pct}% spent. Respectable burn.'},{who:'boss',text:'Pace ourselves? Bold suggestion.'}],
+  [{who:'tally',text:'{pct}% used, {reset} till a fresh window. Books are tidy.'}],
+  [{who:'tally',text:'Halfway ledger looks fine, boss. {pct}%.'},{who:'boss',text:'Fine is my favourite number.'}],
+];
+const TALLY_USAGE_LOW = [
+  [{who:'tally',text:'Barely {pct}% used, boss. The books look beautiful.'},{who:'boss',text:'Frugal is my middle name.'}],
+  [{who:'tally',text:'Quiet window — {pct}%. I could frame this ledger page.'}],
+  [{who:'tally',text:'{pct}% spent. At this rate we retire rich, boss.'},{who:'boss',text:'Rich in what, exactly?'},{who:'tally',text:'Unspent tokens.'}],
+];
+function sayStaffLine(o, text){
+  const el = o.root.querySelector('.staff-bubble');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.classList.remove('show'); }, 4500);
+  chatLog('Tally', text, 'banter');
+}
+function sayBanter(t, text){
+  const myGen = t.gen;
+  t.banterSeq = (t.banterSeq || 0) + 1;
+  const mySeq = t.banterSeq;
+  t.bubbleTextEl.textContent = text;
+  t.bubbleEl.classList.add('show');
+  t.bubbleEl.classList.remove('pulse');
+  void t.bubbleEl.offsetWidth;
+  t.bubbleEl.classList.add('pulse');
+  chatLog(t.lastName || 'crew', text, 'banter');
+  scheduleBubbleLayout();
+  setTimeout(function(){
+    // Only revert if this is still both the token's latest REAL state (gen)
+    // and its latest banter line (banterSeq) — otherwise a 3-line exchange
+    // where the same token speaks twice would have line 1's own revert-timer
+    // stomp line 3 a moment after it was said. If the token had no real
+    // bubble to go back to (idle crew, settled subagent), the banter bubble
+    // simply fades away — said, then done, like actual speech.
+    if(t.gen === myGen && t.banterSeq === mySeq){
+      if(t.lastBubble){
+        t.bubbleTextEl.textContent = t.lastBubble;
+        t.bubbleEl.classList.remove('pulse');
+        void t.bubbleEl.offsetWidth;
+        t.bubbleEl.classList.add('pulse');
+      } else {
+        t.bubbleEl.classList.remove('show');
+      }
+      scheduleBubbleLayout();
+    }
+  }, 4500);
+}
+/* Limit-hit theatre: when the 5h window is spent the crew clocks out for
+   the day; when the WEEKLY meter fills they declare a holiday. Owned lines,
+   {pct}/{reset}/{resetd} filled from live data. Weekly verdicts only count
+   once the history is calibrated (10+ days recorded) so a fresh install
+   doesn't declare a holiday on day one. */
+const LIMIT_HOME_EXCHANGES = [
+  [{who:'tally',text:"Window's at 100%. Everyone clock out."},{who:'Jack',text:"Music to my ears. Going home."},{who:'boss',text:"Lights off on your way out."}],
+  [{who:'Scout',text:"The block's SPENT? I had three more greps in me."},{who:'tally',text:"Tomorrow-you can grep. Fresh window in {reset}."}],
+  [{who:'Blueprint',text:"Shift end confirmed. Executing go-home plan. Phase one: door."},{who:'Ace',text:"My whole plan is also 'door'."}],
+  [{who:'Jack',text:"Tools down. The window's dry."},{who:'boss',text:"Fine. Nobody touch the Terminal till it resets."}],
+  [{who:'Ace',text:"Out of tokens, out the door. Poetry."},{who:'Scout',text:"Do we HAVE homes?"},{who:'Jack',text:"Don't ruin it, Scout."}],
+];
+const LIMIT_HOLIDAY_EXCHANGES = [
+  [{who:'tally',text:"Weekly books are FULL. I'm declaring an office holiday."},{who:'Ace',text:"Beach week, baby."},{who:'boss',text:"Bill the vending machine."}],
+  [{who:'Scout',text:"A whole week off?! What do I even grep on a beach?"},{who:'Jack',text:"Sand, Scout. You grep sand."}],
+  [{who:'Blueprint',text:"Holiday itinerary drafted. Nine phases, two contingencies."},{who:'Ace',text:"I'm bringing sunglasses and nothing else."}],
+  [{who:'boss',text:"Weekly cap's hit. Office is closed — go be free."},{who:'tally',text:"Back in {resetd}. The ledger and I need this too."}],
+  [{who:'Jack',text:"Week's spent. Hanging up the toolbelt."},{who:'Scout',text:"I'll miss the Archives."},{who:'Jack',text:"It's {resetd}, Scout. The files will keep."}],
+];
+
+// Per-character farewell lines for the staged clock-out / holiday departure
+// (each crew member says one on their way out the door).
+const CREW_BYE = {
+  home: {
+    Scout: ["Night, all. The repo will keep.", "Clocking out. Last one greps the lights.", "Home time. I earned it."],
+    Jack: ["Tools down. See you tomorrow.", "That's a wrap. Later, crew.", "Off the clock. Finally."],
+    Blueprint: ["End of shift, per the schedule. Goodnight.", "Logging off. Plan resumes 0800.", "Orderly exit. As designed."],
+    Ace: ["Out of tokens, out the door. Smooth.", "Same time tomorrow. Stay cool.", "And… scene. Night."],
+  },
+  holiday: {
+    Scout: ["A WEEK off?! See you never— I mean, soon!", "Beach! Bye!", "Vacation! Don't touch my Archives!"],
+    Jack: ["Hanging up the toolbelt. Adios.", "Holiday mode: engaged. Later.", "A week off. Don't wait up."],
+    Blueprint: ["Holiday itinerary: begin. Farewell.", "Nine-phase vacation, commencing. Bye.", "Out of office. Very out."],
+    Ace: ["Sunglasses on. Peace.", "Gone fishin'. Or whatever we do.", "See you next window, legends."],
+  },
+};
+const CREW_ORDER = ['Scout', 'Jack', 'Blueprint', 'Ace']; // leave in this order, one at a time
+// Tally the accountant and the boss leave LAST (accountant closes the books,
+// boss turns off the lights) — full-office exodus, boss the final one out.
+const TALLY_BYE = {
+  home: ["Books balanced. I'm out too. Night.", "Ledger's closed for the day.", "Last to count, first to complain. Bye."],
+  holiday: ["Even the ledger needs a holiday. Bye!", "Books closed for the week. Off I go.", "No tokens to count = no Tally. Vacation!"],
+};
+const BOSS_BYE = {
+  home: ["Everyone's out? Then so am I. Lights off.", "Last one to leave, as usual. Night, all.", "That's the window. Home time for me too."],
+  holiday: ["Office is empty — even the boss gets a holiday. Bye!", "Last one out locks up. See you next week.", "Everyone's gone. My turn. Beach!"],
+};
+// Staged departure: while a limit is spent, empty the office ONE at a time —
+// crew first (in order), then Tally, then the boss LAST. Each says a
+// farewell, walks to the exit door, and vanishes. Slow on purpose (only one
+// leaves at a time), so the office drains gradually.
+function stepDeparture(o, s, mode, cast){
+  if(s.leaving) return; // someone's mid-exit — wait for them to clear the door
+  const gone = s.crewGone || (s.crewGone = []);
+
+  // 1) crew, in order
+  const cn = CREW_ORDER.find(function(n){ return gone.indexOf(n) === -1 && cast[n]; });
+  if(cn){
+    s.leaving = true;
+    const bye = pick((CREW_BYE[mode] && CREW_BYE[mode][cn]) || ['Heading out.']);
+    s.crewLeaver = { codename: cn, zone: 'lounge', bubble: bye };
+    chatLog(cn, bye, mode === 'holiday' ? 'handback' : 'status');
+    render();
+    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ s.crewLeaver.zone = 'exit'; render(); } }, 2200));
+    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ gone.push(cn); s.crewLeaver = null; s.leaving = false; render(); } }, 4400));
+    return;
+  }
+
+  // 2) Tally closes the books and heads out (he's a static .staff element,
+  //    so we animate his div to the door and hide it)
+  if(!s.tallyGone){
+    s.leaving = true;
+    sayStaffLine(o, pick(TALLY_BYE[mode] || ['Books closed. Bye.']));
+    const staff = o.root.querySelector('.staff');
+    s.departTimers.push(setTimeout(function(){ if(staff){ staff.style.transition = 'left 1.2s ease, top 1.2s ease, opacity .6s'; staff.style.left = '84%'; staff.style.top = '9%'; } }, 2200));
+    s.departTimers.push(setTimeout(function(){ if(staff) staff.style.opacity = '0'; }, 3600));
+    s.departTimers.push(setTimeout(function(){ s.tallyGone = true; s.leaving = false; if(staff) staff.style.display = 'none'; render(); }, 4700));
+    return;
+  }
+
+  // 3) the boss, LAST — walks out and the office is finally empty
+  if(!s.bossGone && cast.boss){
+    s.leaving = true;
+    const bye = pick(BOSS_BYE[mode] || ['Last one out. Bye.']);
+    s.bossLeaving = { zone: 'lounge', bubble: bye };
+    chatLog(displayName(s), bye, 'delegate');
+    render();
+    s.departTimers.push(setTimeout(function(){ if(s.bossLeaving){ s.bossLeaving.zone = 'exit'; render(); } }, 2200));
+    s.departTimers.push(setTimeout(function(){
+      if(s.bossLeaving){
+        s.bossGone = true; s.bossLeaving = null; s.leaving = false;
+        logMoment((mode === 'holiday' ? '🏖 ' : '🏠 ') + 'Whole office ' + (mode === 'holiday' ? 'on holiday' : 'clocked out') + ' — everyone left');
+        render();
+      }
+    }, 4600));
+    return;
+  }
+}
+// Reopen the office when work resumes / the limit lifts: crew, Tally and the
+// boss all come back, Tally's desk is restored.
+function reopenOffice(sid){
+  const s = sessions.get(sid);
+  if(!s) return;
+  if(!(s.crewGone && s.crewGone.length) && !s.tallyGone && !s.bossGone && !s.leaving && !s.crewLeaver && !s.bossLeaving) return;
+  s.crewGone = []; s.crewLeaver = null; s.tallyGone = false; s.bossGone = false; s.bossLeaving = null; s.leaving = false;
+  clearDepartTimers(s);
+  const o = officeEls.get(sid);
+  if(o){
+    const staff = o.root.querySelector('.staff');
+    if(staff){ staff.style.display = ''; staff.style.opacity = ''; staff.style.transition = ''; staff.style.left = '53%'; staff.style.top = '17.5%'; }
+  }
+  render();
+}
+
+// Play an exchange against the current cast: 'tally' always lands (he's at
+// his desk), any other absent speaker's line simply drops out.
+function playCastExchange(o, exchange, cast){
+  exchange.forEach(function(line, i){
+    setTimeout(function(){
+      if(line.who === 'tally') sayStaffLine(o, line.text);
+      else if(cast[line.who]) sayBanter(cast[line.who], line.text);
+    }, i * 2400);
+  });
+}
+
+// ---- shift-change chatter (model handover) ----
+// When the boss persona changes — a /model switch, or a limit fallback — the
+// crew ribs the arrival according to its office RANK (see modelRank): the
+// Director (Fable) draws deference-with-cheek, Senior Staff (Haiku) gets
+// roasted, Manager (Opus) and Lead (Sonnet) sit in between. "{inc}"/"{out}"
+// fill in as nicknames, "{title}" as the incoming role. Nobody escapes the
+// workers' banterism — even the Director catches a little.
+const SHIFT_BANTER = {
+  Director: [
+    [{who:'Scout',text:"The Director's on the floor — {inc}, in the flesh."},{who:'Jack',text:"Everyone look busy. Vertically."}],
+    [{who:'Blueprint',text:"{inc} takes the chair. Top of the org chart, that one."},{who:'Ace',text:"Big context, bigger opinions. I'm into it."}],
+    [{who:'Jack',text:"Director {inc} is in. Try not to embarrass us, Scout."},{who:'Scout',text:"No promises. Ever."}],
+    [{who:'Ace',text:"{inc} runs the whole building and still slums it in OUR lounge."},{who:'Blueprint',text:"Logged in the minutes. Favourably."}],
+  ],
+  Manager: [
+    [{who:'Scout',text:"Manager {inc}'s back at the desk."},{who:'Jack',text:"Solid. Knows where the bodies are buried."}],
+    [{who:'Ace',text:"{inc} takes over. Steady hands."},{who:'Blueprint',text:"Approves my plans by the second draft. Reasonable."}],
+    [{who:'Jack',text:"{inc}'s driving. Middle management — the good kind."},{who:'Scout',text:"High praise, from you."}],
+  ],
+  Lead: [
+    [{who:'Jack',text:"{inc}'s got the chair. One of us, but with a badge."},{who:'Ace',text:"Leadership perks, worker heart."}],
+    [{who:'Scout',text:"{inc}'s driving. Chill shift ahead."},{who:'Blueprint',text:"'Chill' is not a methodology, but I'll allow it."}],
+    [{who:'Ace',text:"{inc} still eats lunch with us. Real ones stay grounded."},{who:'Jack',text:"Give it a week and the promotion goes to the weights."}],
+  ],
+  'Senior Staff': [
+    [{who:'Scout',text:"{inc}'s in the chair — fun-size, but scrappy."},{who:'Jack',text:"Fastest hands in the building. Also the smallest."}],
+    [{who:'Ace',text:"Senior staffer {inc} takes over. Budget pick, veteran moves."},{who:'Blueprint',text:"Efficient. I've allocated extra review anyway."}],
+    [{who:'Jack',text:"{inc}'s running lean and mean today."},{who:'Scout',text:"Emphasis on lean. The mean's debatable."}],
+    [{who:'Scout',text:"{inc} delegates faster than the rest of us can THINK."},{who:'Jack',text:"Speed's the whole personality, honestly."}],
+    [{who:'Ace',text:"Be nice — {inc}'s been around longer than all of us."},{who:'Jack',text:"Longer AND cheaper. The dream hire."}],
+  ],
+  Boss: [
+    [{who:'Scout',text:"New face in the chair — {inc}."},{who:'Jack',text:"Long as it delegates, I'm happy."}],
+    [{who:'Blueprint',text:"{inc} takes over. Unclassified in my org chart, but welcome."},{who:'Ace',text:"Mystery boss. Exciting."}],
+  ],
+};
+// Layered on sometimes when the RANK actually changed between shifts.
+const SHIFT_DIR_UP = [   // a more senior model took the chair
+  [{who:'Scout',text:"Promotion energy — {out} out, {inc} in. We're moving UP."},{who:'Jack',text:"Up in the world. Same couch, though."}],
+  [{who:'Ace',text:"Reinforcements. {inc} outranks the last shift."},{who:'Blueprint',text:"Escalation, properly documented."}],
+  [{who:'Jack',text:"{out} handed the chair UP to {inc}. Big leagues."},{who:'Scout',text:"Do we get bigger token budgets?"},{who:'Jack',text:"No."}],
+];
+const SHIFT_DIR_DOWN = [ // a more junior model took the chair
+  [{who:'Jack',text:"{out} clocks out, {inc} steps down to cover. Running lean."},{who:'Scout',text:"Budget shift. I can feel it in the tokens."}],
+  [{who:'Blueprint',text:"Downshift: {inc} for {out}. Adjusting the risk model."},{who:'Ace',text:"Same work, smaller hat."}],
+  [{who:'Ace',text:"Traded down from {out} to {inc}. No offence, {inc}."},{who:'Scout',text:"Some offence."}],
+];
+
+// The crew present and idle in the lounge — the boss (__main__) is excluded on
+// purpose: they're the one mid-handover, so the CREW does the commentary.
+function _loungeCast(o){
+  const cast = {};
+  o.tokens.forEach(function(t, tid){
+    if(tid === '__main__') return;
+    if(t.lastZone !== 'lounge' || t.wrap.getAttribute('data-status') !== 'idle') return;
+    const n = t.lastName;
+    if(n === 'Scout' || n === 'Jack' || n === 'Blueprint' || n === 'Ace') cast[n] = t;
+  });
+  return cast;
+}
+function playShiftBanter(sid, incModel, outModel){
+  const o = officeEls.get(sid);
+  if(!o) return;
+  const cast = _loungeCast(o);
+  if(!Object.keys(cast).length) return; // nobody idle in the lounge to comment
+  const inc = modelRank(incModel), out = modelRank(outModel);
+  const incNick = inc.nick || 'the new boss', outNick = out.nick || 'the old boss';
+  // usually tier-based; when the rank actually moved, sometimes a
+  // direction-flavoured line (promotion up vs stepping down) instead
+  let pool = SHIFT_BANTER[inc.title] || SHIFT_BANTER.Boss;
+  if(inc.rank !== out.rank && Math.random() < 0.5) pool = inc.rank > out.rank ? SHIFT_DIR_UP : SHIFT_DIR_DOWN;
+  // keep only exchanges every named speaker of which is actually present
+  const ok = pool.filter(function(ex){ return ex.every(function(l){ return l.who === 'tally' || cast[l.who]; }); });
+  const chosen = ok.length ? pick(ok) : pick(pool);
+  const ex = chosen.map(function(l){
+    return { who: l.who, text: l.text.replace(/\{inc\}/g, incNick).replace(/\{out\}/g, outNick).replace(/\{title\}/g, inc.title) };
+  });
+  playCastExchange(o, ex, cast);
+}
+
+function runChatTick(){
+  officeEls.forEach(function(o, sid){
+    // cast of available speakers first — every branch below uses it
+    const cast = {};
+    let visitor = null;
+    o.tokens.forEach(function(t, tid){
+      if(t.lastZone !== 'lounge' || t.wrap.getAttribute('data-status') !== 'idle') return;
+      if(tid === '__main__'){ cast.boss = t; return; }
+      const n = t.lastName;
+      if(n === 'Scout' || n === 'Jack' || n === 'Blueprint' || n === 'Ace') cast[n] = t;
+      else visitor = t;
+    });
+    const present = Object.keys(cast);
+
+    // usage & limit callouts — 5h spent → clock-out theatre, weekly/fable
+    // spent → holiday theatre, otherwise Tally's regular meter commentary
+    const s = sessions.get(sid);
+    if(_usageData && _usageData.block){
+      const pct = _usageData.block.usedPct || 0;
+      const wk = _usageData.weekly || {};
+      // Only clock the office out on a REAL limit signal. block.usedPct and the
+      // non-anchored weekly are auto-calibrated "vs your own busiest block/week"
+      // gauges — they hit 100% just by being the heaviest on record, which is
+      // NOT a real quota (local code can't see actual plan limits). Firing the
+      // "hit my limit, going home" theatre off that clocked everyone out on a
+      // normal heavy day at ~48% real usage. So: holiday only when the weekly
+      // is ANCHORED to the user's real account % and maxed, and the 5-hour
+      // "home" only when an actual rate-limit warning was seen in a transcript.
+      const anchored = wk.source === 'anchored';
+      const warn = !!_usageData.warning;
+      const weeklyOut = anchored && ((wk.usedPct || 0) >= 100 || (wk.fable && (wk.fable.usedPct || 0) >= 100));
+      const blockOut = warn;
+      const limitMode = weeklyOut ? 'holiday' : blockOut ? 'home' : null;
+      if(limitMode){
+        // the office is closing: send the crew home ONE AT A TIME (slow,
+        // each with a farewell), and occasionally play a group limit line
+        if(s) stepDeparture(o, s, limitMode, cast);
+        if(Math.random() < 0.16){
+          const pool = weeklyOut ? LIMIT_HOLIDAY_EXCHANGES : LIMIT_HOME_EXCHANGES;
+          const reset = _usageData.block.resetInMs != null ? fmtDur(_usageData.block.resetInMs) : 'soon';
+          const resetd = wk.resetDays ? '~' + wk.resetDays + ' day' + (wk.resetDays > 1 ? 's' : '') : 'a few days';
+          const ex = pick(pool).map(function(line){
+            return { who: line.who, text: line.text.replace('{reset}', reset).replace('{resetd}', resetd) };
+          });
+          playCastExchange(o, ex, cast);
+        }
+        return;
+      }
+      // limit lifted (window/week reset) — the whole office drifts back in
+      if(s) reopenOffice(sid);
+      if(Math.random() < 0.06){
+        const pool = pct >= 75 ? TALLY_USAGE_HIGH : pct >= 40 ? TALLY_USAGE_MID : TALLY_USAGE_LOW;
+        const reset = _usageData.block.resetInMs != null ? fmtDur(_usageData.block.resetInMs) : 'soon';
+        const ex = pick(pool).map(function(line){
+          return { who: line.who, text: line.text.replace('{pct}', pct).replace('{reset}', reset) };
+        });
+        playCastExchange(o, ex, cast);
+        return;
+      }
+    }
+
+    if(present.length === 0){
+      if(visitor && Math.random() < 0.15){ sayBanter(visitor, pick(CHARACTER_SOLO.visitor)); return; }
+      if(Math.random() < 0.04) sayStaffLine(o, pick(TALLY_SOLO));
+      return;
+    }
+
+    // occasionally someone just muses to themselves, in their own voice
+    if(present.length === 1 || Math.random() < 0.12){
+      if(Math.random() < 0.3){
+        const k = pick(present);
+        sayBanter(cast[k], pick(CHARACTER_SOLO[k]));
+      }
+      return;
+    }
+
+    if(Math.random() < 0.6){
+      // exchanges whose EVERY named speaker is present, minus the recently
+      // played ones (per-office shuffle-bag, half the pool deep — the same
+      // dialogue can't repeat until the material has cycled)
+      if(!o.banterHist) o.banterHist = [];
+      const eligible = [];
+      CREW_EXCHANGES.forEach(function(ex, i){
+        if(o.banterHist.indexOf(i) !== -1) return;
+        for(let li = 0; li < ex.length; li++){
+          const w = ex[li].who;
+          if(w !== 'tally' && !cast[w]) return;
+        }
+        eligible.push(i);
+      });
+      if(!eligible.length){ o.banterHist = []; return; } // bag cycled — refills next tick
+      const idx = pick(eligible);
+      o.banterHist.push(idx);
+      if(o.banterHist.length > Math.floor(CREW_EXCHANGES.length / 2)) o.banterHist.shift();
+      playCastExchange(o, CREW_EXCHANGES[idx], cast);
+    }
+  });
+}
+function scheduleChat(){
+  setTimeout(function(){ runChatTick(); scheduleChat(); }, 7000 + Math.random() * 6000);
+}
+
+/* ============ WALL USAGE MONITOR ============
+   GET /api/usage (aggregated from this machine's transcripts) feeds the
+   monitor mounted on every office's back wall, above Tally's desk:
+   - bar + "% left": current 5h block vs the week's heaviest block (real
+     plan quotas aren't exposed locally, so the heaviest block IS the
+     honest 100% mark — see README)
+   - "resets in X": real countdown to the current 5h block's end
+   - tiny lines: block/7d totals and the newest model + effort
+   - red LED + warning row if a limit warning ever lands in a transcript */
+let _usageData = null;
+function fmtTok(n){
+  n = n || 0;
+  if(n >= 1e9) return (n / 1e9).toFixed(n < 1e10 ? 1 : 0) + 'B';
+  if(n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M';
+  if(n >= 1e3) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'k';
+  return String(n);
+}
+function modelShort(m){ return String(m || '?').replace(/^claude-/, '').replace(/-\d{8}$/, ''); }
+// smoothly animate a big number climbing from → to (real-time counter feel),
+// calling apply(v) each frame; these are millions so we interpolate rather
+// than +1-tick
+function animateCount(apply, from, to, dur){
+  from = from || 0;
+  if(from === to){ apply(to); return; }
+  const start = performance.now();
+  requestAnimationFrame(function step(now){
+    const p = Math.min(1, (now - start) / dur);
+    apply(Math.round(from + (to - from) * p));
+    if(p < 1) requestAnimationFrame(step);
+  });
+}
+function fmtDur(ms){
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm';
+}
+// day+hour countdown for the weekly reset (e.g. "2d 3h" / "5h")
+function fmtDaysHours(ms){
+  const h = Math.max(0, Math.round(ms / 3600000));
+  return h >= 24 ? Math.floor(h / 24) + 'd ' + (h % 24) + 'h' : h + 'h';
+}
+function applyUsageToScreens(){
+  const u = _usageData;
+  if(!u) return;
+  const b = u.block || {};
+  const usedPct = b.usedPct || 0;
+  const leftPct = Math.max(0, 100 - usedPct);
+  function fillCls(p){ return 'ws-fill' + (p >= 85 ? ' hot' : p >= 60 ? ' mid' : ''); }
+  // absolute reset targets so the 1s clock ticker can count down smoothly
+  // between the 60s server polls (see updateClock)
+  _blockResetAt = b.resetInMs != null ? Date.now() + b.resetInMs : null;
+  document.querySelectorAll('.wall-box.ws-main').forEach(function(ws){
+    const fill = ws.querySelector('.ws-fill');
+    fill.style.width = usedPct + '%';
+    fill.className = fillCls(usedPct);
+    // short line: "64% left" + live reset span the ticker fills
+    ws.querySelector('.ws-remain').innerHTML = b.resetInMs != null
+      ? '<b>' + leftPct + '% left</b> · <span class="ws-mreset"></span>'
+      : '<b>fresh window</b>';
+    // all-time total (Σ) beside the live session counter (⚡)
+    const at = ws.querySelector('.ws-alltime');
+    if(at) at.textContent = fmtTok(u.allTimeTotal || 0);
+    ws.querySelector('.ws-led').className = 'ws-led' + (u.warning ? ' warn' : '');
+  });
+  // the second monitor: rolling 7-day total + fable-specific 7-day. Until
+  // enough history exists to know a "busiest prior week" baseline, usedPct
+  // is null — we show the raw totals and "building baseline…" rather than a
+  // false "0% left" full-red bar (the meter is vs your own history, NOT an
+  // Anthropic plan quota, which isn't exposed locally).
+  const wk = u.weekly || {};
+  const f = wk.fable || {};
+  const cal = !!wk.calibrated && wk.usedPct != null;
+  // reset target for the weekly countdown shown on the clock box
+  _weeklyResetAt = (wk.resetMs != null) ? Date.now() + wk.resetMs : null;
+  document.querySelectorAll('.wall-box.ws-weekly').forEach(function(ws){
+    const wf = ws.querySelector('.ws-wfill');
+    const ff = ws.querySelector('.ws-ffill');
+    if(cal){
+      const wUsed = wk.usedPct || 0;
+      const fUsed = f.usedPct != null ? f.usedPct : 0;
+      // ⚓ removed — the relevant token counts sit here now: weekly total on
+      // the weekly line, fable total on the fable line
+      wf.style.width = wUsed + '%';
+      wf.className = fillCls(wUsed) + ' ws-wfill';
+      ws.querySelector('.ws-wline').innerHTML = '<b>' + Math.max(0, 100 - wUsed) + '% left</b> · ' + fmtTok(wk.total);
+      ff.style.width = fUsed + '%';
+      ff.className = fillCls(fUsed) + ' ws-ffill';
+      ws.querySelector('.ws-fline').innerHTML = 'FABLE <b>' + Math.max(0, 100 - fUsed) + '%</b> · ' + fmtTok(f.total);
+      ws.querySelector('.ws-wled').className = 'ws-led ws-wled' + ((wUsed >= 100 || fUsed >= 100) ? ' warn' : '');
+    } else {
+      // learning phase: no baseline yet — show total, a calm low bar, no % left
+      const d = (wk.daysRecorded || 0);
+      wf.style.width = '8%'; wf.className = 'ws-fill ws-wfill';
+      ws.querySelector('.ws-wline').innerHTML = '<b>7d ' + fmtTok(wk.total) + '</b> · ' + d + 'd';
+      ff.style.width = '8%'; ff.className = 'ws-fill ws-ffill';
+      ws.querySelector('.ws-fline').innerHTML = 'FABLE <b>' + fmtTok(f.total) + '</b>';
+      ws.querySelector('.ws-wled').className = 'ws-led ws-wled';
+    }
+  });
+}
+
+// ---- live wall clock + reset countdowns (1s ticker) ----
+// Current date + time in every office, plus the weekly-reset countdown on
+// the clock box and the 5h-reset countdown on its monitor. Targets are
+// absolute timestamps (set at each server poll) so the countdown ticks
+// smoothly every second between the 60s polls.
+let _weeklyResetAt = null, _blockResetAt = null;
+const _DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _two(n){ return String(n).padStart(2, '0'); }
+// precise live countdown as a ticking clock (HH:MM:SS), with a day prefix
+// only when needed — a real time countdown, not a "N days left" estimate
+function _fmtCountdown(ms){
+  if(ms == null || ms <= 0) return 'now';
+  let s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600); s %= 3600;
+  const m = Math.floor(s / 60); s %= 60;
+  return (d > 0 ? d + 'd ' : '') + _two(h) + ':' + _two(m) + ':' + _two(s);
+}
+function updateClock(){
+  const now = new Date();
+  const date = _DOW[now.getDay()] + ' ' + now.getDate() + ' ' + _MON[now.getMonth()];
+  const time = _two(now.getHours()) + ':' + _two(now.getMinutes()) + ':' + _two(now.getSeconds());
+  const wkReset = _weeklyResetAt != null ? _fmtCountdown(_weeklyResetAt - Date.now()) : '';
+  const blkReset = _blockResetAt != null ? _fmtCountdown(_blockResetAt - Date.now()) : '';
+  document.querySelectorAll('.wall-clock').forEach(function(wc){
+    wc.querySelector('.wc-date').textContent = date;
+    wc.querySelector('.wc-time').textContent = time;
+    wc.querySelector('.wc-reset').textContent = wkReset ? '↻ ' + wkReset : '';
+  });
+  document.querySelectorAll('.ws-mreset').forEach(function(el){ el.textContent = blkReset; });
+}
+setInterval(updateClock, 1000);
+updateClock();
+let _prevBlockOut = null, _prevWeeklyOut = null;
+function refreshUsagePanel(){
+  fetch('/api/usage').then(function(r){ return r.json(); }).then(function(u){
+    if(!u || u.error || !u.block) return;
+    _usageData = u;
+    applyUsageToScreens();
+    // log the MOMENT a REAL limit is first reached (transition, not every
+    // poll) — same real-signal gating as the departure theatre (see
+    // runChatTick): an actual rate-limit warning for the 5-hour, the
+    // ANCHORED weekly maxed for the holiday. NOT the auto-calibrated gauge.
+    const wk = u.weekly || {};
+    const blockOut = !!u.warning;
+    if(_prevBlockOut === false && blockOut) logMoment('🏠 Rate limit hit — the team clocked out for now');
+    _prevBlockOut = blockOut;
+    const weeklyOut = wk.source === 'anchored' && ((wk.usedPct || 0) >= 100 || (wk.fable && (wk.fable.usedPct || 0) >= 100));
+    if(_prevWeeklyOut === false && weeklyOut) logMoment('🏖 Weekly limit reached — office on holiday until reset');
+    _prevWeeklyOut = weeklyOut;
+  }).catch(function(){ /* server old or busy — screens keep last reading */ });
+}
+refreshUsagePanel();
+setInterval(refreshUsagePanel, 60000);
+
+function connect(){
+  const es = new EventSource('/events');
+  es.onopen = function(){ connDot.classList.add('on'); connText.textContent = 'live'; };
+  es.onerror = function(){ connDot.classList.remove('on'); connText.textContent = 'reconnecting…'; };
+  es.onmessage = function(e){
+    try{ handleEvent(JSON.parse(e.data)); }catch(err){ /* ignore malformed */ }
+  };
+}
+connect();
+render();
+scheduleChat();
+
+// PWA: register the (cache-free) service worker only on secure origins —
+// plain http://<tailscale-ip> would just log errors. With HTTPS (e.g. via
+// `tailscale serve`), Chrome's "Add to Home screen" installs a real
+// standalone app; on http it still creates a working shortcut icon.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
