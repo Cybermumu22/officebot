@@ -173,9 +173,9 @@
     /* width:max-content is load-bearing: an abs-positioned box otherwise
        shrink-to-fits against its containing block — the 24px badge — and
        collapses to one character per line. max-width still caps it. */
-    width:max-content; max-width:150px; padding:4px 7px; border-radius:8px;
+    width:max-content; max-width:128px; padding:3px 6px; border-radius:7px;
     background:#11142a; border:1px solid var(--st); color:#e2e4f0;
-    font-family:'VT323',monospace; font-size:.78rem; line-height:1.25; text-align:center;
+    font-family:'VT323',monospace; font-size:.66rem; line-height:1.22; text-align:center;
     opacity:0; white-space:normal; word-break:break-word;
     transition:opacity .25s; z-index:calc(4 + var(--tier, 0));
   }
@@ -2417,48 +2417,76 @@ function runChatTick(){
       return;
     }
 
-    // occasionally someone just muses to themselves, in their own voice
-    if(present.length === 1 || Math.random() < 0.12){
-      if(Math.random() < 0.3){
-        const k = pick(present);
-        sayBanter(cast[k], pick(CHARACTER_SOLO[k]));
-      }
-      return;
+    // ---- Group conversations ----
+    // Group the idle named cast by the room they're in. Each room-group with
+    // >=2 members can independently start its OWN conversation this tick, so
+    // several groups chatter SIMULTANEOUSLY (Lounge + Archives + Terminal can
+    // all be mid-convo at once). Cross-room "cross-talk" still fires now and
+    // then. When it all goes quiet, the next tick simply strikes up fresh.
+    const groups = {};
+    Object.keys(cast).forEach(function(n){
+      const z = cast[n].lastZone; (groups[z] = groups[z] || []).push(n);
+    });
+    if(!o.banterHist) o.banterHist = [];
+    const HIST_MAX = Math.floor(CREW_EXCHANGES.length / 2);
+    function pushHist(i){ o.banterHist.push(i); if(o.banterHist.length > HIST_MAX) o.banterHist.shift(); }
+    function eligibleWhere(test){
+      const out = [];
+      CREW_EXCHANGES.forEach(function(ex, i){ if(o.banterHist.indexOf(i) === -1 && test(ex)) out.push(i); });
+      return out;
     }
+    let fired = false;
 
-    if(Math.random() < 0.6){
-      // exchanges whose EVERY named speaker is present, minus the recently
-      // played ones (per-office shuffle-bag, half the pool deep — the same
-      // dialogue can't repeat until the material has cycled)
-      if(!o.banterHist) o.banterHist = [];
-      const eligible = [];
-      CREW_EXCHANGES.forEach(function(ex, i){
-        if(o.banterHist.indexOf(i) !== -1) return;
+    // (1) each room-group holds its OWN intra-room conversation
+    Object.keys(groups).forEach(function(zone){
+      const members = groups[zone];
+      if(members.length < 2 || Math.random() > 0.5) return; // not every group, every tick
+      const inRoom = {}; members.forEach(function(m){ inRoom[m] = 1; });
+      const eligible = eligibleWhere(function(ex){
+        let hasSpeaker = false;
         for(let li = 0; li < ex.length; li++){
           const w = ex[li].who;
-          if(w !== 'tally' && !cast[w]) return;
+          if(w === 'tally') continue;
+          if(!inRoom[w]) return false;    // a speaker who isn't in THIS room
+          hasSpeaker = true;
         }
-        eligible.push(i);
+        return hasSpeaker;
       });
-      if(!eligible.length){ o.banterHist = []; return; } // bag cycled — refills next tick
-      // Group agents mostly chat WITHIN their own room; cross-room "cross-talk"
-      // fires from time to time. Classify each eligible exchange by whether all
-      // its (non-tally) speakers currently share a room.
-      const intra = [], cross = [];
-      eligible.forEach(function(i){
-        let zone = null, same = true;
-        CREW_EXCHANGES[i].forEach(function(l){
-          if(l.who === 'tally') return; // Tally sits at his own desk, not a room
-          const t = cast[l.who]; if(!t) return;
-          if(zone === null) zone = t.lastZone; else if(t.lastZone !== zone) same = false;
-        });
-        (same ? intra : cross).push(i);
-      });
-      const idx = (cross.length && (!intra.length || Math.random() < 0.28))
-        ? pick(cross) : pick(intra.length ? intra : eligible);
-      o.banterHist.push(idx);
-      if(o.banterHist.length > Math.floor(CREW_EXCHANGES.length / 2)) o.banterHist.shift();
+      if(!eligible.length) return;
+      const idx = pick(eligible);
+      pushHist(idx);
       playCastExchange(o, CREW_EXCHANGES[idx], cast);
+      fired = true;
+    });
+
+    // (2) cross-room cross-talk, from time to time
+    if(Math.random() < 0.22){
+      const eligible = eligibleWhere(function(ex){
+        let zone = null, spans = false, any = false;
+        for(let li = 0; li < ex.length; li++){
+          const w = ex[li].who;
+          if(w === 'tally') continue;
+          if(!cast[w]) return false;
+          any = true;
+          const z = cast[w].lastZone;
+          if(zone === null) zone = z; else if(z !== zone) spans = true;
+        }
+        return any && spans;
+      });
+      if(eligible.length){ const idx = pick(eligible); pushHist(idx); playCastExchange(o, CREW_EXCHANGES[idx], cast); fired = true; }
+    }
+
+    // (3) if nobody struck up, a quiet solo musing or Tally mutter
+    if(!fired){
+      if(o.banterHist.length >= HIST_MAX) o.banterHist = []; // let the shuffle-bag refill
+      if(present.length && Math.random() < 0.22){
+        const k = pick(present);
+        if(CHARACTER_SOLO[k]) sayBanter(cast[k], pick(CHARACTER_SOLO[k]));
+      } else if(visitor && Math.random() < 0.15){
+        sayBanter(visitor, pick(CHARACTER_SOLO.visitor));
+      } else if(Math.random() < 0.05){
+        sayStaffLine(o, pick(TALLY_SOLO));
+      }
     }
   });
 }
