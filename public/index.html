@@ -767,7 +767,7 @@ function ensureSession(sid, evt){
       id: sid, cwd: basename(evt.cwd), avatar: avatarForSession(sid), modelNickname: null,
       status: 'idle', zone: 'lounge', bubble: null, lastEventAt: Date.now(),
       subagents: new Map(), removeTimer: null,
-      lastDelegation: null, lastDelegationAt: 0,
+      lastDelegation: null, lastDelegationAt: 0, pendingAgentTypes: [],
       courier: null, courierTimers: [],
       model: null, departing: null, departTimers: [],
     };
@@ -778,17 +778,36 @@ function ensureSession(sid, evt){
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
   return s;
 }
+// Claude Code's SubagentStart hook doesn't carry the agent type — but the
+// boss's preceding Task/Agent tool call does. We queue those types (FIFO,
+// time-bounded to the delegation window) so an arriving subagent can be named
+// from the boss's own hand-off instead of falling back to the generic pool
+// (which is why untyped subagents all showed up as "Echo").
+function _shiftPendingAgentType(s){
+  const q = s.pendingAgentTypes;
+  if(!q || !q.length) return '';
+  const now = Date.now();
+  while(q.length){
+    const e = q.shift();
+    if(e && e.type && (now - e.at) < DELEGATION_WINDOW_MS) return e.type;
+  }
+  return '';
+}
 function ensureSubagent(s, aid, evt){
   let a = s.subagents.get(aid);
   if(!a){
     // Fun codename instead of the raw agent type ("Scout", not "Explore").
+    // The hook usually omits the type, so fall back to what the boss said it
+    // was sending (see _shiftPendingAgentType) — no type at all is what made
+    // every subagent read as "Echo".
+    var effType = evt.agent_type || _shiftPendingAgentType(s);
     // If a second live subagent of the same type is already on the floor,
     // suffix a numeral so two Scouts working at once stay tellable apart.
-    const base = codenameForAgentType(evt.agent_type);
+    const base = codenameForAgentType(effType);
     let dupes = 0;
     s.subagents.forEach(function(other){ if(other.codenameBase === base) dupes++; });
     a = {
-      id: aid, agentType: evt.agent_type || 'agent', avatar: avatarForAgentType(evt.agent_type), modelNickname: null,
+      id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(effType), modelNickname: null,
       codenameBase: base,
       codename: dupes === 0 ? base : base + ' ' + (['II','III','IV','V'][dupes - 1] || (dupes + 1)),
       status: 'thinking', zone: 'warroom', bubble: base + ' reporting in.',
@@ -1025,9 +1044,13 @@ function handleEvent(evt){
       // the event log right next to it already lists every tool call.
       if(evt._speech) chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
       if(!aid && (evt.tool_name === 'Agent' || evt.tool_name === 'Task')){
+        var _subType = evt.tool_input && evt.tool_input.subagent_type;
         s.lastDelegation = truncate((evt.tool_input && evt.tool_input.description) || 'help out', 40);
         s.lastDelegationAt = Date.now();
-        chatLog(displayName(s), 'Sending ' + codenameForAgentType(evt.tool_input && evt.tool_input.subagent_type)
+        // remember the type so the subagent spawning next wears its real name —
+        // the SubagentStart hook itself doesn't include it
+        if(_subType){ if(!s.pendingAgentTypes) s.pendingAgentTypes = []; s.pendingAgentTypes.push({ type: _subType, at: Date.now() }); }
+        chatLog(displayName(s), 'Sending ' + codenameForAgentType(_subType)
           + ' to: ' + truncate((evt.tool_input && evt.tool_input.description) || 'help out', 160), 'delegate');
       }
       break;
