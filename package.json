@@ -1,9 +1,12 @@
 {
-  "name": "officebot",
+  "name": "@cybermu22/officebot",
   "version": "1.0.0",
   "description": "A live pixel-art 'office' dashboard for your Claude Code sessions — watch your agents work, delegate, and clock out, with usage tracking. Zero dependencies, fully local.",
   "bin": {
     "officebot": "cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "main": "server.js",
   "scripts": {

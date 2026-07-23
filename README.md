@@ -19,7 +19,7 @@ You need [Node.js](https://nodejs.org) (v16+), which you already have if you use
 Claude Code. Then, in a terminal:
 
 ```bash
-npx officebot setup
+npx @cybermu22/officebot setup
 ```
 
 That's it. This one command:
@@ -34,7 +34,7 @@ Now open a Claude Code session anywhere and watch it appear. Leave the
 `officebot` window running in the background; press `Ctrl+C` to stop it.
 
 > Already ran `setup` once? You don't need it again — just run
-> `npx officebot` to start the dashboard any time.
+> `npx @cybermu22/officebot` to start the dashboard any time.
 
 ---
 
@@ -42,10 +42,10 @@ Now open a Claude Code session anywhere and watch it appear. Leave the
 
 | Command | What it does |
 |---|---|
-| `npx officebot setup` | Wire up Claude Code, then start the dashboard |
-| `npx officebot` | Just start the dashboard (same as `start`) |
-| `npx officebot demo` | Start it **and** play a fake session, so you can see it work without a real one |
-| `npx officebot remove` | Cleanly remove the hooks it added (only removes its own) |
+| `npx @cybermu22/officebot setup` | Wire up Claude Code, then start the dashboard |
+| `npx @cybermu22/officebot` | Just start the dashboard (same as `start`) |
+| `npx @cybermu22/officebot demo` | Start it **and** play a fake session, so you can see it work without a real one |
+| `npx @cybermu22/officebot remove` | Cleanly remove the hooks it added (only removes its own) |
 
 **Options:** `--port <n>` (default `4317`), `--no-open` (don't launch a
 browser), `-y` (skip prompts). If you pick a custom port at `setup`, use the
@@ -97,7 +97,7 @@ For the full architecture and design notes, see
 ## Uninstall
 
 ```bash
-npx officebot remove   # takes the hooks back out of settings.json
+npx @cybermu22/officebot remove   # takes the hooks back out of settings.json
 ```
 
 Then stop the server (close its window). `npx` copies are cleaned up
