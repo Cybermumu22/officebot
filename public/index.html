@@ -890,14 +890,28 @@ function ensureSubagent(s, aid, evt){
     // was sending (see _shiftPendingAgentType) — no type at all is what made
     // every subagent read as "Echo".
     var effType = evt.agent_type || _shiftPendingAgentType(s);
+    if(evt.agent_type && s.pendingAgentTypes && s.pendingAgentTypes.length){
+      // the server resolved this delegation itself (it stamps agent_type
+      // now) — consume the matching client-queue entry too, or it would
+      // linger and mis-name the next truly type-less visitor as this type
+      for(var qi = 0; qi < s.pendingAgentTypes.length; qi++){
+        if(s.pendingAgentTypes[qi].type === evt.agent_type){ s.pendingAgentTypes.splice(qi, 1); break; }
+      }
+    }
     _noteAgentType(effType); // a used agent type becomes a lounge standby regular
+    // A truly type-less agent (spawned by the harness itself — background
+    // summarizers etc, with no Task call to learn from) used to ALWAYS hash
+    // to the same pool name ("Echo", from the fixed 'agent' fallback key).
+    // Key the fallback by agent_id instead, so each unknown visitor gets its
+    // own varied contractor identity (Pixel, Rune, Bolt…).
+    var nameKey = effType || ('visitor:' + aid);
     // If a second live subagent of the same type is already on the floor,
     // suffix a numeral so two Scouts working at once stay tellable apart.
-    const base = codenameForAgentType(effType);
+    const base = codenameForAgentType(nameKey);
     let dupes = 0;
     s.subagents.forEach(function(other){ if(other.codenameBase === base) dupes++; });
     a = {
-      id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(effType), modelNickname: null,
+      id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(nameKey), modelNickname: null,
       codenameBase: base,
       codename: dupes === 0 ? base : base + ' ' + (['II','III','IV','V'][dupes - 1] || (dupes + 1)),
       status: 'thinking', zone: 'warroom', bubble: base + ' reporting in.',
@@ -2486,11 +2500,20 @@ function _bioSetup(){
     card.style.top = y + 'px';
   }
   function show(el){
-    var bio = BIOS[nameOf(el)];
+    var name = nameOf(el);
+    var bio = BIOS[name];
+    // pool-named visitors (Pixel, Rune, "Scout II"…) get a generic card
+    // instead of a dead hover: match on the first word against the pool
+    if(!bio){
+      var baseName = name.split(' ')[0];
+      if(typeof CODENAME_POOL !== 'undefined' && CODENAME_POOL.indexOf(baseName) !== -1){
+        bio = { role: 'Contractor', text: 'A one-off specialist passing through — spawned for a single job (a background task or a custom agent type), then gone. Every contractor gets their own name.' };
+      } else if(BIOS[baseName]) bio = BIOS[baseName]; // "Scout II" → Scout's bio
+    }
     if(!bio) return;
     clearTimeout(hideT);
     card._for = el;
-    card.querySelector('.bio-name').textContent = nameOf(el);
+    card.querySelector('.bio-name').textContent = name;
     card.querySelector('.bio-role').textContent = bio.role;
     card.querySelector('.bio-text').textContent = bio.text;
     card.classList.add('show');

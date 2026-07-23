@@ -60,9 +60,11 @@ function cacheEvent(evt) {
   const sid = evt.session_id || 'unknown-session';
   let entry = sessionCache.get(sid);
   if (!entry) {
-    entry = { lastEvent: null, subagents: new Map(), expireTimer: null };
+    entry = { lastEvent: null, subagents: new Map(), expireTimer: null, agentTypes: new Map(), pendingTypes: [] };
     sessionCache.set(sid, entry);
   }
+  if (!entry.agentTypes) entry.agentTypes = new Map();
+  if (!entry.pendingTypes) entry.pendingTypes = [];
 
   // Many hook payloads omit cwd, and the snapshot replay only keeps the LAST
   // event per session — so a fresh page load showed "— unknown" as the
@@ -72,11 +74,34 @@ function cacheEvent(evt) {
 
   if (evt.agent_id) {
     const aid = evt.agent_id;
+    // Subagent hooks don't carry agent_type — but the boss's Task/Agent tool
+    // call (remembered below) said what was being sent. Stamp it SERVER-side
+    // so it's baked into the cached event: a page refresh or SSE reconnect
+    // (phone waking up!) replays the snapshot with the type intact, instead
+    // of the client falling back to a pool codename ("Echo") for an agent
+    // that's mid-flight.
+    if (!evt.agent_type) {
+      if (entry.agentTypes.has(aid)) evt.agent_type = entry.agentTypes.get(aid);
+      else {
+        const nowT = Date.now();
+        while (entry.pendingTypes.length) {
+          const p = entry.pendingTypes.shift();
+          if (nowT - p.at < 20000) { evt.agent_type = p.type; break; }
+        }
+      }
+    }
+    if (evt.agent_type) entry.agentTypes.set(aid, evt.agent_type);
     entry.subagents.set(aid, evt);
     if (evt.hook_event_name === 'SubagentStop') {
-      setTimeout(function () { entry.subagents.delete(aid); }, CACHE_GRACE_MS);
+      setTimeout(function () { entry.subagents.delete(aid); entry.agentTypes.delete(aid); }, CACHE_GRACE_MS);
     }
   } else {
+    // remember delegated types for the stamping above (FIFO, bounded)
+    if (evt.hook_event_name === 'PreToolUse' && (evt.tool_name === 'Task' || evt.tool_name === 'Agent')
+      && evt.tool_input && evt.tool_input.subagent_type) {
+      entry.pendingTypes.push({ type: evt.tool_input.subagent_type, at: Date.now() });
+      if (entry.pendingTypes.length > 8) entry.pendingTypes.shift();
+    }
     entry.lastEvent = evt;
     if (entry.expireTimer) clearTimeout(entry.expireTimer);
     if (evt.hook_event_name === 'SessionEnd') {
