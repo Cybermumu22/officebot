@@ -9,7 +9,9 @@ Zero dependencies. Runs entirely on your machine. **Nothing is ever sent
 anywhere** — it just reads your local Claude Code logs and serves a page on
 `localhost`.
 
-<!-- Add a screenshot or GIF here — e.g. ![officebot](docs/screenshot.png) -->
+![officebot dashboard](docs/screenshot.png)
+
+*Each Claude Code session becomes an office floor: the boss (your model) and its subagents walk between rooms depending on what they're doing — Research, Terminal, Archives, Planning — with live speech bubbles and a token-usage meter on the wall.*
 
 ---
 
@@ -54,6 +56,8 @@ same `--port` when you `start`.
 ---
 
 ## Watch it on your phone
+
+<img src="docs/screenshot-mobile.png" alt="officebot on a phone" width="330" align="right">
 
 The dashboard is a PWA (installable web app), so no app store needed:
 

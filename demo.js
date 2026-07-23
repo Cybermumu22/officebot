@@ -90,7 +90,7 @@ async function main() {
 
   // a second, quieter session just sitting idle for visual contrast
   const main2 = 'demo-main2-' + Date.now();
-  await post({ hook_event_name: 'SessionStart', session_id: main2, cwd: winPath(['C:', 'Users', 'User', 'other-project']), source: 'startup' });
+  await post({ hook_event_name: 'SessionStart', session_id: main2, cwd: winPath(['C:', 'Users', 'demo', 'other-project']), source: 'startup' });
   await post({ hook_event_name: 'Stop', session_id: main2 });
   console.log('-> a second idle session appears for contrast');
 
