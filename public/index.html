@@ -898,12 +898,28 @@ function ensureSubagent(s, aid, evt){
         if(s.pendingAgentTypes[qi].type === evt.agent_type){ s.pendingAgentTypes.splice(qi, 1); break; }
       }
     }
+    if(!effType){
+      // A truly type-less agent (harness-spawned — background summarizers
+      // etc, no Task call to learn from). Don't invent a stranger: hand the
+      // job to a FREE crew member instead. Assigning their agentType makes
+      // the codename/avatar match, so the standby bench copy hides while
+      // "they" work it (the existing on-duty mechanism) and they return
+      // when it ends — the whole roster gets used, not just delegated types.
+      var busyCn = {};
+      s.subagents.forEach(function(other){ busyCn[other.codenameBase] = 1; });
+      var freeCrew = _currentCrew().filter(function(c){
+        var cn = codenameForAgentType(c.agentType);
+        if(busyCn[cn]) return false;
+        if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return false;
+        if(s.crewLeaver && s.crewLeaver.codename === cn) return false;
+        return true;
+      });
+      if(freeCrew.length) effType = pick(freeCrew).agentType;
+    }
     _noteAgentType(effType); // a used agent type becomes a lounge standby regular
-    // A truly type-less agent (spawned by the harness itself — background
-    // summarizers etc, with no Task call to learn from) used to ALWAYS hash
-    // to the same pool name ("Echo", from the fixed 'agent' fallback key).
-    // Key the fallback by agent_id instead, so each unknown visitor gets its
-    // own varied contractor identity (Pixel, Rune, Bolt…).
+    // Only if EVERY crew member is already mid-job does an unknown agent
+    // appear as a one-off contractor — pool name keyed per agent_id
+    // (varied), never the old fixed key that made every unknown "Echo".
     var nameKey = effType || ('visitor:' + aid);
     // If a second live subagent of the same type is already on the floor,
     // suffix a numeral so two Scouts working at once stay tellable apart.
