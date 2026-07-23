@@ -783,6 +783,8 @@ function dispatchCourier(s, promptText){
 }
 
 const ARRIVAL_LINES = ['On it, boss.', 'Got it — starting now.', 'Heading to work.', 'On the case.'];
+// said by whoever picks up a harness-internal job (no ticket, no delegation)
+const UNKNOWN_JOB_LINES = ['No ticket? No problem. On it.', 'Unlabelled job — classic. Mine now.', 'Back-office work. Somebody has to.', 'Internal task. I know too much already.'];
 const HANDBACK_LINES = ['Wrapped up — over to you, boss.', 'Done — here you go, boss.', 'Finished up, boss.'];
 const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line stays eligible to be echoed
                                      // by the very next subagent that spins up, so the arrival line reads
@@ -898,13 +900,20 @@ function ensureSubagent(s, aid, evt){
         if(s.pendingAgentTypes[qi].type === evt.agent_type){ s.pendingAgentTypes.splice(qi, 1); break; }
       }
     }
+    var tookUnknownJob = false;
     if(!effType){
-      // A truly type-less agent (harness-spawned — background summarizers
-      // etc, no Task call to learn from). Don't invent a stranger: hand the
-      // job to a FREE crew member instead. Assigning their agentType makes
-      // the codename/avatar match, so the standby bench copy hides while
-      // "they" work it (the existing on-duty mechanism) and they return
-      // when it ends — the whole roster gets used, not just delegated types.
+      // A truly type-less agent (harness-spawned — the conversation
+      // summarizer/compaction worker and similar internal housekeeping, with
+      // no Task call to learn from). Don't invent a stranger: hand the job
+      // to the crew member whose PROFESSION fits closest. These internal
+      // jobs are generalist read-condense-tidy work, so: the wildcard first
+      // (unknown jobs are literally Ace's job description), the general-
+      // purpose handyman second, the docs-reader third (summarizing IS docs
+      // work), spare hands next, and the narrow specialists (review,
+      // planning) last. Assigning their agentType makes codename+avatar
+      // match, so the bench copy hides while "they" work it and they return
+      // when it ends.
+      var UNKNOWN_JOB_PREFERENCE = ['claude', 'general-purpose', 'claude-code-guide', 'fork', 'Explore', 'statusline-setup', 'code-reviewer', 'Plan'];
       var busyCn = {};
       s.subagents.forEach(function(other){ busyCn[other.codenameBase] = 1; });
       var freeCrew = _currentCrew().filter(function(c){
@@ -914,7 +923,11 @@ function ensureSubagent(s, aid, evt){
         if(s.crewLeaver && s.crewLeaver.codename === cn) return false;
         return true;
       });
-      if(freeCrew.length) effType = pick(freeCrew).agentType;
+      freeCrew.sort(function(a, b){
+        var ia = UNKNOWN_JOB_PREFERENCE.indexOf(a.agentType), ib = UNKNOWN_JOB_PREFERENCE.indexOf(b.agentType);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+      if(freeCrew.length){ effType = freeCrew[0].agentType; tookUnknownJob = true; }
     }
     _noteAgentType(effType); // a used agent type becomes a lounge standby regular
     // Only if EVERY crew member is already mid-job does an unknown agent
@@ -928,7 +941,7 @@ function ensureSubagent(s, aid, evt){
     s.subagents.forEach(function(other){ if(other.codenameBase === base) dupes++; });
     a = {
       id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(nameKey), modelNickname: null,
-      codenameBase: base,
+      codenameBase: base, tookUnknownJob: tookUnknownJob,
       codename: dupes === 0 ? base : base + ' ' + (['II','III','IV','V'][dupes - 1] || (dupes + 1)),
       status: 'thinking', zone: 'warroom', bubble: base + ' reporting in.',
       lastEventAt: Date.now(), removeTimer: null, settleTimer: null,
@@ -1144,11 +1157,11 @@ function handleEvent(evt){
       // moments ago, echo that specific task back instead of a generic
       // greeting — reads like an actual reply to being deployed, not two
       // unrelated status lines that happen to sit next to each other.
-      if(s.lastDelegation && (Date.now() - s.lastDelegationAt) < DELEGATION_WINDOW_MS){
+      if(s.lastDelegation && (Date.now() - s.lastDelegationAt) < DELEGATION_WINDOW_MS && !target.tookUnknownJob){
         target.bubble = 'Got it — ' + s.lastDelegation;
         s.lastDelegation = null;
       } else {
-        target.bubble = pick(ARRIVAL_LINES);
+        target.bubble = pick(target.tookUnknownJob ? UNKNOWN_JOB_LINES : ARRIVAL_LINES);
       }
       chatLog(displayName(target), target.bubble, 'arrive');
       break;
