@@ -1,4 +1,4 @@
-# dependencies (agent-viz itself is zero-dep; this is only for optional extras)
+# dependencies (officebot itself is zero-dep; this is only for optional extras)
 node_modules/
 
 # personal / per-machine runtime data — never commit
