@@ -760,6 +760,34 @@ const REGULAR_CREW = [
 // lounge banter system still hands them real lines now and then, which
 // appear and then fade away like actual speech.
 
+// The lounge isn't limited to the four base regulars — any agent TYPE you
+// actually use joins the standby crew, so your real toolkit
+// (Bookworm/claude-code-guide, Nitpick/code-reviewer, ...) hangs out too.
+// Tracked by codename (deduped against the base crew), kept to the
+// most-recently-used few so the lounge stays tidy, and persisted so they
+// stick around across refreshes. Purely cosmetic, exactly like the base crew.
+var _CREW_EXTRA_MAX = 4;
+var _usedAgentTypes = [];
+try { var _uc = JSON.parse(localStorage.getItem('officebot.crew') || '[]'); if (Array.isArray(_uc)) _usedAgentTypes = _uc; } catch (e) { }
+function _baseCrewCodenames() {
+  var set = {};
+  REGULAR_CREW.forEach(function (c) { set[codenameForAgentType(c.agentType)] = 1; });
+  return set;
+}
+function _noteAgentType(t) {
+  if (!t) return;
+  var cn = codenameForAgentType(t);
+  if (_baseCrewCodenames()[cn]) return; // already one of the base regulars
+  _usedAgentTypes = _usedAgentTypes.filter(function (x) { return codenameForAgentType(x) !== cn; });
+  _usedAgentTypes.unshift(t); // most-recently-used to the front
+  if (_usedAgentTypes.length > _CREW_EXTRA_MAX) _usedAgentTypes.length = _CREW_EXTRA_MAX;
+  try { localStorage.setItem('officebot.crew', JSON.stringify(_usedAgentTypes)); } catch (e) { }
+}
+function _currentCrew() {
+  var crew = REGULAR_CREW.slice();
+  _usedAgentTypes.forEach(function (t) { crew.push({ key: 'crew-x-' + codenameForAgentType(t), agentType: t }); });
+  return crew;
+}
 function ensureSession(sid, evt){
   let s = sessions.get(sid);
   if(!s){
@@ -801,6 +829,7 @@ function ensureSubagent(s, aid, evt){
     // was sending (see _shiftPendingAgentType) — no type at all is what made
     // every subagent read as "Echo".
     var effType = evt.agent_type || _shiftPendingAgentType(s);
+    _noteAgentType(effType); // a used agent type becomes a lounge standby regular
     // If a second live subagent of the same type is already on the floor,
     // suffix a numeral so two Scouts working at once stay tellable apart.
     const base = codenameForAgentType(effType);
@@ -1641,7 +1670,7 @@ function render(){
     // subagent IS that crew member (same codename, same sprite), so its
     // bench copy is hidden rather than the whole lounge emptying out.
     if(s.status !== 'offline'){
-      REGULAR_CREW.forEach(function(crew){
+      _currentCrew().forEach(function(crew){
         const cn = codenameForAgentType(crew.agentType);
         if(onDuty[cn]) return;
         if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return; // already clocked out / on holiday
