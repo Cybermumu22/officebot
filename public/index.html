@@ -2049,7 +2049,6 @@ function sayStaffLine(o, text){
   chatLog('Tally', text, 'banter');
 }
 function sayBanter(t, text){
-  const myGen = t.gen;
   t.banterSeq = (t.banterSeq || 0) + 1;
   const mySeq = t.banterSeq;
   t.bubbleTextEl.textContent = text;
@@ -2060,24 +2059,22 @@ function sayBanter(t, text){
   chatLog(t.lastName || 'crew', text, 'banter');
   scheduleBubbleLayout();
   setTimeout(function(){
-    // Only revert if this is still both the token's latest REAL state (gen)
-    // and its latest banter line (banterSeq) — otherwise a 3-line exchange
-    // where the same token speaks twice would have line 1's own revert-timer
-    // stomp line 3 a moment after it was said. If the token had no real
-    // bubble to go back to (idle crew, settled subagent), the banter bubble
-    // simply fades away — said, then done, like actual speech.
-    if(t.gen === myGen && t.banterSeq === mySeq){
-      if(t.lastBubble){
-        t.bubbleTextEl.textContent = t.lastBubble;
-        t.bubbleEl.classList.remove('pulse');
-        void t.bubbleEl.offsetWidth;
-        t.bubbleEl.classList.add('pulse');
-      } else {
-        t.bubbleEl.classList.remove('show');
-      }
-      scheduleBubbleLayout();
+    // Revert to whatever the model says NOW. Guard only on banterSeq (a
+    // 3-line exchange where the same token speaks twice must not have line
+    // 1's timer stomp line 3). The old code also required t.gen unchanged —
+    // but gen bumps on EVERY render (any real event anywhere), so a bubble
+    // whose 4.5s window contained any activity was never cleared and stuck
+    // on screen forever. Checking the current state instead is always safe:
+    // if a real bubble owns the token, restore its text (usually a no-op);
+    // if there is none, the banter line simply fades away — said, then done.
+    if(t.banterSeq !== mySeq) return;
+    if(t.lastBubble){
+      t.bubbleTextEl.textContent = t.lastBubble;
+    } else {
+      t.bubbleEl.classList.remove('show');
     }
-  }, 4500);
+    scheduleBubbleLayout();
+  }, 5200);
 }
 /* Limit-hit theatre: when the 5h window is spent the crew clocks out for
    the day; when the WEEKLY meter fills they declare a holiday. Owned lines,
@@ -2195,12 +2192,14 @@ function reopenOffice(sid){
 
 // Play an exchange against the current cast: 'tally' always lands (he's at
 // his desk), any other absent speaker's line simply drops out.
-function playCastExchange(o, exchange, cast){
+function playCastExchange(o, exchange, cast, startDelay){
+  // 3.1s between lines — a readable back-and-forth, not a wall of popups.
+  // startDelay staggers whole conversations so two groups never pop at once.
   exchange.forEach(function(line, i){
     setTimeout(function(){
       if(line.who === 'tally') sayStaffLine(o, line.text);
       else if(cast[line.who]) sayBanter(cast[line.who], line.text);
-    }, i * 2400);
+    }, (startDelay || 0) + i * 3100);
   });
 }
 
@@ -2418,11 +2417,13 @@ function runChatTick(){
     }
 
     // ---- Group conversations ----
-    // Group the idle named cast by the room they're in. Each room-group with
-    // >=2 members can independently start its OWN conversation this tick, so
-    // several groups chatter SIMULTANEOUSLY (Lounge + Archives + Terminal can
-    // all be mid-convo at once). Cross-room "cross-talk" still fires now and
-    // then. When it all goes quiet, the next tick simply strikes up fresh.
+    // Group the idle named cast by the room they're in. Room-groups hold
+    // their own intra-room conversations — but PACED: at most two
+    // conversations per tick, and the second starts ~6s after the first, so
+    // the floor reads as a living office rather than a wall of simultaneous
+    // popups. Cross-room "cross-talk" still fires now and then (it takes one
+    // of the two slots). When it all goes quiet, the next tick strikes up
+    // fresh — the room-aware rules keep applying.
     const groups = {};
     Object.keys(cast).forEach(function(n){
       const z = cast[n].lastZone; (groups[z] = groups[z] || []).push(n);
@@ -2435,12 +2436,15 @@ function runChatTick(){
       CREW_EXCHANGES.forEach(function(ex, i){ if(o.banterHist.indexOf(i) === -1 && test(ex)) out.push(i); });
       return out;
     }
-    let fired = false;
 
-    // (1) each room-group holds its OWN intra-room conversation
-    Object.keys(groups).forEach(function(zone){
+    // collect candidate conversations first, then play at most two, staggered
+    const queue = []; // {idx}
+
+    // (1) intra-room candidates — shuffled so no room always goes first
+    const zoneKeys = Object.keys(groups).sort(function(){ return Math.random() - .5; });
+    zoneKeys.forEach(function(zone){
       const members = groups[zone];
-      if(members.length < 2 || Math.random() > 0.5) return; // not every group, every tick
+      if(members.length < 2 || Math.random() > 0.45) return; // not every group, every tick
       const inRoom = {}; members.forEach(function(m){ inRoom[m] = 1; });
       const eligible = eligibleWhere(function(ex){
         let hasSpeaker = false;
@@ -2452,15 +2456,11 @@ function runChatTick(){
         }
         return hasSpeaker;
       });
-      if(!eligible.length) return;
-      const idx = pick(eligible);
-      pushHist(idx);
-      playCastExchange(o, CREW_EXCHANGES[idx], cast);
-      fired = true;
+      if(eligible.length) queue.push(pick(eligible));
     });
 
-    // (2) cross-room cross-talk, from time to time
-    if(Math.random() < 0.22){
+    // (2) cross-room cross-talk candidate, from time to time
+    if(Math.random() < 0.18){
       const eligible = eligibleWhere(function(ex){
         let zone = null, spans = false, any = false;
         for(let li = 0; li < ex.length; li++){
@@ -2473,8 +2473,16 @@ function runChatTick(){
         }
         return any && spans;
       });
-      if(eligible.length){ const idx = pick(eligible); pushHist(idx); playCastExchange(o, CREW_EXCHANGES[idx], cast); fired = true; }
+      if(eligible.length) queue.push(pick(eligible));
     }
+
+    // play at most TWO conversations, the second starting ~6s in
+    let fired = false;
+    queue.slice(0, 2).forEach(function(idx, qi){
+      pushHist(idx);
+      playCastExchange(o, CREW_EXCHANGES[idx], cast, qi * 6200);
+      fired = true;
+    });
 
     // (3) if nobody struck up, a quiet solo musing or Tally mutter
     if(!fired){
@@ -2491,7 +2499,10 @@ function runChatTick(){
   });
 }
 function scheduleChat(){
-  setTimeout(function(){ runChatTick(); scheduleChat(); }, 7000 + Math.random() * 6000);
+  // 10-17s between ticks. With up to two staggered conversations per tick
+  // (~6-12s of speech), the office chats steadily without becoming a wall
+  // of text — lulls happen, then someone pipes up again.
+  setTimeout(function(){ runChatTick(); scheduleChat(); }, 10000 + Math.random() * 7000);
 }
 
 /* ============ WALL USAGE MONITOR ============
