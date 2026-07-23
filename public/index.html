@@ -157,7 +157,7 @@
   .token-main .token-badge{width:34px; height:34px;}
 
   .token-bubble{
-    position:absolute; left:50%; bottom:100%; transform:translateX(-50%);
+    position:absolute; left:50%; bottom:100%; transform:translateX(calc(-50% + var(--bx, 0px)));
     /* Same-zone occupants alternate a "tier" (see render()) so neighboring
        bubbles stack at two different heights instead of fighting for the
        same strip of space right above the badges — a bubble is much wider
@@ -185,9 +185,9 @@
   .token-bubble .tb-text{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden;}
   .token-bubble.show{opacity:1;}
   .token-bubble.pulse{animation:bubblePop .25s ease;}
-  @keyframes bubblePop{0%{transform:translateX(-50%) scale(.86);} 100%{transform:translateX(-50%) scale(1);}}
+  @keyframes bubblePop{0%{transform:translateX(calc(-50% + var(--bx, 0px))) scale(.86);} 100%{transform:translateX(calc(-50% + var(--bx, 0px))) scale(1);}}
   .token-bubble::after{
-    content:''; position:absolute; left:50%; top:100%; transform:translateX(-50%);
+    content:''; position:absolute; left:calc(50% - var(--bx, 0px)); top:100%; transform:translateX(-50%);
     border:5px solid transparent; border-top-color:var(--st);
   }
   /* Flipped bubble: when an avatar stands near the top of the floor, a
@@ -1763,6 +1763,7 @@ function resolveBubbleLayout(o){
   o.tokens.forEach(function(t){
     if(!t.bubbleEl.classList.contains('show')) return;
     if(t.curLift){ t.bubbleEl.style.setProperty('--lift', '0px'); t.curLift = 0; }
+    if(t.curBx){ t.bubbleEl.style.setProperty('--bx', '0px'); t.curBx = 0; }
     shown.push(t);
   });
   if(!shown.length) return;
@@ -1779,6 +1780,21 @@ function resolveBubbleLayout(o){
   shown.forEach(function(t){
     const r = t.bubbleEl.getBoundingClientRect();
     if(r.top < floorRect.top + 2) t.bubbleEl.classList.add('below');
+  });
+
+  // Pass 1.5 — horizontal clamp. A speaker near the floor's left/right edge
+  // (Archives' right slot, Research's left) has a centred bubble poking past
+  // the floor, where overflow:hidden slices it off. Shift the bubble back
+  // inside via --bx; the tail arrow counter-shifts so it still points at
+  // the speaker. Runs for lone speakers too — edge clipping doesn't need a
+  // crowd.
+  shown.forEach(function(t){
+    const r = t.bubbleEl.getBoundingClientRect();
+    if(r.right - r.left < 2) return;
+    let bx = 0;
+    if(r.left < floorRect.left + 2) bx = (floorRect.left + 2) - r.left;
+    else if(r.right > floorRect.right - 2) bx = (floorRect.right - 2) - r.right;
+    if(bx){ t.bubbleEl.style.setProperty('--bx', (bx / scale).toFixed(1) + 'px'); t.curBx = bx; }
   });
   if(shown.length < 2) return;
 
