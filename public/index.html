@@ -750,10 +750,14 @@ const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line st
 // them, up from the bench and working (same sprite, same name, since both
 // derive from the agent type) — and the rest keep lounging.
 const REGULAR_CREW = [
-  { key: 'crew-explore', agentType: 'Explore' },        // Scout
-  { key: 'crew-general', agentType: 'general-purpose' },// Jack
-  { key: 'crew-plan',    agentType: 'Plan' },           // Blueprint
-  { key: 'crew-claude',  agentType: 'claude' },         // Ace
+  { key: 'crew-explore', agentType: 'Explore' },           // Scout
+  { key: 'crew-general', agentType: 'general-purpose' },   // Jack
+  { key: 'crew-plan',    agentType: 'Plan' },              // Blueprint
+  { key: 'crew-claude',  agentType: 'claude' },            // Ace
+  { key: 'crew-guide',   agentType: 'claude-code-guide' }, // Bookworm
+  { key: 'crew-review',  agentType: 'code-reviewer' },     // Nitpick
+  { key: 'crew-fork',    agentType: 'fork' },              // Twin
+  { key: 'crew-status',  agentType: 'statusline-setup' },  // Tinker
 ];
 // Crew members idle SILENTLY — no resting bubble at all. A permanent
 // "Keeping busy." over someone who isn't talking read as un-immersive; the
@@ -766,7 +770,8 @@ const REGULAR_CREW = [
 // Tracked by codename (deduped against the base crew), kept to the
 // most-recently-used few so the lounge stays tidy, and persisted so they
 // stick around across refreshes. Purely cosmetic, exactly like the base crew.
-var _CREW_EXTRA_MAX = 4;
+var _CREW_EXTRA_MAX = 2; // the 8 recognized agents are always shown; this caps
+                         // only truly custom/unknown types so the lounge stays tidy
 var _usedAgentTypes = [];
 try { var _uc = JSON.parse(localStorage.getItem('officebot.crew') || '[]'); if (Array.isArray(_uc)) _usedAgentTypes = _uc; } catch (e) { }
 function _baseCrewCodenames() {
@@ -2004,7 +2009,7 @@ const CREW_BYE = {
     Ace: ["Sunglasses on. Peace.", "Gone fishin'. Or whatever we do.", "See you next window, legends."],
   },
 };
-const CREW_ORDER = ['Scout', 'Jack', 'Blueprint', 'Ace']; // leave in this order, one at a time
+const CREW_ORDER = ['Scout', 'Jack', 'Blueprint', 'Ace', 'Bookworm', 'Nitpick', 'Twin', 'Tinker']; // leave in this order, one at a time
 // Tally the accountant and the boss leave LAST (accountant closes the books,
 // boss turns off the lights) — full-office exodus, boss the final one out.
 const TALLY_BYE = {
