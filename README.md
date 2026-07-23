@@ -1,9 +1,9 @@
 # officebot
 
-**A live pixel-art "office" for your Claude Code sessions.** Watch your agents
-walk in, think, run tools, delegate to subagents, banter in the lounge, and
-clock out — with a real usage/limit tracker on the wall. It's a fun, glanceable
-window into what Claude Code is doing.
+**A live pixel-art "office" for your Claude Code sessions.** Every session
+becomes an office floor with a full cast of characters: the boss (your model)
+delegates, the crew works the rooms, everyone banters — and it's all driven by
+real events. It's a fun, glanceable window into what Claude Code is doing.
 
 Zero dependencies. Runs entirely on your machine. **Nothing is ever sent
 anywhere** — it just reads your local Claude Code logs and serves a page on
@@ -11,7 +11,48 @@ anywhere** — it just reads your local Claude Code logs and serves a page on
 
 ![officebot dashboard](docs/screenshot.png)
 
-*Each Claude Code session becomes an office floor: the boss (your model) and its subagents walk between rooms depending on what they're doing — Research, Terminal, Archives, Planning — with live speech bubbles and a token-usage meter on the wall.*
+*A live moment: Scout searching in Research, Jack running tests in Terminal,
+the boss editing in Archives — real tool calls, real speech bubbles, while the
+rest of the crew holds down their rooms.*
+
+---
+
+## Meet the office
+
+**The boss is whichever Claude model is running your session**, each with a
+persona and an office rank: **Fabby** the Director (Fable), **Oppy** the
+Manager (Opus), **Sonny** the Lead (Sonnet), **Kiku** the scrappy Senior
+Staffer (Haiku). Switch models (`/model`) and the outgoing boss hands the desk
+over — walks out while the new one walks in — with the crew commenting on the
+new management (Haiku gets roasted; nobody escapes the workers' banter).
+
+**The crew are your agent types**, each with a name, a face, a profession and
+a home room:
+
+| | Agent type | Role | Home |
+|---|---|---|---|
+| **Scout** | `Explore` | recon & exploration | Research |
+| **Bookworm** | `claude-code-guide` | docs & knowledge | Research |
+| **Jack** | `general-purpose` | the handyman | Lounge |
+| **Ace** | `claude` | the wildcard | Lounge |
+| **Blueprint** | `Plan` | planner / architect | Archives |
+| **Nitpick** | `code-reviewer` | code review / QA | Archives |
+| **Twin** | `fork` | parallel worker | Terminal |
+| **Tinker** | `statusline-setup` | tooling & config | Terminal |
+
+When the boss delegates to one of these types, that crew member leaves their
+spot and *works the job* — then walks back when it's done. Even Claude Code's
+internal background tasks get picked up by whoever's profession fits closest.
+Custom agent types get their own generated codenames.
+
+**And the office lives on its own:** the crew wanders between rooms, whoever
+shares a room strikes up profession-flavoured conversations (with the
+occasional shout across the floor), turns that finish cleanly get confetti,
+failures get a red "!", hand-backs get a ✓ and sometimes a spoken review from
+the boss. **Hover (or tap) any character for their bio.** Tally the accountant
+mans the wall meters — the live clock, your 5-hour window and weekly usage —
+and pipes up only when the burn actually climbs. When a limit is truly spent,
+the whole office clocks out one by one… and drifts back in when it resets.
 
 ---
 
