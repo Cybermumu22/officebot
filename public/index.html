@@ -749,15 +749,19 @@ const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line st
 // spawns, only the crew member with the SAME codename is hidden — that's
 // them, up from the bench and working (same sprite, same name, since both
 // derive from the agent type) — and the rest keep lounging.
+// `home` = the room a standby crew member idles in. The original four keep the
+// lounge as their social hub (all the banter lives there); the newer agents
+// group into the room that fits their job, so the lounge doesn't get crowded:
+// the reading/review pair in Archives, the tooling/exec pair in Terminal.
 const REGULAR_CREW = [
-  { key: 'crew-explore', agentType: 'Explore' },           // Scout
-  { key: 'crew-general', agentType: 'general-purpose' },   // Jack
-  { key: 'crew-plan',    agentType: 'Plan' },              // Blueprint
-  { key: 'crew-claude',  agentType: 'claude' },            // Ace
-  { key: 'crew-guide',   agentType: 'claude-code-guide' }, // Bookworm
-  { key: 'crew-review',  agentType: 'code-reviewer' },     // Nitpick
-  { key: 'crew-fork',    agentType: 'fork' },              // Twin
-  { key: 'crew-status',  agentType: 'statusline-setup' },  // Tinker
+  { key: 'crew-explore', agentType: 'Explore',           home: 'lounge' },   // Scout
+  { key: 'crew-general', agentType: 'general-purpose',   home: 'lounge' },   // Jack
+  { key: 'crew-plan',    agentType: 'Plan',              home: 'lounge' },   // Blueprint
+  { key: 'crew-claude',  agentType: 'claude',            home: 'lounge' },   // Ace
+  { key: 'crew-guide',   agentType: 'claude-code-guide', home: 'archives' }, // Bookworm — reads docs
+  { key: 'crew-review',  agentType: 'code-reviewer',     home: 'archives' }, // Nitpick  — reviews files
+  { key: 'crew-fork',    agentType: 'fork',              home: 'terminal' }, // Twin     — parallel exec
+  { key: 'crew-status',  agentType: 'statusline-setup',  home: 'terminal' }, // Tinker   — tooling/config
 ];
 // Crew members idle SILENTLY — no resting bubble at all. A permanent
 // "Keeping busy." over someone who isn't talking read as un-immersive; the
@@ -1681,7 +1685,7 @@ function render(){
         if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return; // already clocked out / on holiday
         const leaving = s.crewLeaver && s.crewLeaver.codename === cn;
         seen[crew.key] = true;
-        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : 'lounge', status:'idle',
+        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : (crew.home || 'lounge'), status:'idle',
           bubble: leaving ? s.crewLeaver.bubble : null,
           avatar:avatarForAgentType(crew.agentType), name:cn, isMain:false, isCrew:true });
       });

@@ -102,7 +102,24 @@ function codenameForAgentType(agentType) {
 
 // Subagents (Explore, general-purpose, custom agents...) get an operative,
 // deterministically hashed so the same agent_type always looks the same.
+// Recognized agent types get a FIXED avatar, chosen to avoid the four MODEL
+// faces (ids 2, 5, 7, 12) so a subagent never wears the boss's face — and to
+// be distinct from each other. Unknown/custom types fall back to the hash.
+const AGENT_AVATARS = {
+  'Explore': 3,            // Scout     — RedAgent
+  'general-purpose': 9,    // Jack      — NullPtr
+  'Plan': 11,              // Blueprint — Pr0xyGhost
+  'claude': 10,            // Ace       — NeuralNet
+  'claude-code-guide': 8,  // Bookworm  — PacketSniper (was #7 CryptWitch = Opus)
+  'code-reviewer': 1,      // Nitpick   — Ghost.exe
+  'fork': 4,               // Twin      — AI.Oracle (was #2 CyberKnight = Sonnet)
+  'statusline-setup': 6,   // Tinker    — F1rewall
+};
 function avatarForAgentType(agentType) {
+  if (agentType && AGENT_AVATARS[agentType] != null) {
+    const id = AGENT_AVATARS[agentType];
+    for (let j = 0; j < AVATARS.length; j++) { if (AVATARS[j].id === id) return AVATARS[j]; }
+  }
   const key = 'agent:' + (agentType || 'general-purpose');
   return AVATARS[hashStr(key) % AVATARS.length];
 }
