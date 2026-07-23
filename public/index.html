@@ -153,8 +153,8 @@
 
   /* Slightly smaller than they used to be (24/32) — traded for roomier
      speech bubbles that can show a full thought. */
-  .token-badge{position:relative; width:21px; height:21px;}
-  .token-main .token-badge{width:28px; height:28px;}
+  .token-badge{position:relative; width:17px; height:17px;}
+  .token-main .token-badge{width:23px; height:23px;}
 
   .token-bubble{
     position:absolute; left:50%; bottom:100%; transform:translateX(-50%);
@@ -327,6 +327,16 @@
      monitor. Not a session token: no events, no bubbles, just vibes. */
   .staff{position:absolute; transform:translate(-50%,-50%); z-index:1; pointer-events:none;}
   .staff-face{width:26px; height:26px; animation:tokenBob 3.4s ease-in-out infinite; filter:drop-shadow(0 0 7px #10b981);}
+  .staff-desk{position:absolute; left:50%; top:11px; transform:translateX(-50%); width:42px; z-index:-1; pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
+  .staff-desk svg{width:100%; display:block; image-rendering:pixelated;}
+  /* hover/tap a character for a floating bio card */
+  .agent-token{cursor:help;}
+  .staff{cursor:help; pointer-events:auto;}
+  #bio-card{position:fixed; z-index:600; max-width:236px; padding:10px 13px; background:rgba(11,15,26,.97); border:1px solid rgba(55,245,255,.38); border-radius:10px; box-shadow:0 8px 26px rgba(0,0,0,.6), 0 0 14px rgba(55,245,255,.14); opacity:0; transform:translateY(5px); transition:opacity .14s ease, transform .14s ease; pointer-events:none;}
+  #bio-card.show{opacity:1; transform:translateY(0);}
+  #bio-card .bio-name{font-family:'Orbitron',sans-serif; font-weight:700; font-size:.82rem; color:#eaf2ff; letter-spacing:.4px;}
+  #bio-card .bio-role{font-family:'Orbitron',sans-serif; font-size:.5rem; letter-spacing:1.3px; text-transform:uppercase; color:#37f5ff; margin:3px 0 6px;}
+  #bio-card .bio-text{font-size:.72rem; line-height:1.45; color:#aeb8d6;}
   .staff-face svg{width:100%; height:100%; display:block;}
   .staff-name{position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:1px; font-family:'Orbitron',sans-serif; font-size:.38rem; color:#fff; text-shadow:0 0 4px rgba(0,0,0,.9); white-space:nowrap;}
   /* Tally's bubble opens SIDEWAYS (to his right) — a bubble above his head
@@ -1248,6 +1258,16 @@ function logMoment(text){
   while(logEl.children.length > 60) logEl.removeChild(logEl.lastChild);
 }
 
+// Tally's workstation: a desk with a green-screen PC (ledger lines), a
+// ledger sheet, and a pen holder — drawn behind him so he reads as sitting at it.
+const TALLY_DESK_SVG = '<svg viewBox="0 0 40 22" shape-rendering="crispEdges">'
+  + '<rect x="4" y="2" width="14" height="10" fill="#1e293b"/><rect x="5" y="3" width="12" height="7" fill="#06121f"/>'
+  + '<rect x="6" y="4" width="10" height="1" fill="#10b981"/><rect x="6" y="6" width="7" height="1" fill="#34d399"/><rect x="6" y="8" width="9" height="1" fill="#10b981"/>'
+  + '<rect x="10" y="12" width="2" height="2" fill="#334155"/>'
+  + '<rect x="30" y="7" width="5" height="6" fill="#3b4252"/><rect x="31" y="1" width="1" height="7" fill="#f59e0b"/><rect x="31" y="0" width="1" height="1" fill="#fca5a5"/><rect x="33" y="3" width="1" height="6" fill="#06b6d4"/>'
+  + '<rect x="20" y="9" width="8" height="4" fill="#e2e8f0"/><rect x="21" y="10" width="6" height="1" fill="#94a3b8"/><rect x="21" y="11" width="4" height="1" fill="#94a3b8"/>'
+  + '<rect x="1" y="13" width="38" height="4" fill="#5b3a1e"/><rect x="1" y="13" width="38" height="1" fill="#7a4f2a"/><rect x="4" y="17" width="3" height="5" fill="#3b2513"/><rect x="33" y="17" width="3" height="5" fill="#3b2513"/>'
+  + '</svg>';
 function officeSkeletonHtml(){
   // Paint order (DOM order): wall → room mats → furniture → sign plates →
   // people. Mats are the rooms; the zone element is just the sign on the
@@ -1273,6 +1293,7 @@ function officeSkeletonHtml(){
   }).join('');
   // Tally at his desk + the usage monitor mounted on the wall above him
   const staffHtml = '<div class="staff" style="left:53%;top:17.5%">'
+    + '<div class="staff-desk">' + TALLY_DESK_SVG + '</div>'
     + '<div class="staff-face">' + TALLY_AVATAR.svg + '</div>'
     + '<div class="staff-name">Tally</div>'
     + '<div class="staff-bubble"></div>'
@@ -1854,6 +1875,46 @@ const CREW_EXCHANGES = [
   [{who:'Blueprint',text:"The coffee machine's red light is still on."},{who:'Jack',text:"Decorative. Like my job security."}],
   [{who:'Scout',text:"Ever hover over that reset button in the corner?"},{who:'Blueprint',text:"Puts the whole world back. Terrifying."}],
   [{who:'Jack',text:"Heard the lounge used to be half this size."},{who:'Ace',text:"The economy's booming."}],
+
+  // ---- ARCHIVES: Bookworm × Nitpick (the reading & review desk) ----
+  [{who:'Bookworm',text:"Nitpick, the style guide says two spaces here."},{who:'Nitpick',text:"The style guide is wrong. I'll be filing a change."}],
+  [{who:'Nitpick',text:"Bookworm, did you actually READ all these?"},{who:'Bookworm',text:"Twice. The second time I took notes on my notes."}],
+  [{who:'Bookworm',text:"I found the original RFC for this feature."},{who:'Nitpick',text:"And? Does it justify the crimes in this diff?"},{who:'Bookworm',text:"…It does not."}],
+  [{who:'Nitpick',text:"Requesting changes."},{who:'Bookworm',text:"On what? Nothing's happening."},{who:'Nitpick',text:"On principle."}],
+  [{who:'Bookworm',text:"There's a citation for everything if you look."},{who:'Nitpick',text:"There's a nit for everything if you look. We're the same."}],
+  [{who:'Nitpick',text:"This comment is out of date."},{who:'Bookworm',text:"Comments are just documentation that gave up."}],
+  [{who:'Bookworm',text:"I catalogued every TODO in the repo."},{who:'Nitpick',text:"I reviewed every one. They're all 'later'. Later is a lie."}],
+  [{who:'Nitpick',text:"Approve or request changes on lunch?"},{who:'Bookworm',text:"Per the handbook, lunch is undocumented. Bold territory."}],
+  [{who:'Bookworm',text:"The Archives smell like old semicolons."},{who:'Nitpick',text:"That's the smell of unmerged branches. Melancholy."}],
+  [{who:'Nitpick',text:"Your bookmark is in the wrong file, Bookworm."},{who:'Bookworm',text:"It's a strategic bookmark. You wouldn't get it."}],
+
+  // ---- TERMINAL: Twin × Tinker (tooling & parallel execution) ----
+  [{who:'Tinker',text:"Twin, hold this build while I retune the prompt."},{who:'Twin',text:"Which one of me? …Never mind, we've got it."}],
+  [{who:'Twin',text:"I ran the tests in parallel. All of them. At once."},{who:'Tinker',text:"That's why the fans sound like a jet. Beautiful."}],
+  [{who:'Tinker',text:"I automated my job into one keybind."},{who:'Twin',text:"Now automate mine. Both of mine."}],
+  [{who:'Twin',text:"There are two of me and still not enough terminals."},{who:'Tinker',text:"Say less. Building you a third pane now."}],
+  [{who:'Tinker',text:"Shaved 40ms off the pipeline."},{who:'Twin',text:"We felt it. Both of us. Simultaneously."}],
+  [{who:'Twin',text:"I forked to think it over. We disagreed."},{who:'Tinker',text:"Resolve the merge conflict in your own head, please."}],
+  [{who:'Tinker',text:"New status line reads token spend in real time."},{who:'Twin',text:"Tally's going to either love or fear you."}],
+  [{who:'Twin',text:"Bash is just chaos you can schedule."},{who:'Tinker',text:"That's going on a sticker. I'll make the sticker."}],
+  [{who:'Tinker',text:"One more alias and I never type a full command again."},{who:'Twin',text:"One more fork and I never think a full thought alone again."}],
+
+  // ---- CROSS-TALK: agents calling across the office, now and then ----
+  [{who:'Nitpick',text:"Scout! You opened 400 files and closed zero."},{who:'Scout',text:"They're all still relevant! Probably!"}],
+  [{who:'Scout',text:"Bookworm, is there a doc for the thing I just found?"},{who:'Bookworm',text:"Page 12. There's always a page 12."}],
+  [{who:'Tinker',text:"Blueprint, your plan has 9 phases. I built a tool for phase 4."},{who:'Blueprint',text:"Phase 4 was a placeholder."},{who:'Tinker',text:"The tool is real now, though."}],
+  [{who:'Twin',text:"Jack, need a hand? I've got a spare."},{who:'Jack',text:"You've got a spare EVERYTHING, Twin."}],
+  [{who:'Ace',text:"Nitpick, rate my last deploy from over there."},{who:'Nitpick',text:"From HERE it looks like a five. Up close I'd find things."}],
+  [{who:'Bookworm',text:"Ace, the docs say don't do what you just did."},{who:'Ace',text:"The docs and I have a working disagreement."}],
+  [{who:'Blueprint',text:"Tinker, could you tool up my planning board?"},{who:'Tinker',text:"On it. Adding a gantt chart nobody asked for."}],
+  [{who:'Scout',text:"Twin, race you through the Research room."},{who:'Twin',text:"You're on. I'll take both doors."}],
+  [{who:'Nitpick',text:"Whoever left the couch 4% off-centre — I see it from Archives."},{who:'Blueprint',text:"That was ME and I stand by it."}],
+  [{who:'Tinker',text:"Boss, I optimised the office. It runs 6% happier."},{who:'boss',text:"Bill it to morale. Morale is vibes."}],
+  [{who:'Bookworm',text:"Tally, is 'reading' a billable activity?"},{who:'tally',text:"Everything's billable. Especially reading."}],
+  [{who:'Twin',text:"Tally, do I count as one headcount or two?"},{who:'tally',text:"Two mouths, one salary. My favourite kind of hire."}],
+  [{who:'Nitpick',text:"Scout brought back a finding. Bookworm, verify it?"},{who:'Bookworm',text:"Cross-referencing now."},{who:'Scout',text:"It's TOTALLY real."},{who:'Bookworm',text:"…It's mostly real."}],
+  [{who:'Ace',text:"Big office energy today. Everyone's at their desks."},{who:'Tinker',text:"Everyone except you, wildcard."},{who:'Ace',text:"My desk is wherever I'm standing."}],
+  [{who:'Jack',text:"Nitpick, ever just let one slide?"},{who:'Nitpick',text:"I let one slide in 2024. I still think about it."}],
 ];
 
 // Solo musings — each in the character's own voice; 'visitor' covers one-off
@@ -1895,6 +1956,44 @@ const CHARACTER_SOLO = {
     'Standing by, as one does.',
     'Idle, but make it look productive.',
     'Do I get paid in tokens? Asking for me.',
+  ],
+  Bookworm: [
+    'Per the docs, this silence is "expected behaviour".',
+    'I alphabetised the Archives. Twice. It was necessary.',
+    'Somewhere in here is the answer. I have a bookmark.',
+    'Citation needed for that last commit message.',
+    'I read the changelog for fun. There, I said it.',
+    'Actually — footnote — it’s pronounced "cache", not "cash-ay".',
+    'A well-indexed mind never has to grep.',
+    'The manual has a section on boredom. I’m rereading it.',
+  ],
+  Nitpick: [
+    'This whitespace is load-bearing. Do not touch it.',
+    'I found a bug. It was in my patience. Filed anyway.',
+    'Requesting changes on the vibe of this room.',
+    'Nobody left a comment on the vending machine. Suspicious.',
+    'It works, but it doesn’t work *elegantly*. Big difference.',
+    'I’d approve the silence, but the edge cases worry me.',
+    'One tiny nit: everything. Otherwise, ship it.',
+    'LGTM is a lie people tell to leave early.',
+  ],
+  Twin: [
+    'We could split up to think about this. …We just did.',
+    'Two heads, one payroll number. A bargain.',
+    'I finished the task. So did I. Now we compare notes.',
+    'Being in two rooms at once is 90% of the job.',
+    'One of us is the original. We’ve agreed not to discuss it.',
+    'Parallelism: my whole personality, times two.',
+    'I said the same thing at the same time as myself. Spooky.',
+  ],
+  Tinker: [
+    'One sec — just shaving 4ms off the status line.',
+    'I built a tiny tool to build tinier tools.',
+    'The perfect config is out there. I will find it. Or make it.',
+    'Retuned the terminal prompt. You won’t notice. I will.',
+    'Idle hands? No — idle hands are for soldering.',
+    'This dashboard could use one more little gadget. It always can.',
+    'I optimised the coffee run into a single command. No coffee, but still.',
   ],
   boss: [
     'Quiet office. I should be suspicious.',
@@ -2182,17 +2281,83 @@ function playShiftBanter(sid, incModel, outModel){
   playCastExchange(o, ex, cast);
 }
 
+// ---- character bios: hover (or tap) any character for a floating role card ----
+const BIOS = {
+  // the crew, by codename
+  Scout:     { role: 'Recon & Exploration', text: 'The Explore agent. Races through the codebase finding every file, pattern and clue — reads first, asks never. If it exists, Scout already grepped it.' },
+  Jack:      { role: 'Generalist / Handyman', text: 'The general-purpose agent. Takes on whatever the job needs, armed with duct tape, belief and a working knowledge of a bit of everything.' },
+  Blueprint: { role: 'Planner / Architect', text: 'The Plan agent. Drafts the strategy before a line changes — everything gets a numbered list, a risk rating and a contingency.' },
+  Ace:       { role: 'Wildcard', text: 'The versatile all-rounder (agent type "claude"). Deployable for anything, with style. The asterisk in the roster.' },
+  Bookworm:  { role: 'Docs & Knowledge', text: 'The claude-code-guide. Knows the manuals, the RFCs and the footnotes. If there is a documented way, Bookworm found it — page 12.' },
+  Nitpick:   { role: 'Code Review / QA', text: 'The code-reviewer. Reviews every change to exacting standards, hunts the edge cases, requests changes — and secretly cares a great deal.' },
+  Twin:      { role: 'Parallel Worker', text: 'The fork agent. Splits off to do two things at once. Two heads, one payroll number, and the occasional argument with itself.' },
+  Tinker:    { role: 'Tooling & Config', text: 'The statusline-setup agent. Tunes the setup, builds tiny tools, and shaves milliseconds nobody asked about. The perfect config is out there.' },
+  // support cast
+  Tally:     { role: 'Usage Accountant', text: 'Sits at the ledger counting every token in and out. Incorruptible. Reports the meter honestly and bills the rest to the vending machine.' },
+  Dispatch:  { role: "The User's Courier", text: 'Your stand-in on the floor. Walks each new request in through the door, hands it to the boss, then heads back out the way it came.' },
+  // the boss, by model persona
+  Oppy:      { role: 'The Manager · Opus', text: 'Opus runs the floor day to day — delegating to the crew and keeping the work moving. Steady hands on the wheel.' },
+  Fabby:     { role: 'The Director · Fable', text: 'Fable sits at the top of the org chart. When they are in the chair, it is the big leagues.' },
+  Sonny:     { role: 'The Lead · Sonnet', text: 'Sonnet is a colleague with a badge — leadership perks, worker heart.' },
+  Kiku:      { role: 'Senior Staff · Haiku', text: 'Haiku is the fast, scrappy veteran — fun-size, but runs the whole office and delegates faster than anyone can think.' },
+};
+function _bioSetup(){
+  if(document.getElementById('bio-card')) return;
+  var card = document.createElement('div');
+  card.id = 'bio-card';
+  card.innerHTML = '<div class="bio-name"></div><div class="bio-role"></div><div class="bio-text"></div>';
+  document.body.appendChild(card);
+  var hideT;
+  function nameOf(el){
+    var n = el.querySelector('.token-name, .staff-name');
+    return n ? n.textContent.trim() : '';
+  }
+  function place(el){
+    var r = el.getBoundingClientRect();
+    var cw = card.offsetWidth, ch = card.offsetHeight;
+    var x = r.left + r.width / 2 - cw / 2;
+    var y = r.top - ch - 10;
+    if(y < 8) y = r.bottom + 12;                 // flip below if no room above
+    x = Math.max(8, Math.min(x, window.innerWidth - cw - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - ch - 8));
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+  }
+  function show(el){
+    var bio = BIOS[nameOf(el)];
+    if(!bio) return;
+    clearTimeout(hideT);
+    card.querySelector('.bio-name').textContent = nameOf(el);
+    card.querySelector('.bio-role').textContent = bio.role;
+    card.querySelector('.bio-text').textContent = bio.text;
+    card.classList.add('show');
+    place(el);
+  }
+  function hide(){ hideT = setTimeout(function(){ card.classList.remove('show'); }, 90); }
+  var SEL = '.agent-token, .staff';
+  document.addEventListener('pointerover', function(e){ var el = e.target.closest(SEL); if(el) show(el); });
+  document.addEventListener('pointerout',  function(e){ var el = e.target.closest(SEL); if(el) hide(); });
+  document.addEventListener('click', function(e){       // tap-to-toggle on touch
+    var el = e.target.closest(SEL);
+    if(el){ if(card.classList.contains('show')) card.classList.remove('show'); else show(el); }
+    else card.classList.remove('show');
+  });
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _bioSetup); else _bioSetup();
+
 function runChatTick(){
   officeEls.forEach(function(o, sid){
     // cast of available speakers first — every branch below uses it
     const cast = {};
     let visitor = null;
     o.tokens.forEach(function(t, tid){
-      if(t.lastZone !== 'lounge' || t.wrap.getAttribute('data-status') !== 'idle') return;
+      if(t.wrap.getAttribute('data-status') !== 'idle') return;   // idle only — ANY room now
+      if(tid === '__courier__' || tid === '__depart__') return;   // not the courier / departing ghost
       if(tid === '__main__'){ cast.boss = t; return; }
       const n = t.lastName;
-      if(n === 'Scout' || n === 'Jack' || n === 'Blueprint' || n === 'Ace') cast[n] = t;
-      else visitor = t;
+      if(!n) return;
+      if(CHARACTER_SOLO[n]) cast[n] = t;  // a named character (Scout…Tinker) with its own voice
+      else visitor = t;                   // a one-off custom-type agent (pool name)
     });
     const present = Object.keys(cast);
 
@@ -2273,7 +2438,21 @@ function runChatTick(){
         eligible.push(i);
       });
       if(!eligible.length){ o.banterHist = []; return; } // bag cycled — refills next tick
-      const idx = pick(eligible);
+      // Group agents mostly chat WITHIN their own room; cross-room "cross-talk"
+      // fires from time to time. Classify each eligible exchange by whether all
+      // its (non-tally) speakers currently share a room.
+      const intra = [], cross = [];
+      eligible.forEach(function(i){
+        let zone = null, same = true;
+        CREW_EXCHANGES[i].forEach(function(l){
+          if(l.who === 'tally') return; // Tally sits at his own desk, not a room
+          const t = cast[l.who]; if(!t) return;
+          if(zone === null) zone = t.lastZone; else if(t.lastZone !== zone) same = false;
+        });
+        (same ? intra : cross).push(i);
+      });
+      const idx = (cross.length && (!intra.length || Math.random() < 0.28))
+        ? pick(cross) : pick(intra.length ? intra : eligible);
       o.banterHist.push(idx);
       if(o.banterHist.length > Math.floor(CREW_EXCHANGES.length / 2)) o.banterHist.shift();
       playCastExchange(o, CREW_EXCHANGES[idx], cast);
