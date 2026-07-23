@@ -510,7 +510,9 @@ const ZONES = {
 // the mat's top edge; occupants gather at the mat's centre.
 const ROOM_MATS = {
   warroom:  { w:24, h:26, bg:'repeating-linear-gradient(45deg, #10142c 0 6px, #0e1226 6px 12px)' },
-  research: { w:24, h:26, bg:'repeating-linear-gradient(-45deg, #0e1a26 0 6px, #0c1622 6px 12px)' },
+  // Research widened (2026-07): it's a proper two-resident room now
+  // (Scout + Bookworm home there) plus wander visitors.
+  research: { w:27, h:27, bg:'repeating-linear-gradient(-45deg, #0e1a26 0 6px, #0c1622 6px 12px)' },
   terminal: { w:26, h:26, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(#0d101f, #0b0e1b)' },
   archives: { w:24, h:26, bg:'repeating-linear-gradient(90deg, #15102a 0 9px, #120d24 9px 18px)' },
   // Widened 58% → 76% (2026-07): the permanent 4-man crew + the boss + a
@@ -550,6 +552,14 @@ const PROP_ART = {
   meetTable:'<svg viewBox="0 0 40 24" shape-rendering="crispEdges"><rect x="4" y="6" width="32" height="4" fill="#2a4a8c"/><rect x="4" y="6" width="32" height="1" fill="#3d63b3"/><rect x="2" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="36" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="4" y="10" width="32" height="3" fill="#1d3868"/><rect x="7" y="13" width="3" height="8" fill="#16305e"/><rect x="30" y="13" width="3" height="8" fill="#16305e"/><rect x="12" y="3" width="6" height="3" fill="#334155"/><rect x="13" y="4" width="4" height="2" fill="#06b6d4"/><rect x="24" y="4" width="5" height="2" fill="#e2e8f0"/></svg>',
   cmdDesk:  '<svg viewBox="0 0 40 26" shape-rendering="crispEdges"><rect x="3" y="3" width="10" height="8" fill="#1e293b"/><rect x="4" y="4" width="8" height="6" fill="#06b6d4"/><rect x="4" y="4" width="8" height="2" fill="#67e8f9"/><rect x="15" y="2" width="10" height="9" fill="#1e293b"/><rect x="16" y="3" width="8" height="7" fill="#7c3aed"/><rect x="16" y="3" width="8" height="2" fill="#a78bfa"/><rect x="27" y="3" width="10" height="8" fill="#1e293b"/><rect x="28" y="4" width="8" height="6" fill="#10b981"/><rect x="28" y="4" width="8" height="2" fill="#6ee7b7"/><rect x="1" y="12" width="38" height="2" fill="#64748b"/><rect x="1" y="14" width="38" height="3" fill="#475569"/><rect x="14" y="12" width="12" height="1" fill="#0c0e1c"/><rect x="3" y="17" width="3" height="8" fill="#334155"/><rect x="34" y="17" width="3" height="8" fill="#334155"/></svg>',
   coffeeBar:'<svg viewBox="0 0 34 28" shape-rendering="crispEdges"><rect x="4" y="3" width="10" height="7" fill="#334155"/><rect x="4" y="3" width="10" height="2" fill="#475569"/><rect x="6" y="6" width="3" height="3" fill="#0c0e1c"/><rect x="12" y="4" width="1" height="1" fill="#e63946"/><rect x="6" y="7" width="4" height="2" fill="#78350f"/><rect x="18" y="8" width="3" height="2" fill="#e63946"/><rect x="23" y="8" width="3" height="2" fill="#06b6d4"/><rect x="28" y="8" width="2" height="2" fill="#10b981"/><rect x="1" y="10" width="32" height="2" fill="#f59e0b"/><rect x="1" y="12" width="32" height="3" fill="#b45309"/><rect x="2" y="15" width="30" height="11" fill="#26170e"/><rect x="2" y="15" width="30" height="2" fill="#3a2415"/><rect x="6" y="18" width="9" height="7" fill="#2d1c11"/><rect x="19" y="18" width="9" height="7" fill="#2d1c11"/><rect x="13" y="20" width="1" height="2" fill="#94a3b8"/><rect x="20" y="20" width="1" height="2" fill="#94a3b8"/></svg>',
+  // --- detail pass (2026-07): more life per room ---
+  globe:    '<svg viewBox="0 0 18 24" shape-rendering="crispEdges"><rect x="5" y="1" width="8" height="2" fill="#155e75"/><rect x="3" y="3" width="12" height="8" fill="#0e7490"/><rect x="3" y="3" width="12" height="2" fill="#22d3ee"/><rect x="5" y="4" width="3" height="3" fill="#10b981"/><rect x="10" y="6" width="4" height="3" fill="#059669"/><rect x="6" y="9" width="3" height="2" fill="#34d399"/><rect x="5" y="11" width="8" height="2" fill="#155e75"/><rect x="8" y="13" width="2" height="3" fill="#78350f"/><rect x="5" y="16" width="8" height="2" fill="#92400e"/><rect x="4" y="18" width="10" height="2" fill="#78350f"/></svg>',
+  caseboard:'<svg viewBox="0 0 26 22" shape-rendering="crispEdges"><rect x="1" y="1" width="24" height="16" fill="#7c5a2e"/><rect x="2" y="2" width="22" height="14" fill="#a97b3f"/><rect x="4" y="4" width="5" height="4" fill="#e2e8f0"/><rect x="15" y="3" width="5" height="4" fill="#cbd5e1"/><rect x="10" y="10" width="5" height="4" fill="#e2e8f0"/><rect x="19" y="11" width="4" height="3" fill="#cbd5e1"/><rect x="7" y="6" width="6" height="1" fill="#b91c1c"/><rect x="13" y="5" width="4" height="1" fill="#b91c1c"/><rect x="12" y="7" width="1" height="4" fill="#b91c1c"/><rect x="6" y="5" width="1" height="1" fill="#e63946"/><rect x="17" y="4" width="1" height="1" fill="#06b6d4"/><rect x="12" y="11" width="1" height="1" fill="#e63946"/><rect x="21" y="12" width="1" height="1" fill="#10b981"/><rect x="4" y="17" width="2" height="4" fill="#5b3a1e"/><rect x="20" y="17" width="2" height="4" fill="#5b3a1e"/></svg>',
+  bookpile: '<svg viewBox="0 0 16 12" shape-rendering="crispEdges"><rect x="2" y="8" width="12" height="3" fill="#7c3aed"/><rect x="2" y="8" width="12" height="1" fill="#a78bfa"/><rect x="3" y="5" width="10" height="3" fill="#0e7490"/><rect x="3" y="5" width="10" height="1" fill="#22d3ee"/><rect x="4" y="2" width="8" height="3" fill="#b91c1c"/><rect x="4" y="2" width="8" height="1" fill="#ef4444"/></svg>',
+  ladder:   '<svg viewBox="0 0 16 28" shape-rendering="crispEdges"><rect x="3" y="2" width="2" height="24" fill="#92400e"/><rect x="11" y="2" width="2" height="24" fill="#78350f"/><rect x="5" y="5" width="6" height="2" fill="#b45309"/><rect x="5" y="10" width="6" height="2" fill="#b45309"/><rect x="5" y="15" width="6" height="2" fill="#b45309"/><rect x="5" y="20" width="6" height="2" fill="#b45309"/></svg>',
+  bankLamp: '<svg viewBox="0 0 20 22" shape-rendering="crispEdges"><rect x="4" y="4" width="10" height="1" fill="#bbf7d0"/><rect x="5" y="1" width="8" height="3" fill="#059669"/><rect x="5" y="1" width="8" height="1" fill="#34d399"/><rect x="8" y="4" width="2" height="4" fill="#eab308"/><rect x="3" y="8" width="12" height="2" fill="#7c2d12"/><rect x="3" y="10" width="12" height="1" fill="#5b3a1e"/><rect x="4" y="11" width="2" height="7" fill="#5b3a1e"/><rect x="12" y="11" width="2" height="7" fill="#5b3a1e"/></svg>',
+  arcade:   '<svg viewBox="0 0 22 30" shape-rendering="crispEdges"><rect x="3" y="1" width="16" height="4" fill="#9d174d"/><rect x="3" y="1" width="16" height="1" fill="#ec4899"/><rect x="6" y="2" width="2" height="1" fill="#f9a8d4"/><rect x="10" y="2" width="2" height="1" fill="#67e8f9"/><rect x="14" y="2" width="2" height="1" fill="#fde68a"/><rect x="4" y="5" width="14" height="22" fill="#831843"/><rect x="6" y="7" width="10" height="8" fill="#0c0e1c"/><rect x="7" y="8" width="3" height="2" fill="#22d3ee"/><rect x="12" y="10" width="2" height="2" fill="#ec4899"/><rect x="8" y="12" width="5" height="1" fill="#10b981"/><rect x="5" y="16" width="12" height="4" fill="#be185d"/><rect x="7" y="17" width="2" height="2" fill="#0c0e1c"/><rect x="8" y="16" width="1" height="2" fill="#e2e8f0"/><rect x="12" y="17" width="2" height="2" fill="#fbbf24"/><rect x="15" y="17" width="1" height="2" fill="#22d3ee"/><rect x="4" y="27" width="14" height="2" fill="#500724"/></svg>',
+  cables:   '<svg viewBox="0 0 26 8" shape-rendering="crispEdges"><rect x="1" y="4" width="8" height="1" fill="#475569"/><rect x="8" y="2" width="6" height="1" fill="#475569"/><rect x="13" y="4" width="7" height="1" fill="#64748b"/><rect x="19" y="3" width="6" height="1" fill="#475569"/><rect x="5" y="5" width="9" height="1" fill="#0e7490"/><rect x="15" y="5" width="6" height="1" fill="#7c3aed"/><rect x="23" y="2" width="2" height="3" fill="#94a3b8"/></svg>',
 };
 const PROPS = [
   // --- on the wall (inside the top 13% band; the CLOCK + two monitor boxes
@@ -565,20 +575,29 @@ const PROPS = [
   { x:29.5, y:24.5, w:11, art:'chair' },
   { x:22,   y:29,   w:36, art:'meetTable' }, // meeting table w/ laptop + papers
   { x:31.5, y:36,   w:24, art:'board' },     // whiteboard easel
-  // --- research room ---
-  { x:6,  y:49,   w:22, art:'shelf' },
-  { x:10.5, y:49, w:22, art:'shelf' },     // a proper pair of bookcases
-  { x:19, y:59,   w:28, art:'desk' },      // reading desk
-  { x:19, y:64,   w:11, art:'chair' },
+  // --- research room (the two-resident study: shelves, desk, globe,
+  //     evidence board with red string, a pile of borrowed books) ---
+  { x:5.5,  y:48.5, w:22, art:'shelf' },
+  { x:10,   y:48.5, w:22, art:'shelf' },   // a proper pair of bookcases
+  { x:25,   y:47,   w:20, art:'caseboard' }, // the red-string investigation board
+  { x:18.5, y:59,   w:28, art:'desk' },    // reading desk
+  { x:18.5, y:64,   w:11, art:'chair' },
+  { x:27,   y:59,   w:12, art:'globe' },
+  { x:6,    y:64,   w:11, art:'bookpile' },
+  // --- corridor greenery between Research and Terminal ---
+  { x:33,   y:60,   w:14, art:'plant' },
   // --- terminal room ---
   { x:50,   y:52, w:38, art:'cmdDesk' },   // triple-monitor command desk
   { x:50,   y:57, w:11, art:'chair' },
   { x:40,   y:62, w:20, art:'servers' },
   { x:60.5, y:62, w:20, art:'servers' },
-  // --- archives room ---
+  { x:50,   y:66.5, w:20, art:'cables', flat:true }, // cable spaghetti between the racks
+  // --- archives room (plus the library ladder and a banker's lamp) ---
   { x:76.5, y:48.5, w:16, art:'cabinet' },
   { x:80.5, y:48.5, w:16, art:'cabinet' },
   { x:91.5, y:49,   w:22, art:'shelf' },
+  { x:74.5, y:61,   w:12, art:'ladder' },
+  { x:85,   y:63.5, w:14, art:'bankLamp' },
   { x:92.5, y:62,   w:24, art:'boxes' },
   // --- lounge (rug first so everything else sits on it) ---
   // Furniture hugs the EDGES: couch corner on the left, coffee corner on
@@ -590,6 +609,7 @@ const PROPS = [
   { x:24, y:89.5, w:26,  art:'table' },
   { x:14, y:78,   w:18,  art:'plant' },
   { x:33, y:78,   w:16,  art:'lamp' },
+  { x:44, y:77.5, w:18,  art:'arcade' },    // the lounge arcade cabinet
   { x:79, y:82,   w:34,  art:'coffeeBar' }, // coffee corner: machine + mugs
   { x:85.5, y:91, w:18,  art:'plant' },
   // --- hallway ---
@@ -768,17 +788,18 @@ const DELEGATION_WINDOW_MS = 15000; // how long a boss "Sending X to: Y" line st
 // spawns, only the crew member with the SAME codename is hidden — that's
 // them, up from the bench and working (same sprite, same name, since both
 // derive from the agent type) — and the rest keep lounging.
-// `home` = the room a standby crew member idles in. The original four keep the
-// lounge as their social hub (all the banter lives there); the newer agents
-// group into the room that fits their job, so the lounge doesn't get crowded:
-// the reading/review pair in Archives, the tooling/exec pair in Terminal.
+// `home` = the room a standby crew member starts in (wandering takes it from
+// there). Each agent homes where their PROFESSION points: the recon and the
+// docs-reader in Research (that's where the bookshelves are), the reviewer
+// with the file cabinets in Archives, the tooling/exec pair in Terminal, and
+// the social core in the lounge keeping the boss company.
 const REGULAR_CREW = [
-  { key: 'crew-explore', agentType: 'Explore',           home: 'lounge' },   // Scout
+  { key: 'crew-explore', agentType: 'Explore',           home: 'research' }, // Scout    — recon = research
   { key: 'crew-general', agentType: 'general-purpose',   home: 'lounge' },   // Jack
   { key: 'crew-plan',    agentType: 'Plan',              home: 'lounge' },   // Blueprint
   { key: 'crew-claude',  agentType: 'claude',            home: 'lounge' },   // Ace
-  { key: 'crew-guide',   agentType: 'claude-code-guide', home: 'archives' }, // Bookworm — reads docs
-  { key: 'crew-review',  agentType: 'code-reviewer',     home: 'archives' }, // Nitpick  — reviews files
+  { key: 'crew-guide',   agentType: 'claude-code-guide', home: 'research' }, // Bookworm — manuals live on the shelves
+  { key: 'crew-review',  agentType: 'code-reviewer',     home: 'archives' }, // Nitpick  — reviews the filed records
   { key: 'crew-fork',    agentType: 'fork',              home: 'terminal' }, // Twin     — parallel exec
   { key: 'crew-status',  agentType: 'statusline-setup',  home: 'terminal' }, // Tinker   — tooling/config
 ];
