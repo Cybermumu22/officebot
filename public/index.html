@@ -986,6 +986,7 @@ function ensureSubagent(s, aid, evt){
       id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(nameKey), modelNickname: null,
       codenameBase: base, tookUnknownJob: tookUnknownJob,
       codename: memberName,
+      isExtra: dupes > 0,   // a temp reinforcement, not the permanent crew member
       status: 'thinking', zone: 'warroom', bubble: memberName + ' reporting in.',
       lastEventAt: Date.now(), removeTimer: null, settleTimer: null,
     };
@@ -1290,6 +1291,19 @@ function handleEvent(evt){
       dispatchCourier(s, evt.user_input || evt.prompt);
       break;
     case 'SubagentStart':
+      if(aid && target.isExtra){
+        // Temp reinforcement: enter through the door, then walk to the war
+        // room — so extras visibly ARRIVE from outside, not pop into place.
+        target.status = 'thinking'; target.zone = 'exit'; target.bubble = null;
+        (function(a2){ setTimeout(function(){
+          if(!s.subagents.has(aid)) return;
+          a2.zone = 'warroom';
+          a2.bubble = pick(TEMP_ARRIVE_LINES);
+          chatLog(displayName(a2), a2.bubble, 'arrive');
+          render();
+        }, 400); })(target);
+        break;
+      }
       target.status = 'thinking'; target.zone = 'warroom';
       // If the boss just announced a handoff ("Sending Scout to: ...")
       // moments ago, echo that specific task back instead of a generic
@@ -1352,6 +1366,16 @@ function handleEvent(evt){
       if(evt._speech) chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
       break;
     case 'SubagentStop':
+      if(aid && target.isExtra){
+        // Temp reinforcement: says goodbye, walks OUT through the door, and
+        // is removed once clear — extras never pile up in the lounge.
+        target.status = 'done'; target.zone = 'exit'; target.bubble = pick(TEMP_BYE_LINES);
+        chatLog(displayName(target), target.bubble, 'handback');
+        _fxFor(sid, aid, 'check');
+        if(target.settleTimer){ clearTimeout(target.settleTimer); target.settleTimer = null; }
+        target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, 2600);
+        break;
+      }
       // Head to the lounge (not straight out the door) — settling there
       // idle for a few seconds is what makes it a candidate for lounge
       // small-talk with whoever else (including the boss) is parked there.
@@ -2636,6 +2660,20 @@ function subDoneLine(aid, tool){
   const line = SUB_DONE_LINES[Math.abs(hashStr('done:' + aid)) % SUB_DONE_LINES.length];
   return line.replace('{t}', t);
 }
+// The office has 8 PERMANENT staff (the crew). The FIRST agent of a type is
+// that staff member getting up to work (seamless, stays). EXTRA parallel
+// same-type agents are TEMP REINFORCEMENTS — they walk IN through the door
+// for the big job and walk OUT when it's done, so they never accumulate.
+const TEMP_ARRIVE_LINES = [
+  'Reinforcements — point me at it.', 'Temp crew, checking in.',
+  'Extra hands, reporting.', 'Heard you needed the numbers.',
+  'On loan for this one.', 'Here for the surge.',
+];
+const TEMP_BYE_LINES = [
+  'Job’s done — clocking out.', 'That’s my slice. Heading off.',
+  'Back to the pool. Later.', 'Contract fulfilled. Bye.',
+  'Out I go — call again.', 'Wrapped. Off I pop.',
+];
 const CREW_ARRIVE_ORDER = ['Scout', 'Blueprint', 'Bookworm', 'Tinker', 'Twin', 'Nitpick', 'Ace', 'Jack'];
 const BOSS_HI = [
   "Morning. Unlock, lights, coffee — in that order.",
