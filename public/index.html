@@ -156,6 +156,12 @@
      token rises above the crowd instead. */
   .agent-token:has(.token-bubble.show){z-index:24;}
   .agent-token.token-main:has(.token-bubble.show){z-index:25;}
+  /* Ceremony walking: arrivals stroll in relaxed; departures a touch
+     brisker (work's over, home beckons). Normal hustle is 1.7s. */
+  .office.ceremony .agent-token{transition-duration:3.4s,3.4s;}
+  .office.closing .agent-token{transition-duration:2.6s,2.6s;}
+  /* No session = nobody inside. Not even the accountant. */
+  .office-placeholder .staff{display:none;}
 
   /* Slightly smaller than they used to be (24/32) — traded for roomier
      speech bubbles that can show a full thought. */
@@ -1217,8 +1223,16 @@ function handleEvent(evt){
 
   switch(name){
     case 'SessionStart':
-      s.status = 'idle'; s.zone = 'lounge'; s.bubble = 'Just got in (' + (evt.source || 'startup') + ').';
-      chatLog(displayName(s), s.bubble, 'status');
+      // A fresh office (or one that emptied/was closing) gets the full
+      // arrival ceremony — boss first, Tally, crew one by one. An office
+      // that's already staffed (resume into a live one) skips the theatre.
+      if(!officeEls.get(sid) || s.closing || s.bossGone || (s.crewGone && s.crewGone.length)){
+        playOpening(sid);
+      } else {
+        s.status = 'idle'; s.zone = 'terminal';
+        s.bubble = 'Back at it (' + (evt.source || 'startup') + ').';
+        chatLog(displayName(s), s.bubble, 'status');
+      }
       break;
     case 'UserPromptSubmit':
       target.status = 'thinking'; target.zone = 'warroom';
@@ -1389,22 +1403,14 @@ function handleEvent(evt){
       // above already played the handover — leave bubble/zone/status alone.
       break;
     case 'SessionEnd':
-      s.status = 'offline'; s.zone = 'exit'; s.bubble = 'Signing off.';
+      // Nobody blinks out of existence: the closing ceremony drains the
+      // office one at a time — crew (brisker: work's over), Tally closes
+      // the books, the boss last. playClosing owns removal.
       s.courier = null; clearCourierTimers(s);
-      s.departing = null; clearDepartTimers(s);
-      // Power the WHOLE office down together: every subagent goes offline and
-      // heads for the door too, instead of freezing at its last "working"
-      // status while the boss walks out alone. On /clear the office is
-      // closing, so everyone leaves — then the removeTimer disappears it.
-      s.subagents.forEach(function(a){
-        if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
-        if(a.settleTimer){ clearTimeout(a.settleTimer); a.settleTimer = null; }
-        if(a.bubbleFadeTimer){ clearTimeout(a.bubbleFadeTimer); a.bubbleFadeTimer = null; }
-        a.status = 'offline'; a.zone = 'exit'; a.bubble = null;
-      });
-      chatLog(displayName(s), s.bubble, 'status');
-      logMoment('👋 ' + displayName(s) + ' signed off — office closing (' + s.cwd + ')');
-      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 8000);
+      s.departing = null;
+      chatLog(displayName(s), "That's the session — closing up.", 'status');
+      logMoment('👋 ' + displayName(s) + ' wrapped the session — office closing (' + s.cwd + ')');
+      playClosing(sid);
       break;
     default:
       target.bubble = name || target.bubble;
@@ -1647,6 +1653,10 @@ function hidePlaceholderOffice(){
 function ensureOffice(sid, s){
   let o = officeEls.get(sid);
   if(!o){
+    // The placeholder must be gone BEFORE the office joins floorEl —
+    // hidePlaceholderOffice() wipes floorEl.innerHTML, and an office
+    // appended first would be orphaned (visible nowhere, updated forever).
+    hidePlaceholderOffice();
     const root = document.createElement('div');
     root.className = 'office';
     root.innerHTML = '<div class="office-head"><span class="office-plaque"></span><span class="office-cwd"></span></div>' + officeSkeletonHtml();
@@ -1945,11 +1955,14 @@ function render(){
         if(onDuty[cn]) return;
         if(s.crewGone && s.crewGone.indexOf(cn) !== -1) return; // already clocked out / on holiday
         const leaving = s.crewLeaver && s.crewLeaver.codename === cn;
+        const arriving = s.crewArriver && s.crewArriver.codename === cn;
         seen[crew.key] = true;
         // wander state wins over the static home room (see runWanderTick)
         const crewZone = (s.crewZones && s.crewZones[crew.key]) || crew.home || 'lounge';
-        entities.push({ key:crew.key, zone: leaving ? s.crewLeaver.zone : crewZone, status:'idle',
-          bubble: leaving ? s.crewLeaver.bubble : null,
+        entities.push({ key:crew.key,
+          zone: leaving ? s.crewLeaver.zone : arriving ? s.crewArriver.zone : crewZone,
+          status:'idle',
+          bubble: leaving ? s.crewLeaver.bubble : arriving ? s.crewArriver.bubble : null,
           avatar:avatarForAgentType(crew.agentType), name:cn, isMain:false, isCrew:true });
       });
     }
@@ -2525,6 +2538,7 @@ function stepDeparture(o, s, mode, cast){
 function reopenOffice(sid){
   const s = sessions.get(sid);
   if(!s) return;
+  if(s.closing || s.arriving) return; // ceremonies own the roster right now
   if(!(s.crewGone && s.crewGone.length) && !s.tallyGone && !s.bossGone && !s.leaving && !s.crewLeaver && !s.bossLeaving) return;
   s.crewGone = []; s.crewLeaver = null; s.tallyGone = false; s.bossGone = false; s.bossLeaving = null; s.leaving = false;
   clearDepartTimers(s);
@@ -2534,6 +2548,146 @@ function reopenOffice(sid){
     if(staff){ staff.style.display = ''; staff.style.opacity = ''; staff.style.transition = ''; staff.style.left = '53%'; staff.style.top = '17.5%'; }
   }
   render();
+}
+
+/* ============ OPENING & CLOSING CEREMONIES (2026-07) ============
+   The office is a WORKPLACE: before a session starts, nobody's in (the
+   placeholder hides even Tally). On SessionStart the boss unlocks the door
+   first with his own coming-to-work line, Tally follows to open the books,
+   then the crew trickle in ONE BY ONE in a fixed personality order — the
+   eager ones early, Jack last — all at a stroll (.ceremony slows walks).
+   On SessionEnd the existing stepDeparture machinery drains the office in
+   reverse: crew out one at a time (a touch brisker — work's over), Tally
+   closes the books, the boss leaves LAST and gets the lights. */
+const CREW_ARRIVE_ORDER = ['Scout', 'Blueprint', 'Bookworm', 'Tinker', 'Twin', 'Nitpick', 'Ace', 'Jack'];
+const BOSS_HI = [
+  "Morning. Unlock, lights, coffee — in that order.",
+  "Boss on deck. Let's see what today wants.",
+  "First one in, as always. Right — to work.",
+];
+const TALLY_HI = [
+  "Morning, boss. The ledger slept well.",
+  "Books open. The counting begins.",
+  "On time. Unlike the budget.",
+];
+const CREW_HI = {
+  Scout: ["FIRST. As documented.", "Morning! Anything to grep yet?"],
+  Blueprint: ["On schedule. To the minute.", "Morning. Today's plan has phases."],
+  Bookworm: ["Morning. The shelves called.", "I dreamt in documentation again."],
+  Tinker: ["Morning. The terminals missed me.", "Booting up. Literally and emotionally."],
+  Twin: ["We're both here. Counts as two.", "Morning, morning."],
+  Nitpick: ["I still have notes from YESTERDAY.", "Morning. The couch is 4% off-centre again."],
+  Ace: ["The office may begin. I've arrived.", "Morning, legends."],
+  Jack: ["I'm here. Nobody log it as early.", "Coffee first. Questions never."],
+};
+const MORNING_EXCHANGES = [
+  [{who:'boss',text:"Full house. Alright — what's first?"},{who:'Scout',text:"Everything. Everything is first."}],
+  [{who:'tally',text:"Everyone's in. Payroll notices."},{who:'Jack',text:"Payroll should notice HARDER."}],
+  [{who:'boss',text:"Good crowd today."},{who:'Ace',text:"We're contractually a great crowd."}],
+];
+function crewHomeZone(cn){
+  const def = _currentCrew().filter(function(c){ return codenameForAgentType(c.agentType) === cn; })[0];
+  return (def && def.home) || 'lounge';
+}
+function playOpening(sid){
+  const s = sessions.get(sid);
+  if(!s) return;
+  clearDepartTimers(s);
+  if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  s.closing = false; s.arriving = true; s.leaving = false;
+  s.crewLeaver = null; s.bossLeaving = null; s.bossGone = false;
+  s.crewGone = CREW_ARRIVE_ORDER.slice();   // nobody's in yet
+  s.crewArriver = null; s.tallyGone = true;
+  s.zone = 'exit'; s.status = 'idle';
+  s.bubble = pick(BOSS_HI); s.speechBubble = false;
+  chatLog(displayName(s), s.bubble, 'status');
+  const o = ensureOffice(sid, s);
+  o.root.classList.remove('closing'); o.root.classList.add('ceremony');
+  const staff = o.root.querySelector('.staff');
+  if(staff){ staff.style.display = 'none'; staff.style.opacity = '0'; staff.style.transition = ''; }
+  render();
+  const T = s.departTimers;                 // one cleanup rail for both ceremonies
+  T.push(setTimeout(function(){ if(sessions.has(sid)){ s.zone = 'lounge'; render(); } }, 900));
+  // Tally second — slides in from the door to his desk
+  T.push(setTimeout(function(){
+    if(!sessions.has(sid)) return;
+    s.tallyGone = false;
+    if(staff){
+      staff.style.display = ''; staff.style.transition = 'none';
+      staff.style.left = '84%'; staff.style.top = '9%'; staff.style.opacity = '1';
+      void staff.offsetWidth;
+      staff.style.transition = 'left 3s ease, top 3s ease';
+      staff.style.left = '53%'; staff.style.top = '17.5%';
+    }
+    sayStaffLine(o, pick(TALLY_HI));
+  }, 6000));
+  // then the crew, one at a time, at a stroll
+  const CREW_STEP_MS = 5200, CREW_FROM_MS = 11000;
+  CREW_ARRIVE_ORDER.forEach(function(cn, i){
+    T.push(setTimeout(function(){
+      if(!sessions.has(sid) || s.closing) return;
+      const gi = s.crewGone.indexOf(cn);
+      if(gi === -1) return;
+      s.crewGone.splice(gi, 1);
+      s.crewArriver = { codename: cn, zone: 'exit', bubble: null };
+      render();
+      T.push(setTimeout(function(){
+        if(!s.crewArriver || s.crewArriver.codename !== cn) return;
+        s.crewArriver.zone = crewHomeZone(cn);
+        s.crewArriver.bubble = CREW_HI[cn] ? pick(CREW_HI[cn]) : null;
+        if(s.crewArriver.bubble) chatLog(cn, s.crewArriver.bubble, 'arrive');
+        render();
+      }, 500));
+      T.push(setTimeout(function(){
+        if(s.crewArriver && s.crewArriver.codename === cn){ s.crewArriver = null; render(); }
+      }, 4600));
+    }, CREW_FROM_MS + i * CREW_STEP_MS));
+  });
+  // everyone's in: back to normal walking pace + one bit of morning banter
+  T.push(setTimeout(function(){
+    if(!sessions.has(sid)) return;
+    s.arriving = false;
+    o.root.classList.remove('ceremony');
+    const cast = {};
+    o.tokens.forEach(function(t, tid){
+      if(tid === '__main__'){ cast.boss = t; return; }
+      const n = t.lastName;
+      if(n && CHARACTER_SOLO[n]) cast[n] = t;
+    });
+    playCastExchange(o, pick(MORNING_EXCHANGES), cast, 800);
+  }, CREW_FROM_MS + CREW_ARRIVE_ORDER.length * CREW_STEP_MS + 4800));
+}
+function playClosing(sid){
+  const s = sessions.get(sid);
+  if(!s || s.closing) return;
+  s.closing = true; s.arriving = false;
+  clearDepartTimers(s);            // cancel an arrival still trickling in
+  s.crewArriver = null; s.leaving = false;
+  const o = officeEls.get(sid);
+  if(o){ o.root.classList.remove('ceremony'); o.root.classList.add('closing'); }
+  // real subagents head straight out — the ceremony is for the household
+  s.subagents.forEach(function(a){
+    if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
+    if(a.settleTimer){ clearTimeout(a.settleTimer); a.settleTimer = null; }
+    if(a.bubbleFadeTimer){ clearTimeout(a.bubbleFadeTimer); a.bubbleFadeTimer = null; }
+    a.status = 'offline'; a.zone = 'exit'; a.bubble = null;
+  });
+  const step = function(){
+    if(!sessions.has(sid)) return;
+    const cast = {};
+    if(o) o.tokens.forEach(function(t, tid){
+      if(tid === '__main__'){ cast.boss = t; return; }
+      const n = t.lastName;
+      if(n && CHARACTER_SOLO[n]) cast[n] = t;
+    });
+    stepDeparture(o, s, 'home', cast);
+    if(s.bossGone){
+      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 2600);
+      return;
+    }
+    s.departTimers.push(setTimeout(step, 1300));
+  };
+  step();
 }
 
 // Play an exchange against the current cast: 'tally' always lands (he's at
@@ -3176,21 +3330,13 @@ setInterval(function(){
   const now = Date.now();
   let changed = false;
   sessions.forEach(function(s, sid){
-    if(s.status === 'offline') return;
+    if(s.status === 'offline' || s.closing) return;
     if(now - (s.lastEventAt || 0) < CLIENT_STALE_MS) return;
     changed = true;
-    s.status = 'offline'; s.zone = 'exit'; s.bubble = 'Gone quiet — signing off.';
     s.courier = null; clearCourierTimers(s);
-    s.departing = null; clearDepartTimers(s);
-    s.subagents.forEach(function(a){
-      if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
-      if(a.settleTimer){ clearTimeout(a.settleTimer); a.settleTimer = null; }
-      if(a.bubbleFadeTimer){ clearTimeout(a.bubbleFadeTimer); a.bubbleFadeTimer = null; }
-      a.status = 'offline'; a.zone = 'exit'; a.bubble = null;
-    });
-    logMoment('👋 ' + displayName(s) + ' went quiet — office closed (' + s.cwd + ')');
-    if(s.removeTimer) clearTimeout(s.removeTimer);
-    s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 8000);
+    s.departing = null;
+    logMoment('👋 ' + displayName(s) + ' went quiet — office closing (' + s.cwd + ')');
+    playClosing(sid);
   });
   if(changed) render();
 }, 60000);
