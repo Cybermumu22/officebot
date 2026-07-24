@@ -1208,7 +1208,18 @@ function handleEvent(evt){
   }
 
   const sid = evt.session_id || 'unknown-session';
+  const isNewSession = !sessions.has(sid);
   const s = ensureSession(sid, evt);
+  // The office opens the moment a session is FIRST SEEN — whatever event
+  // that is. SessionStart is the usual door-opener but it can be missed
+  // (confirmed on the phone), and then the first prompt materialized a
+  // fully-staffed office from thin air. The age check keeps page reloads
+  // honest: a REPLAYED old event means an established session — staff the
+  // office instantly, no theatre.
+  const evtAge = Date.now() - (evt._receivedAt || Date.now());
+  if(isNewSession && !officeEls.get(sid) && name !== 'SessionEnd' && evtAge < 15000){
+    playOpening(sid);
+  }
   const aid = evt.agent_id || null;
   const target = aid ? ensureSubagent(s, aid, evt) : s;
   maybeSetModel(target, evt);
@@ -1223,6 +1234,7 @@ function handleEvent(evt){
 
   switch(name){
     case 'SessionStart':
+      if(s.arriving) break;   // the first-sight hook above already opened up
       // A fresh office (or one that emptied/was closing) gets the full
       // arrival ceremony — boss first, Tally, crew one by one. An office
       // that's already staffed (resume into a live one) skips the theatre.
@@ -2607,7 +2619,9 @@ function playOpening(sid){
   if(staff){ staff.style.display = 'none'; staff.style.opacity = '0'; staff.style.transition = ''; }
   render();
   const T = s.departTimers;                 // one cleanup rail for both ceremonies
-  T.push(setTimeout(function(){ if(sessions.has(sid)){ s.zone = 'lounge'; render(); } }, 900));
+  // …unless real work already claimed him (first-sight opening on a prompt
+  // event) — never yank a thinking boss back to the lounge
+  T.push(setTimeout(function(){ if(sessions.has(sid) && s.status === 'idle'){ s.zone = 'lounge'; render(); } }, 900));
   // Tally second — slides in from the door to his desk
   T.push(setTimeout(function(){
     if(!sessions.has(sid)) return;
