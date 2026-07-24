@@ -56,25 +56,30 @@ export PATH="$HOME/bin:$PATH"
 export USE_BUILTIN_RIPGREP=0
 export DISABLE_AUTOUPDATER=1
 
-# Separate marker block so existing installs pick up the office-opener wrapper
-# on a re-run. Launching `claude` pings officebot to run the arrival ceremony
-# right away (the phone's real SessionStart hook is unreliable); the real
-# session then adopts that already-open office, so there's never a duplicate.
-if ! grep -q '# >>> pocket-deck-claude-fn >>>' ~/.profile 2>/dev/null; then
+# Office-opener wrapper. Launching `claude` pings officebot to run the arrival
+# ceremony right away (the phone's real SessionStart hook is unreliable); the
+# real session then adopts that already-open office, so there's never a
+# duplicate. It reads your configured model so the boss wears the right face
+# from the first second, not a generic one. REFRESHED every run (not
+# skip-if-present) so wrapper improvements actually reach existing installs.
+# Strip any prior block (matches both the old >>> and new <<< close markers)
+if grep -q '>>> pocket-deck-claude-fn' ~/.profile 2>/dev/null; then
+  awk '/>>> pocket-deck-claude-fn/{s=1} !s{print} /<<< pocket-deck-claude-fn/{s=0}' ~/.profile > ~/.profile.tmp && mv ~/.profile.tmp ~/.profile
+fi
 cat >> ~/.profile <<'EOF'
 # >>> pocket-deck-claude-fn >>>
 claude() {
   if command -v curl >/dev/null 2>&1; then
+    _m=$(jq -r '.model // "fable"' ~/.claude/settings.json 2>/dev/null || echo fable)
     curl -s -m 2 -o /dev/null -X POST -H 'Content-Type: application/json' \
-      -d "{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",\"_opener\":true,\"session_id\":\"office-open-$$-$RANDOM\",\"cwd\":\"$PWD\"}" \
+      -d "{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",\"_opener\":true,\"model\":\"$_m\",\"session_id\":\"office-open-$$-$RANDOM\",\"cwd\":\"$PWD\"}" \
       http://127.0.0.1:4317/event >/dev/null 2>&1 &
   fi
   command claude "$@"
 }
-# <<< pocket-deck-claude-fn >>>
+# <<< pocket-deck-claude-fn <<<
 EOF
-echo "added claude office-opener wrapper to ~/.profile"
-fi
+echo "installed/refreshed claude office-opener wrapper in ~/.profile"
 
 step "Cloning repos (into Termux home — NOT /sdcard, git breaks there)"
 mkdir -p ~/work
