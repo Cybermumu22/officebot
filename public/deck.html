@@ -53,6 +53,12 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   /* collapsed sideways: thin vertical strip, arrow only */
   .layout-collapse.collapsed #officeHandle{writing-mode:vertical-rl;flex:1;padding:10px 0;justify-content:flex-start}
 }
+/* Keyboard open = you're typing = you want the TERMINAL. In the split layouts
+   the office is hidden while the soft keyboard is up, so Claude's TUI (slash
+   menus, model picker, prompts) gets the full row count it needs to list its
+   options. It slides back the moment the keyboard closes. */
+.kbd-open.layout-split #officePane,
+.kbd-open.layout-collapse #officePane{display:none}
 
 /* ---- office chat: floating glass overlay + bottom-panel mode ---- */
 #chatFab{position:absolute;right:12px;bottom:14px;z-index:8;width:46px;height:46px;border-radius:50%;background:#141830ee;color:#22d3ee;border:1px solid #2a3560;font-size:20px;box-shadow:0 2px 12px #000a;cursor:pointer}
@@ -287,7 +293,14 @@ new ResizeObserver(fitSoon).observe($('xtermHost'));
 // on EVERY word, and refitting each time forced a full terminal re-layout
 // mid-typing — the "janky typing" feel. Let the viewport settle first.
 let vvT = null;
+function syncKbd(){
+  // soft keyboard eats a big chunk of the visual viewport; 150px clears the
+  // noise from the URL-bar/suggestion-strip shuffle
+  const open = !!(window.visualViewport && (window.innerHeight - visualViewport.height) > 150);
+  $('app').classList.toggle('kbd-open', open);
+}
 if(window.visualViewport) visualViewport.addEventListener('resize', function(){
+  syncKbd();
   if(vvT) clearTimeout(vvT);
   vvT = setTimeout(fitNow, 220);
 });
