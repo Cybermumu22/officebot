@@ -18,6 +18,7 @@ const MIME = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.apk': 'application/vnd.android.package-archive',
+  '.webmanifest': 'application/manifest+json',
 };
 
 let sseClients = [];
@@ -846,7 +847,11 @@ server.on('error', function (err) {
   console.error('agent-viz server error:', err && err.message ? err.message : err);
   process.exit(1);
 });
-server.listen(PORT, function () {
-  console.log('officebot dashboard: http://localhost:' + PORT);
+// AGENT_VIZ_HOST restricts the bind address. Unset = all interfaces (LAN
+// viewing, the historical behavior); the Pocket Deck phone launcher sets
+// 127.0.0.1 so a phone on public Wi-Fi never exposes the dashboard.
+const HOST = process.env.AGENT_VIZ_HOST || undefined;
+server.listen(PORT, HOST, function () {
+  console.log('officebot dashboard: http://localhost:' + PORT + (HOST ? ' (bound to ' + HOST + ')' : ''));
   console.log('Hook endpoint:       http://localhost:' + PORT + '/event');
 });
