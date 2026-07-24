@@ -16,16 +16,23 @@ if [ -z "${PREFIX:-}" ] || [ ! -d "/data/data/com.termux" ]; then
   exit 1
 fi
 
-step "Updating package lists"
+step "Updating packages (fresh installs often ship half-updated libraries)"
 pkg update -y || warn "pkg update failed — check your internet connection"
+# Without the full upgrade, openssl/libngtcp2/git/curl can mismatch and git dies
+# with: CANNOT LINK EXECUTABLE ... SSL_set_quic_tls_transport_params
+pkg upgrade -y || warn "pkg upgrade failed"
 
 step "Installing packages (node, git, gh, ripgrep, ssh, ttyd, tmux, jq)"
 pkg install -y nodejs-lts git gh ripgrep openssh ttyd tmux jq curl termux-tools \
   || warn "some packages failed to install — scroll up for which"
 
 step "Installing Claude Code (npm build — the native installer does not run on Android)"
-if ! command -v claude >/dev/null 2>&1; then
-  npm install -g @anthropic-ai/claude-code || warn "npm install failed — see ANDROID.md troubleshooting"
+# Test that claude actually RUNS, not merely that a bin exists — npm >= 11.18
+# blocks postinstall scripts by default, which leaves a broken half-install.
+if ! claude --version >/dev/null 2>&1; then
+  npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code \
+    || npm install -g @anthropic-ai/claude-code \
+    || warn "npm install failed — see ANDROID.md troubleshooting"
 fi
 # npm sometimes fails to create the launcher on Termux — make our own shim
 if ! command -v claude >/dev/null 2>&1 && [ -f "$PREFIX/lib/node_modules/@anthropic-ai/claude-code/cli.js" ]; then
