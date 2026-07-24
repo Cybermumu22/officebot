@@ -1248,7 +1248,13 @@ function handleEvent(evt){
       break;
     case 'UserPromptSubmit':
       target.status = 'thinking'; target.zone = 'warroom';
-      target.bubble = 'Thinking: ' + truncate(evt.user_input || evt.prompt || 'new request', 140);
+      // Don't PARROT the prompt back — Dispatch already walks it in and the
+      // chat feed shows it. The boss instead REACTS to receiving work, which
+      // reads like a person taking a ticket, not an echo. His real first
+      // words replace this the moment the transcript has them (SpeechTick).
+      target.bubble = pick(BOSS_ACK);
+      target.speechBubble = false;
+      chatLog(displayName(target), target.bubble, 'status');
       // Dispatch owns the prompt in the chat feed (one amber line, not two)
       // and physically walks it in through the exit door.
       dispatchCourier(s, evt.user_input || evt.prompt);
@@ -2571,6 +2577,19 @@ function reopenOffice(sid){
    On SessionEnd the existing stepDeparture machinery drains the office in
    reverse: crew out one at a time (a touch brisker — work's over), Tally
    closes the books, the boss leaves LAST and gets the lights. */
+// The boss's reaction to a new prompt landing on his desk — a person taking
+// a ticket, not an echo of it. Replaced by his real words once the transcript
+// produces them (SpeechTick), so these only ever show for the first beat.
+const BOSS_ACK = [
+  "Right — let's have a look.",
+  "On it. Give me a second.",
+  "New one in. Reading it now.",
+  "Okay. Rolling up my sleeves.",
+  "Got your request. Thinking.",
+  "Let's see what we've got here.",
+  "Noted. Working on it.",
+  "Alright — my turn.",
+];
 const CREW_ARRIVE_ORDER = ['Scout', 'Blueprint', 'Bookworm', 'Tinker', 'Twin', 'Nitpick', 'Ace', 'Jack'];
 const BOSS_HI = [
   "Morning. Unlock, lights, coffee — in that order.",
