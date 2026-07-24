@@ -627,6 +627,13 @@ const PROPS = [
 const sessions = new Map();
 const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
 let evtCount = 0;
+
+// Display-only filter: ?only=<project> shows only sessions whose project (cwd
+// basename) matches — used by the Command Deck to watch just its own runs.
+// Empty (the normal case) shows every session, unchanged.
+var ONLY_PROJECT = '';
+try { ONLY_PROJECT = (new URLSearchParams(location.search)).get('only') || ''; } catch (e) {}
+function _sessionShown(s){ return !ONLY_PROJECT || (s && s.cwd === ONLY_PROJECT); }
 const floorEl = document.getElementById('floor');
 let placeholderShown = false;
 const logEl = document.getElementById('log');
@@ -1846,14 +1853,17 @@ function scheduleBubbleLayout(){
 }
 
 function render(){
-  if(sessions.size === 0 && officeEls.size === 0){
+  var shownCount = 0;
+  sessions.forEach(function(s){ if(_sessionShown(s)) shownCount++; });
+  if(shownCount === 0 && officeEls.size === 0){
     showPlaceholderOffice();
     return;
   }
   hidePlaceholderOffice();
 
   officeEls.forEach(function(o, sid){
-    if(!sessions.has(sid) && !o.leaving){
+    var _s = sessions.get(sid);
+    if((!_s || !_sessionShown(_s)) && !o.leaving){
       o.leaving = true;
       o.root.style.transition = 'opacity .4s, transform .4s';
       o.root.style.opacity = '0';
@@ -1863,6 +1873,7 @@ function render(){
   });
 
   sessions.forEach(function(s, sid){
+    if(!_sessionShown(s)) return;
     const o = ensureOffice(sid, s);
 
     // Collect every entity that needs a token this render, THEN group by

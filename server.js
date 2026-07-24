@@ -728,8 +728,11 @@ function ensureSnapshotter() {
 }
 
 function serveStatic(req, res) {
-  let reqPath = req.url === '/' ? '/index.html' : req.url;
-  reqPath = reqPath.split('?')[0];
+  // Strip the query string FIRST, then default to index.html — so a root URL
+  // carrying a query (e.g. /?only=command-deck for the deck's office filter)
+  // still serves the dashboard instead of 404-ing on the directory.
+  let reqPath = req.url.split('?')[0];
+  if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   const filePath = path.join(PUBLIC_DIR, reqPath);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end(); return; }
   fs.readFile(filePath, function (err, data) {
