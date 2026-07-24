@@ -1347,13 +1347,15 @@ function handleEvent(evt){
       }
       break;
     case 'Stop':
-      // Head to the lounge with the turn's closing words — fresh transcript
-      // text if there is any, else keep the speech already on screen (the
-      // dedup gate means Stop often arrives just after a SpeechTick already
-      // showed the final line). Either way it's said once and then fades
-      // (armIdleFade) — never a permanent bubble, and never a filler
-      // "Standing by." over someone who isn't talking.
-      target.status = 'idle'; target.zone = 'lounge';
+      // Stay AT THE DESK between turns (2026-07: used to walk to the lounge
+      // after every answer, which read as "officebot lost my session"). An
+      // open session is an occupied desk — the LOUNGE now means "no live
+      // session": just-got-in, sign-off, ghosts, limit theatre. Closing
+      // words: fresh transcript text if there is any, else keep the speech
+      // already on screen (the dedup gate means Stop often arrives just
+      // after a SpeechTick already showed the final line). Either way it's
+      // said once and then fades (armIdleFade).
+      target.status = 'idle';
       if(s._didWork){ _fxFor(sid, null, 'confetti'); s._didWork = false; } // turn wrapped cleanly 🎉
       if(evt._speech){
         target.bubble = cleanSpeech(evt._speech, 220);
