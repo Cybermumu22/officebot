@@ -978,11 +978,15 @@ function ensureSubagent(s, aid, evt){
     const base = codenameForAgentType(nameKey);
     let dupes = 0;
     s.subagents.forEach(function(other){ if(other.codenameBase === base) dupes++; });
+    // Parallel same-type agents get distinct teammate names (Scout, Recon,
+    // Probe, …) instead of Scout II/III/IV — a fan-out reads as a squad, not
+    // clones. The name is their identity; the base still groups them.
+    const memberName = squadNameFor(base, dupes);
     a = {
       id: aid, agentType: effType || 'agent', avatar: avatarForAgentType(nameKey), modelNickname: null,
       codenameBase: base, tookUnknownJob: tookUnknownJob,
-      codename: dupes === 0 ? base : base + ' ' + (['II','III','IV','V'][dupes - 1] || (dupes + 1)),
-      status: 'thinking', zone: 'warroom', bubble: base + ' reporting in.',
+      codename: memberName,
+      status: 'thinking', zone: 'warroom', bubble: memberName + ' reporting in.',
       lastEventAt: Date.now(), removeTimer: null, settleTimer: null,
     };
     s.subagents.set(aid, a);
@@ -1332,7 +1336,10 @@ function handleEvent(evt){
         target.speechBubble = true;
         chatLog(displayName(target), cleanSpeechFull(evt._speech), 'speech');
       } else {
-        target.bubble = 'Done with ' + (evt.tool_name || 'that') + '.';
+        // Vary the line PER AGENT so a fan-out finishing together doesn't
+        // chant the identical "Done with Read." in unison. Deterministic on
+        // the agent id, so a given teammate keeps a consistent voice.
+        target.bubble = aid ? subDoneLine(aid, evt.tool_name) : ('Done with ' + (evt.tool_name || 'that') + '.');
       }
       break;
     case 'PostToolUseFailure':
@@ -2616,6 +2623,19 @@ const BOSS_ACK = [
   "Noted. Working on it.",
   "Alright — my turn.",
 ];
+// Per-agent completion lines — a fan-out that finishes together shouldn't
+// chant the same bubble. Picked deterministically from the agent id so each
+// teammate has a steady voice. "{t}" fills in the tool name.
+const SUB_DONE_LINES = [
+  'Done with {t}.', '{t} — wrapped.', 'That’s my part.', 'Section’s clear.',
+  'Finished my chunk.', '{t} sorted.', 'All read, boss.', 'My slice is done.',
+  'Handing it back.', 'Clean pass on {t}.',
+];
+function subDoneLine(aid, tool){
+  const t = tool || 'that';
+  const line = SUB_DONE_LINES[Math.abs(hashStr('done:' + aid)) % SUB_DONE_LINES.length];
+  return line.replace('{t}', t);
+}
 const CREW_ARRIVE_ORDER = ['Scout', 'Blueprint', 'Bookworm', 'Tinker', 'Twin', 'Nitpick', 'Ace', 'Jack'];
 const BOSS_HI = [
   "Morning. Unlock, lights, coffee — in that order.",

@@ -94,6 +94,27 @@ const CODENAME_POOL = [
   'Pixel', 'Gizmo', 'Byte', 'Echo', 'Bolt', 'Nova', 'Chip', 'Sparks',
   'Glitch', 'Turbo', 'Widget', 'Zippy', 'Mochi', 'Patch', 'Dash', 'Rune',
 ];
+// When Claude fans out several agents of the SAME type at once (e.g. four
+// parallel Explores), numbering them "Scout II/III/IV" reads as clones. Each
+// role instead has a small SQUAD of teammate names — the first keeps the base
+// codename, extras get a distinct name — so a fan-out looks like a real team.
+// (squadNameFor() falls back to numerals past the roster; index 0 = the base.)
+const AGENT_SQUADS = {
+  'Scout':     ['Scout', 'Recon', 'Probe', 'Ranger', 'Tracker', 'Scout VI'],
+  'Jack':      ['Jack', 'Mac', 'Rigg', 'Bolt', 'Wrench', 'Jack VI'],
+  'Blueprint': ['Blueprint', 'Draft', 'Schema', 'Sketch', 'Grid', 'Blueprint VI'],
+  'Ace':       ['Ace', 'Deuce', 'King', 'Joker', 'Trey', 'Ace VI'],
+  'Bookworm':  ['Bookworm', 'Index', 'Scroll', 'Margin', 'Footnote', 'Bookworm VI'],
+  'Tinker':    ['Tinker', 'Sprocket', 'Cog', 'Fuse', 'Bit', 'Tinker VI'],
+  'Twin':      ['Twin', 'Clone', 'Echo', 'Mirror', 'Fork', 'Twin VI'],
+  'Nitpick':   ['Nitpick', 'Quibble', 'Sniff', 'Redline', 'Comma', 'Nitpick VI'],
+};
+function squadNameFor(base, dupeIndex) {
+  const squad = AGENT_SQUADS[base];
+  if (dupeIndex <= 0) return base;
+  if (squad && squad[dupeIndex]) return squad[dupeIndex];
+  return base + ' ' + (['II', 'III', 'IV', 'V', 'VI', 'VII'][dupeIndex - 1] || (dupeIndex + 1));
+}
 function codenameForAgentType(agentType) {
   if (agentType && AGENT_CODENAMES[agentType]) return AGENT_CODENAMES[agentType];
   const key = 'codename:' + (agentType || 'agent');
