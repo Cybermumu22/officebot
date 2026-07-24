@@ -150,6 +150,12 @@
     z-index:2;
   }
   .agent-token.token-main{z-index:3;}
+  /* The transform above makes every token its own stacking context, so a
+     bubble's z-index can never climb past a LATER sibling token — bubbles
+     rendered behind neighbours' names/badges. While speaking, the whole
+     token rises above the crowd instead. */
+  .agent-token:has(.token-bubble.show){z-index:24;}
+  .agent-token.token-main:has(.token-bubble.show){z-index:25;}
 
   /* Slightly smaller than they used to be (24/32) — traded for roomier
      speech bubbles that can show a full thought. */
@@ -173,8 +179,15 @@
     /* width:max-content is load-bearing: an abs-positioned box otherwise
        shrink-to-fits against its containing block — the 24px badge — and
        collapses to one character per line. max-width still caps it. */
-    width:max-content; max-width:128px; padding:3px 6px; border-radius:7px;
-    background:#11142a; border:1px solid var(--st); color:#e2e4f0;
+    width:max-content; max-width:128px; padding:4px 7px; border-radius:11px;
+    /* liquid glass: translucent body blurring the office behind it, status
+       tint kept on a softened border, glossy top edge */
+    background:rgba(17,20,42,.55);
+    -webkit-backdrop-filter:blur(10px) saturate(1.5); backdrop-filter:blur(10px) saturate(1.5);
+    border:1px solid var(--st);
+    border-color:color-mix(in srgb, var(--st) 55%, transparent);
+    box-shadow:0 4px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.16);
+    color:#e2e4f0;
     font-family:'VT323',monospace; font-size:.66rem; line-height:1.22; text-align:center;
     opacity:0; white-space:normal; word-break:break-word;
     transition:opacity .25s; z-index:calc(4 + var(--tier, 0));
@@ -189,6 +202,7 @@
   .token-bubble::after{
     content:''; position:absolute; left:calc(50% - var(--bx, 0px)); top:100%; transform:translateX(-50%);
     border:5px solid transparent; border-top-color:var(--st);
+    border-top-color:color-mix(in srgb, var(--st) 65%, transparent);
   }
   /* Flipped bubble: when an avatar stands near the top of the floor, a
      bubble anchored above its head pokes past the floor's top edge and
@@ -350,8 +364,13 @@
      would cover the wall monitor he stands under. */
   .staff-bubble{
     position:absolute; left:130%; top:40%; transform:translateY(-50%);
-    width:max-content; max-width:112px; padding:3px 6px; border-radius:8px;
-    background:#11142a; border:1px solid #10b981; color:#e2e4f0;
+    width:max-content; max-width:112px; padding:4px 7px; border-radius:11px;
+    background:rgba(17,20,42,.55);
+    -webkit-backdrop-filter:blur(10px) saturate(1.5); backdrop-filter:blur(10px) saturate(1.5);
+    border:1px solid #10b981;
+    border-color:color-mix(in srgb, #10b981 55%, transparent);
+    box-shadow:0 4px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.16);
+    color:#e2e4f0;
     font-family:'VT323',monospace; font-size:.72rem; line-height:1.25; text-align:center;
     opacity:0; transition:opacity .25s; z-index:4;
   }

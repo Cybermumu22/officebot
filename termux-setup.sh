@@ -106,6 +106,21 @@ if [ ! -f ~/.claude/statusline-command.sh ] && [ -f ~/officebot/termux/statuslin
   echo "installed status line script"
 fi
 
+step "Phone context for Claude (global CLAUDE.md — every session knows the stack)"
+CM=~/.claude/CLAUDE.md
+SRC=~/officebot/termux/CLAUDE-android.md
+if [ -f "$SRC" ]; then
+  mkdir -p ~/.claude
+  if [ -f "$CM" ] && grep -q '<!-- pocket-deck:begin -->' "$CM"; then
+    # refresh only our managed block; the user's own notes survive
+    awk '/<!-- pocket-deck:begin -->/{skip=1} !skip{print} /<!-- pocket-deck:end -->/{skip=0}' "$CM" > "$CM.tmp" \
+      && cat "$SRC" >> "$CM.tmp" && mv "$CM.tmp" "$CM"
+  else
+    cat "$SRC" >> "$CM"
+  fi
+  echo "installed/refreshed pocket-deck section in ~/.claude/CLAUDE.md"
+fi
+
 step "tmux config (sessions that survive the screen turning off)"
 if ! grep -q '# >>> pocket-deck >>>' ~/.tmux.conf 2>/dev/null; then
 cat >> ~/.tmux.conf <<'EOF'

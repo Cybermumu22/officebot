@@ -40,7 +40,7 @@
     "public/deck-icon-512.png",
     "public/vendor/",
     "termux-setup.sh",
-    "termux/statusline-command.sh",
+    "termux/",
     "README.md",
     "ANDROID.md",
     "ARCHITECTURE.md",
