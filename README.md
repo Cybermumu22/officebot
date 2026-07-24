@@ -96,6 +96,21 @@ same `--port` when you `start`.
 
 ---
 
+## Pocket Deck (Android): run Claude Code ON your phone
+
+Not just *viewing* from a phone — the whole thing runs on it. Termux hosts
+the real interactive Claude Code CLI, your repo comes from GitHub, and
+`public/deck.html` combines a proper terminal (tabs, key bar, persistent
+tmux sessions) with the office in one installable app at
+`http://localhost:4317/deck.html`. One-command setup:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Cybermumu22/officebot/main/termux-setup.sh
+bash termux-setup.sh
+```
+
+Full walkthrough and troubleshooting: **[ANDROID.md](ANDROID.md)**.
+
 ## Viewing from other devices (phone, another computer, anywhere)
 
 <img src="docs/screenshot-mobile.png" alt="officebot on a phone" width="300" align="right">
