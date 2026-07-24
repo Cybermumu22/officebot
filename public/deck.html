@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- interactive-widget=resizes-content: Chrome 108+ shrinks the layout when the
+     soft keyboard opens, so the terminal input line stays visible. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0f1220">
+<link rel="manifest" href="/deck.webmanifest">
+<link rel="icon" href="/deck-icon-192.png">
+<link rel="apple-touch-icon" href="/deck-icon-192.png">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<title>Pocket Deck</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+#app{display:flex;flex-direction:column;height:100dvh}
+
+/* ---- top bar ---- */
+#bar{flex:0 0 44px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#0f1220;border-bottom:1px solid #1e2338}
+#brand{font-size:11px;letter-spacing:1px;color:#7c9eff;white-space:nowrap;font-weight:700}
+#tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:#141830;color:#8fa0c5;border:1px solid #1e2338;font-size:12px;cursor:pointer}
+.tab.active{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
+.tab .x{opacity:.55;padding:0 2px;font-size:13px}
+#bar button{flex:0 0 auto;width:32px;height:32px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #1e2338;font-size:15px;cursor:pointer}
+.layout-split #flipBtn{display:none}
+
+/* ---- panes ---- */
+#main{flex:1;display:flex;flex-direction:column;min-height:0}
+#officePane{display:flex;flex-direction:column;min-height:0;min-width:0;background:#000}
+#officeHandle{display:none;flex:0 0 30px;align-items:center;gap:8px;padding:0 10px;background:#0f1220;border-bottom:1px solid #1e2338;color:#7c9eff;font-size:11px;letter-spacing:1px;cursor:pointer;user-select:none}
+#office{flex:1;border:0;width:100%;background:#000}
+#termPane{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;background:#0b0e17}
+#xtermHost{flex:1;min-height:0;padding:2px 0 0 4px}
+#xtermHost .xterm{height:100%}
+#ttydFrame{flex:1;border:0;width:100%;background:#000}
+
+/* flip: one pane at a time, whole screen each */
+.layout-flip #officePane{display:none}
+.layout-flip.show-office #officePane{display:flex}
+.layout-flip.show-office #termPane{display:none}
+/* split + collapsible: office above (beside, in landscape), terminal fills the rest */
+.layout-split #officePane,.layout-collapse #officePane{flex:0 0 var(--office-size,38%)}
+.layout-collapse #officeHandle{display:flex}
+.layout-collapse.collapsed #officePane{flex:0 0 30px}
+.layout-collapse.collapsed #office{display:none}
+@media (orientation:landscape){
+  .layout-split #main,.layout-collapse #main{flex-direction:row}
+  .layout-split #officePane,.layout-collapse #officePane{border-right:1px solid #1e2338}
+  /* collapsed sideways: thin vertical strip, arrow only */
+  .layout-collapse.collapsed #officeHandle{writing-mode:vertical-rl;flex:1;padding:10px 0;justify-content:flex-start}
+}
+
+/* ---- connection pill ---- */
+#conn{position:absolute;top:6px;right:10px;z-index:5;padding:4px 10px;border-radius:12px;font-size:11px;background:#3b1d24;color:#ff9db1;border:1px solid #7a2f42;cursor:pointer}
+#conn.ok{background:#12301f;color:#7ce6a8;border-color:#1f7a4a}
+#conn.hidden{display:none}
+
+/* ---- key bar ---- */
+#keybar{flex:0 0 auto;display:flex;gap:4px;padding:4px 6px calc(4px + env(safe-area-inset-bottom));overflow-x:auto;background:#0f1220;border-top:1px solid #1e2338;scrollbar-width:none}
+#keybar::-webkit-scrollbar{display:none}
+#keybar button{flex:0 0 auto;min-width:38px;height:34px;padding:0 9px;border-radius:6px;background:#141830;color:#aebbdd;border:1px solid #232a4a;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+#keybar button.on{background:#2a3560;color:#fff;border-color:#4d5fa5}
+.keybar-off #keybar{display:none}
+.engine-ttyd #keybar{display:none}
+.engine-ttyd #xtermHost{display:none}
+
+/* ---- settings drawer ---- */
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40}
+#settings{position:fixed;top:0;right:0;bottom:0;width:min(320px,86vw);z-index:41;background:#0f1220;border-left:1px solid #263056;padding:16px 14px;overflow-y:auto}
+#settings h2{font-size:13px;letter-spacing:2px;color:#7c9eff;margin-bottom:14px}
+#settings .sec{margin-bottom:16px}
+#settings .lbl{font-size:10px;letter-spacing:1px;color:#6b7aa5;margin-bottom:6px;text-transform:uppercase}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:70px;padding:8px 6px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:12px;cursor:pointer}
+.seg button.on{background:#1d2440;color:#e6ecff;border-color:#4d5fa5}
+.rowset{display:flex;align-items:center;gap:10px}
+.rowset button{width:34px;height:34px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:16px;cursor:pointer}
+.rowset .val{min-width:34px;text-align:center;font-size:13px}
+.togglerow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #171c30;font-size:13px}
+.togglerow input{width:18px;height:18px;accent-color:#4d5fa5}
+#settings input[type=range]{width:100%;accent-color:#4d5fa5}
+#settings input[type=number]{width:90px;padding:7px;border-radius:6px;background:#141830;color:#cfd8ea;border:1px solid #232a4a;font-size:13px}
+#settings .note{font-size:11px;color:#5f6c92;margin-top:6px;line-height:1.5}
+#settings .actions{display:flex;gap:8px;margin-top:18px}
+#settings .actions button{flex:1;padding:10px;border-radius:6px;background:#1d2440;color:#e6ecff;border:1px solid #3b4a7a;font-size:13px;cursor:pointer}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="app" class="layout-flip show-term">
+  <header id="bar">
+    <span id="brand">◆ DECK</span>
+    <nav id="tabs"></nav>
+    <button id="addTab" title="New tab">+</button>
+    <button id="flipBtn" title="Terminal / Office">⇄</button>
+    <button id="gearBtn" title="Settings">⚙</button>
+  </header>
+  <div id="main">
+    <div id="officePane">
+      <div id="officeHandle"><span id="officeArrow">▾</span> THE OFFICE</div>
+      <iframe id="office" src="/" title="Office viewer"></iframe>
+    </div>
+    <div id="termPane">
+      <div id="xtermHost"></div>
+      <div id="conn" class="hidden"></div>
+      <div id="keybar"></div>
+    </div>
+  </div>
+</div>
+<div id="backdrop" class="hidden"></div>
+<aside id="settings" class="hidden">
+  <h2>POCKET DECK — SETTINGS</h2>
+  <div class="sec"><div class="lbl">Layout</div>
+    <div class="seg" id="segLayout">
+      <button data-v="flip">Flip</button>
+      <button data-v="split">Split</button>
+      <button data-v="collapse">Collapsible</button>
+    </div>
+    <div class="note">Flip: one full screen at a time (⇄ swaps). Split: office above the terminal. Collapsible: split, but the office folds to a strip.</div>
+  </div>
+  <div class="sec"><div class="lbl">Office pane size</div>
+    <input type="range" id="rngSplit" min="25" max="60" step="1">
+  </div>
+  <div class="sec"><div class="lbl">Terminal font size</div>
+    <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
+  </div>
+  <div class="sec">
+    <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
+    <label class="togglerow">Keep screen awake<input type="checkbox" id="chkAwake"></label>
+  </div>
+  <div class="sec"><div class="lbl">Terminal engine</div>
+    <div class="seg" id="segEngine">
+      <button data-v="pocket">Pocket</button>
+      <button data-v="ttyd">ttyd page</button>
+    </div>
+    <div class="note">Pocket is the built-in terminal (key bar, tabs, auto-reconnect). "ttyd page" embeds ttyd's own UI — fallback if Pocket misbehaves.</div>
+  </div>
+  <div class="sec"><div class="lbl">Terminal port</div>
+    <input type="number" id="numPort" min="1" max="65535">
+    <div class="note">Where ttyd listens (deck-start uses 7681). Closing a tab only detaches it — the session keeps running until you type <b>exit</b> in it.</div>
+  </div>
+  <div class="actions">
+    <button id="btnReconnect">Reconnect</button>
+    <button id="btnCloseSettings">Close</button>
+  </div>
+</aside>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script>
+'use strict';
+/* Pocket Deck — phone CLI + office viewer in one page.
+ *
+ * The terminal talks ttyd's WebSocket protocol directly (ttyd 1.7.x,
+ * pinned; verified against tsl0922/ttyd src/protocol.c):
+ *   ws://host:port/ws  subprotocol "tty", binary frames
+ *   client → server:  first message = raw JSON {"columns","rows","AuthToken"}
+ *                     then '0'+bytes = input, '1'+JSON = resize
+ *   server → client:  '0'+bytes = output, '1' = title, '2' = prefs (ignored)
+ * ttyd runs `tmux new -A -s <session>` (session name arrives via ?arg=, ttyd -a),
+ * so the real shell/Claude lives in tmux and SURVIVES every disconnect —
+ * Android killing a backgrounded tab just detaches; reopening reattaches.
+ */
+
+// ---------- settings ----------
+const DEFAULTS = {
+  layout:'flip', showing:'term', splitPct:38, collapsed:false,
+  fontSize:14, keybar:true, engine:'pocket', keepAwake:true, wsPort:7681,
+  tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
+  active:0, nextTab:3
+};
+let S = loadSettings();
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem('pocketDeck.v1');
+    if(raw){ return Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(raw)); }
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+function save(){ try{ localStorage.setItem('pocketDeck.v1', JSON.stringify(S)); }catch(e){} }
+
+const $ = id => document.getElementById(id);
+
+// ---------- terminal ----------
+const term = new Terminal({
+  fontSize:S.fontSize,
+  fontFamily:'ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace',
+  cursorBlink:true, scrollback:3000,
+  theme:{ background:'#0b0e17', foreground:'#d6e0f5', cursor:'#37f5ff',
+          selectionBackground:'#2a3560' }
+});
+const fit = new FitAddon.FitAddon();
+term.loadAddon(fit);
+term.open($('xtermHost'));
+
+let fitQ = false;
+function fitNow(){ try{ fit.fit(); }catch(e){} }
+function fitSoon(){
+  if(fitQ) return; fitQ = true;
+  requestAnimationFrame(function(){ fitQ = false; fitNow(); });
+}
+new ResizeObserver(fitSoon).observe($('xtermHost'));
+if(window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
+window.addEventListener('orientationchange', function(){ setTimeout(fitSoon, 300); });
+
+// ---------- ttyd connection ----------
+const enc = new TextEncoder();
+let ws = null, gen = 0, retryT = null, retryDelay = 250, retryAt = 0;
+let inited = false;   // ttyd's first frame MUST be the JSON init — gate everything else on this
+
+function tabSession(){ return S.tabs[S.active].session; }
+// "localhost" can resolve to ::1 first, and ttyd is bound to 127.0.0.1 (IPv4
+// only) — Chrome then hangs on the IPv6 attempt. Pin the terminal host to the
+// v4 loopback; the office iframe is same-origin and unaffected.
+function termHost(){ return location.hostname === 'localhost' ? '127.0.0.1' : location.hostname; }
+function httpBase(){ return location.protocol + '//' + termHost() + ':' + S.wsPort; }
+function wsUrl(sess){ return 'ws://' + termHost() + ':' + S.wsPort + '/ws?arg=' + encodeURIComponent(sess); }
+
+function setConn(text, ok){
+  const el = $('conn');
+  el.textContent = text;
+  el.className = ok ? 'ok' : '';
+}
+function hideConn(){ $('conn').className = 'hidden'; }
+
+async function connect(){
+  const g = ++gen;
+  closeWs();
+  setConn('connecting…', false);
+  let token = '';
+  try{
+    const r = await fetch(httpBase() + '/token', {cache:'no-store'});
+    if(r.ok){ token = (await r.json()).token || ''; }
+  }catch(e){}
+  if(g !== gen) return;
+  let sock;
+  try{ sock = new WebSocket(wsUrl(tabSession()), ['tty']); }
+  catch(e){ scheduleRetry(); return; }
+  sock.binaryType = 'arraybuffer';
+  ws = sock;
+  sock.onopen = function(){
+    if(g !== gen){ try{ sock.close(); }catch(e){} return; }
+    term.reset();               // tmux repaints the full screen on attach
+    // Init FIRST — fitNow() can fire term.onResize synchronously, and a
+    // resize frame before the init JSON corrupts ttyd's handshake.
+    sock.send(enc.encode(JSON.stringify({AuthToken:token, columns:term.cols, rows:term.rows})));
+    inited = true;
+    fitNow();
+    retryDelay = 250;
+    setConn('connected', true);
+    setTimeout(function(){ if(g === gen && ws === sock) hideConn(); }, 1200);
+    term.focus();
+  };
+  sock.onmessage = function(e){
+    if(g !== gen) return;
+    if(typeof e.data === 'string'){          // defensive: ttyd sends binary
+      if(e.data[0] === '0') term.write(e.data.slice(1));
+      return;
+    }
+    const d = new Uint8Array(e.data);
+    if(d.length && d[0] === 0x30) term.write(d.subarray(1));   // '0' OUTPUT
+    // 0x31 SET_WINDOW_TITLE / 0x32 SET_PREFERENCES: ignored
+  };
+  sock.onclose = function(){ if(g !== gen) return; ws = null; scheduleRetry(); };
+  sock.onerror = function(){};
+}
+function closeWs(){
+  inited = false;
+  if(retryT){ clearTimeout(retryT); retryT = null; }
+  if(ws){ const s = ws; ws = null; s.onclose = null; try{ s.close(); }catch(e){} }
+}
+function scheduleRetry(){
+  retryDelay = Math.min(retryDelay * 2, 8000);
+  retryAt = Date.now() + retryDelay;
+  tickRetry();
+}
+function tickRetry(){
+  const left = retryAt - Date.now();
+  if(left <= 0){ retryT = null; connect(); return; }
+  setConn('reconnecting in ' + Math.ceil(left/1000) + 's — tap to retry', false);
+  retryT = setTimeout(tickRetry, 250);
+}
+$('conn').addEventListener('click', function(){ retryAt = 0; });
+
+// ---------- input ----------
+let ctrlSticky = false;
+function sendInput(data){
+  if(ctrlSticky && data.length === 1){
+    const c = data.toLowerCase().charCodeAt(0);
+    if(c >= 97 && c <= 122) data = String.fromCharCode(c - 96);
+    ctrlSticky = false; syncCtrlBtn();
+  }
+  if(ws && ws.readyState === 1 && inited) ws.send(enc.encode('0' + data));
+}
+term.onData(sendInput);
+term.onResize(function(sz){
+  if(ws && ws.readyState === 1 && inited)
+    ws.send(enc.encode('1' + JSON.stringify({columns:sz.cols, rows:sz.rows})));
+});
+
+// ---------- key bar ----------
+const KEYS = [
+  {t:'Esc', s:'\x1b'}, {t:'Tab', s:'\t'}, {t:'⇧Tab', s:'\x1b[Z'}, {t:'^C', s:'\x03'},
+  {t:'↑', s:'\x1b[A'}, {t:'↓', s:'\x1b[B'}, {t:'←', s:'\x1b[D'}, {t:'→', s:'\x1b[C'},
+  {t:'/', s:'/'}, {t:'!', s:'!'}, {t:'Ctrl', ctrl:true}, {t:'⏎', s:'\r'}, {t:'📋', paste:true}
+];
+let ctrlBtn = null;
+function syncCtrlBtn(){ if(ctrlBtn) ctrlBtn.className = ctrlSticky ? 'on' : ''; }
+(function buildKeybar(){
+  const bar = $('keybar');
+  KEYS.forEach(function(k){
+    const b = document.createElement('button');
+    b.textContent = k.t;
+    // preventDefault on pointerdown keeps focus (and the soft keyboard) on xterm
+    b.addEventListener('pointerdown', function(e){ e.preventDefault(); });
+    b.addEventListener('click', function(){
+      if(k.ctrl){ ctrlSticky = !ctrlSticky; syncCtrlBtn(); return; }
+      if(k.paste){
+        navigator.clipboard.readText()
+          .then(function(t){ if(t) term.paste(t); })
+          .catch(function(){ setConn('clipboard blocked — long-press the terminal instead', false);
+                             setTimeout(hideConn, 2500); });
+        return;
+      }
+      sendInput(k.s);
+    });
+    if(k.ctrl) ctrlBtn = b;
+    bar.appendChild(b);
+  });
+})();
+
+// ---------- tabs (each = a named tmux session; closing only detaches) ----------
+function renderTabs(){
+  const nav = $('tabs');
+  nav.innerHTML = '';
+  S.tabs.forEach(function(tab, i){
+    const b = document.createElement('div');
+    b.className = 'tab' + (i === S.active ? ' active' : '');
+    const label = document.createElement('span');
+    label.textContent = tab.label;
+    b.appendChild(label);
+    if(i === S.active && S.tabs.length > 1){
+      const x = document.createElement('span');
+      x.className = 'x'; x.textContent = '×';
+      x.addEventListener('click', function(e){ e.stopPropagation(); closeTab(i); });
+      b.appendChild(x);
+    }
+    b.addEventListener('click', function(){ switchTab(i); });
+    nav.appendChild(b);
+  });
+}
+function switchTab(i){
+  if(i === S.active || i < 0 || i >= S.tabs.length) return;
+  S.active = i; save(); renderTabs();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+function addTab(){
+  const n = S.nextTab++;
+  S.tabs.push({label:'TERM ' + n, session:'deck-' + n});
+  S.active = S.tabs.length - 1;
+  save(); renderTabs();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+function closeTab(i){
+  if(S.tabs.length <= 1) return;
+  S.tabs.splice(i, 1);
+  if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
+  save(); renderTabs();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+$('addTab').addEventListener('click', addTab);
+
+// ---------- layout ----------
+function applyLayout(){
+  const app = $('app');
+  app.className = 'layout-' + S.layout
+    + (S.showing === 'office' ? ' show-office' : ' show-term')
+    + (S.collapsed ? ' collapsed' : '')
+    + (S.keybar ? '' : ' keybar-off')
+    + (S.engine === 'ttyd' ? ' engine-ttyd' : '');
+  app.style.setProperty('--office-size', S.splitPct + '%');
+  $('officeArrow').textContent = S.collapsed ? '▸' : '▾';
+  fitSoon();
+}
+$('flipBtn').addEventListener('click', function(){
+  if(S.layout === 'flip'){
+    S.showing = (S.showing === 'term') ? 'office' : 'term';
+  } else if(S.layout === 'collapse'){
+    S.collapsed = !S.collapsed;
+  }
+  save(); applyLayout();
+  if(S.showing === 'term' && S.engine === 'pocket') term.focus();
+});
+$('officeHandle').addEventListener('click', function(){
+  S.collapsed = !S.collapsed; save(); applyLayout();
+});
+
+// ---------- engine (pocket xterm vs ttyd's own page as fallback) ----------
+function applyEngine(){
+  if(S.engine === 'ttyd'){
+    closeWs(); hideConn();
+    let f = $('ttydFrame');
+    if(!f){
+      f = document.createElement('iframe');
+      f.id = 'ttydFrame'; f.title = 'ttyd terminal';
+      $('termPane').insertBefore(f, $('xtermHost'));
+    }
+    f.src = httpBase() + '/?arg=' + encodeURIComponent(tabSession());
+  } else {
+    const f = $('ttydFrame');
+    if(f) f.remove();
+    retryDelay = 250; connect();
+  }
+  applyLayout();
+}
+
+// ---------- keep screen awake ----------
+let wakeLock = null;
+function updateWake(){
+  if(!('wakeLock' in navigator)) return;
+  if(S.keepAwake && document.visibilityState === 'visible'){
+    if(!wakeLock){
+      navigator.wakeLock.request('screen').then(function(l){
+        wakeLock = l;
+        l.addEventListener('release', function(){ wakeLock = null; });
+      }).catch(function(){});
+    }
+  } else if(wakeLock){
+    try{ wakeLock.release(); }catch(e){}
+    wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', function(){
+  updateWake();
+  // coming back to the app: reattach immediately instead of waiting out backoff
+  if(document.visibilityState === 'visible' && S.engine === 'pocket'){
+    if(retryT){ retryAt = 0; }
+    else if(!ws || ws.readyState > 1){ retryDelay = 250; connect(); }
+  }
+});
+
+// ---------- settings drawer ----------
+function syncSettingsUI(){
+  Array.prototype.forEach.call($('segLayout').children, function(b){
+    b.className = (b.dataset.v === S.layout) ? 'on' : '';
+  });
+  Array.prototype.forEach.call($('segEngine').children, function(b){
+    b.className = (b.dataset.v === S.engine) ? 'on' : '';
+  });
+  $('rngSplit').value = S.splitPct;
+  $('fontVal').textContent = S.fontSize;
+  $('chkKeybar').checked = S.keybar;
+  $('chkAwake').checked = S.keepAwake;
+  $('numPort').value = S.wsPort;
+}
+$('gearBtn').addEventListener('click', function(){
+  syncSettingsUI();
+  $('settings').classList.remove('hidden');
+  $('backdrop').classList.remove('hidden');
+});
+function closeSettings(){
+  $('settings').classList.add('hidden');
+  $('backdrop').classList.add('hidden');
+}
+$('backdrop').addEventListener('click', closeSettings);
+$('btnCloseSettings').addEventListener('click', closeSettings);
+$('segLayout').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v) return;
+  S.layout = v; save(); syncSettingsUI(); applyLayout();
+});
+$('segEngine').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v || v === S.engine) return;
+  S.engine = v; save(); syncSettingsUI(); applyEngine();
+});
+$('rngSplit').addEventListener('input', function(){
+  S.splitPct = Number(this.value); save(); applyLayout();
+});
+$('fontMinus').addEventListener('click', function(){ bumpFont(-1); });
+$('fontPlus').addEventListener('click', function(){ bumpFont(1); });
+function bumpFont(d){
+  S.fontSize = Math.max(8, Math.min(24, S.fontSize + d));
+  save(); $('fontVal').textContent = S.fontSize;
+  term.options.fontSize = S.fontSize; fitSoon();
+}
+$('chkKeybar').addEventListener('change', function(){
+  S.keybar = this.checked; save(); applyLayout();
+});
+$('chkAwake').addEventListener('change', function(){
+  S.keepAwake = this.checked; save(); updateWake();
+});
+$('numPort').addEventListener('change', function(){
+  const p = Number(this.value);
+  if(p >= 1 && p <= 65535){ S.wsPort = p; save(); applyEngine(); }
+});
+$('btnReconnect').addEventListener('click', function(){
+  closeSettings();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+});
+
+// ---------- boot ----------
+applyLayout();
+renderTabs();
+updateWake();
+if(S.engine === 'pocket') connect(); else applyEngine();
+if('serviceWorker' in navigator && window.isSecureContext){
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
