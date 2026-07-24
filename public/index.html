@@ -2750,8 +2750,10 @@ function runChatTick(){
       // A session that is ACTIVELY WORKING never gets sent home — usage
       // credits mean hitting the window doesn't stop real work, and a
       // lounging avatar over a busy terminal reads as "officebot broke".
+      // 15 min: reading a long answer between prompts must still count as
+      // "at work" (3 min sent the boss home mid-conversation).
       const busy = s && (s.status === 'active' || s.status === 'thinking' || s.status === 'calm'
-        || (Date.now() - (s.lastEventAt || 0)) < 180000);
+        || (Date.now() - (s.lastEventAt || 0)) < 900000);
       const limitMode = busy ? null : weeklyOut ? 'holiday' : blockOut ? 'home' : null;
       if(limitMode){
         // the office is closing: send the crew home ONE AT A TIME (slow,
