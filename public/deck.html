@@ -655,13 +655,26 @@ function updateWake(){
     wakeLock = null;
   }
 }
+let _hiddenAt = 0;
 document.addEventListener('visibilitychange', function(){
   updateWake();
-  // coming back to the app: reattach immediately instead of waiting out backoff
-  if(document.visibilityState === 'visible' && S.engine === 'pocket'){
+  if(document.visibilityState === 'hidden'){ _hiddenAt = Date.now(); return; }
+  // ---- coming back to the app ----
+  // reattach the terminal immediately instead of waiting out the backoff
+  if(S.engine === 'pocket'){
     if(retryT){ retryAt = 0; }
     else if(!ws || ws.readyState > 1){ retryDelay = 250; connect(); }
   }
+  // Auto-refresh the OFFICE. Chrome freezes the iframe's live feed while the
+  // app is backgrounded and doesn't always resume it cleanly, so it can sit
+  // on a stale snapshot. The office is a pure view (no unsaved state), so
+  // after any real background gap just reload the iframe — no manual refresh,
+  // and the terminal (which holds the session) is untouched.
+  if(_hiddenAt && Date.now() - _hiddenAt > 12000){
+    const f = $('office');
+    if(f){ try{ f.contentWindow.location.reload(); }catch(e){ f.src = f.src; } }
+  }
+  _hiddenAt = 0;
 });
 
 // ---------- settings drawer ----------
