@@ -2651,7 +2651,11 @@ function stepDeparture(o, s, mode, cast, fast){
   if(cn){
     s.leaving = true;
     const bye = pick((CREW_BYE[mode] && CREW_BYE[mode][cn]) || ['Heading out.']);
-    s.crewLeaver = { codename: cn, zone: 'lounge', bubble: bye };
+    // Start FROM where they're currently standing (wander/home room), not a
+    // forced 'lounge' — the lounge teleport-then-walk was the jank.
+    const cdef = _currentCrew().filter(function(c){ return codenameForAgentType(c.agentType) === cn; })[0];
+    const fromZone = (cdef && s.crewZones && s.crewZones[cdef.key]) || (cdef && cdef.home) || 'lounge';
+    s.crewLeaver = { codename: cn, zone: fromZone, bubble: bye };
     chatLog(cn, bye, mode === 'holiday' ? 'handback' : 'status');
     render();
     s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ s.crewLeaver.zone = 'exit'; render(); } }, cX));
@@ -2927,7 +2931,21 @@ function playClosing(sid){
   clearDepartTimers(s);            // cancel an arrival still trickling in
   s.crewArriver = null; s.leaving = false;
   const o = officeEls.get(sid);
-  if(o){ o.root.classList.remove('ceremony'); o.root.classList.add('closing'); }
+  // Silence the boss's lingering work/ack bubble on the ENTITY too — clearing
+  // only the token bubble let the next render re-apply s.bubble.
+  s.bubble = null; s.speechBubble = false;
+  if(s.bubbleFadeTimer){ clearTimeout(s.bubbleFadeTimer); s.bubbleFadeTimer = null; }
+  if(o){
+    o.root.classList.remove('ceremony'); o.root.classList.add('closing');
+    // Clear EVERY lingering bubble so the office goes quiet for the exodus —
+    // otherwise stale banter/speech bubbles hang over agents and overlap the
+    // farewell lines of whoever's currently walking out.
+    o.tokens.forEach(function(t){
+      if(t.bubbleFadeTimer){ clearTimeout(t.bubbleFadeTimer); t.bubbleFadeTimer = null; }
+      t.bubbleEl.classList.remove('show');
+      t.lastBubble = null;
+    });
+  }
   // real subagents head straight out — the ceremony is for the household
   s.subagents.forEach(function(a){
     if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
@@ -3144,6 +3162,10 @@ if(document.readyState === 'loading') document.addEventListener('DOMContentLoade
 
 function runChatTick(){
   officeEls.forEach(function(o, sid){
+    // no idle chit-chat while the office is opening or shutting down — the
+    // ceremony owns the floor, so only the arriving/departing agent speaks
+    var _cs = sessions.get(sid);
+    if(_cs && (_cs.closing || _cs.arriving)) return;
     // cast of available speakers first — every branch below uses it
     const cast = {};
     let visitor = null;
@@ -3379,7 +3401,7 @@ const ROOM_ACTING = {
 };
 function runWanderTick(){
   sessions.forEach(function(s, sid){
-    if(s.status === 'offline' || s.bossGone || s.leaving) return;
+    if(s.status === 'offline' || s.bossGone || s.leaving || s.closing || s.arriving) return;
     if(!s.crewZones) s.crewZones = {};
     const crew = _currentCrew().filter(function(c){
       const cn = codenameForAgentType(c.agentType);

@@ -33,6 +33,9 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 .tab.active{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
 .tab .x{opacity:.55;padding:0 2px;font-size:13px}
 .tab .x.arm{opacity:1;color:#ff9db1;font-weight:700}
+.tab.closing{background:#2a1d24;border-color:#7a2f42;color:#ff9db1}
+.tab.closing span{animation:tabClosingPulse 1.1s ease-in-out infinite}
+@keyframes tabClosingPulse{0%,100%{opacity:.55}50%{opacity:1}}
 #bar button{flex:0 0 auto;width:32px;height:32px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #1e2338;font-size:15px;cursor:pointer}
 .layout-split #flipBtn{display:none}
 
@@ -584,11 +587,13 @@ function renderTabs(){
   nav.innerHTML = '';
   S.tabs.forEach(function(tab, i){
     const b = document.createElement('div');
-    b.className = 'tab' + (i === S.active ? ' active' : '');
+    const isClosing = _pendingClose && _pendingClose.tab === tab.session;
+    b.className = 'tab' + (i === S.active ? ' active' : '') + (isClosing ? ' closing' : '');
     const label = document.createElement('span');
-    label.textContent = tab.label;
+    // while shutting down, the tab shows a live status instead of the ✕
+    label.textContent = isClosing ? 'closing…' : tab.label;
     b.appendChild(label);
-    if(i === S.active && S.tabs.length > 1){
+    if(!isClosing && i === S.active && S.tabs.length > 1){
       const x = document.createElement('span');
       x.className = 'x'; x.textContent = '×';
       // two-tap arm: first tap asks, second within 2.6s really ends the session
@@ -600,7 +605,7 @@ function renderTabs(){
       });
       b.appendChild(x);
     }
-    b.addEventListener('click', function(){ switchTab(i); });
+    b.addEventListener('click', function(){ if(!isClosing) switchTab(i); });
     nav.appendChild(b);
   });
 }
@@ -646,6 +651,7 @@ function closeTab(i){
     f.contentWindow.postMessage({type:'closeTab', tab:tab}, '*');  // run the shutdown ceremony
   }catch(e){ finishTabClose(tab); return; }
   _pendingClose = { tab:tab, done:false };
+  renderTabs();   // show the "closing…" state on the tab
   // safety net if the office never reports back — longer than the office's own
   // cap so its natural "ceremony finished" signal always wins
   setTimeout(function(){ if(_pendingClose && !_pendingClose.done && _pendingClose.tab === tab){ finishTabClose(tab); } }, 65000);
