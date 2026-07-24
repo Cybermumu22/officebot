@@ -675,9 +675,30 @@ function _sessionShown(s){
 // with no ceremony re-run.
 window.addEventListener('message', function(e){
   var d = e.data;
-  if(d && d.type === 'deckTab'){
+  if(!d) return;
+  if(d.type === 'deckTab'){
     var t = d.tab || '';
     if(t !== ONLY_TAB){ ONLY_TAB = t; if(typeof render === 'function') render(); }
+  } else if(d.type === 'closeTab'){
+    // The deck is closing this tab and wants the farewell shown FIRST. Find
+    // the session, make it the visible one, tombstone it (so claude's still-
+    // live events can't reopen it mid-ceremony), and play the closing
+    // ceremony — then poll until the office empties and tell the deck it's
+    // safe to actually remove the tab / kill the session.
+    var tab = d.tab || '', sid = null;
+    sessions.forEach(function(s, id){ if(s.deckTab === tab && !_endedSessions[id]) sid = id; });
+    var tell = function(){ try{ parent.postMessage({type:'tabClosed', tab:tab}, '*'); }catch(_){} };
+    if(!sid){ tell(); return; }
+    ONLY_TAB = tab; if(typeof render === 'function') render();
+    _endedSessions[sid] = true;
+    var s = sessions.get(sid);
+    if(s){ s.courier = null; if(typeof clearCourierTimers === 'function') clearCourierTimers(s); }
+    logMoment('👋 Closing ' + tab.toUpperCase() + ' — office shutting down');
+    playClosing(sid);
+    var t0 = Date.now();
+    var poll = setInterval(function(){
+      if(!sessions.has(sid) || Date.now() - t0 > 20000){ clearInterval(poll); tell(); }
+    }, 400);
   }
 });
 const floorEl = document.getElementById('floor');

@@ -632,16 +632,40 @@ function addTab(){
   save(); renderTabs(); syncOffice();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 }
+// Closing a tab plays the office SHUTDOWN ceremony first, then removes the
+// tab — so you actually get to watch that session's crew clock out.
+let _pendingClose = null;
 function closeTab(i){
   if(S.tabs.length <= 1) return;
-  // closing a tab ENDS its tmux session — a deleted tab must not keep a
-  // hidden Claude running (it kept haunting the office as a ghost)
-  fetch('/deck/kill?session=' + encodeURIComponent(S.tabs[i].session), {method:'POST'}).catch(function(){});
-  S.tabs.splice(i, 1);
+  const tab = S.tabs[i].session;
+  if(_pendingClose) return;               // one at a time
+  S.showing = 'office'; applyLayout();     // flip to the office to watch the farewell
+  const f = $('office');
+  try{
+    f.contentWindow.postMessage({type:'deckTab', tab:tab}, '*');   // make sure it's showing this tab
+    f.contentWindow.postMessage({type:'closeTab', tab:tab}, '*');  // run the shutdown ceremony
+  }catch(e){ finishTabClose(tab); return; }
+  _pendingClose = { tab:tab, done:false };
+  // safety net if the office never reports back
+  setTimeout(function(){ if(_pendingClose && !_pendingClose.done && _pendingClose.tab === tab){ finishTabClose(tab); } }, 20000);
+}
+function finishTabClose(tab){
+  if(_pendingClose){ _pendingClose.done = true; _pendingClose = null; }
+  fetch('/deck/kill?session=' + encodeURIComponent(tab), {method:'POST'}).catch(function(){});  // now really end the session
+  const idx = S.tabs.findIndex(function(t){ return t.session === tab; });
+  if(idx === -1) return;
+  S.tabs.splice(idx, 1);
   if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
-  save(); renderTabs(); syncOffice();
+  S.showing = 'term';                      // back to the terminal on the surviving tab
+  save(); renderTabs(); applyLayout(); syncOffice();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 }
+window.addEventListener('message', function(e){
+  const d = e.data;
+  if(d && d.type === 'tabClosed' && _pendingClose && !_pendingClose.done && d.tab === _pendingClose.tab){
+    finishTabClose(d.tab);
+  }
+});
 $('addTab').addEventListener('click', addTab);
 
 // ---------- layout ----------
