@@ -128,9 +128,11 @@ function replaySnapshot(res) {
 // cluttering every future page load. If NOTHING has happened for this long,
 // treat it as dead even without a formal SessionEnd. Generous on purpose — a
 // real session can go quiet for a while if you just haven't sent a new
-// prompt, and a false-positive removal here is a worse experience than a
-// stale entry sticking around a little too long.
-const STALE_SESSION_MS = 45 * 60 * 1000;
+// prompt — but a killed/crashed session haunting every page load for most
+// of an hour proved worse (Pocket Deck: users open and close tabs freely).
+// A false positive only costs a walk-out; the next prompt's hooks bring the
+// session straight back.
+const STALE_SESSION_MS = 15 * 60 * 1000;
 setInterval(function () {
   const now = Date.now();
   sessionCache.forEach(function (entry, sid) {
@@ -789,6 +791,21 @@ const server = http.createServer(function (req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
     });
+    return;
+  }
+
+  // Pocket Deck: closing a deck tab ENDS its tmux session — a deleted tab
+  // must not keep a hidden Claude running (and haunting the office).
+  // Loopback-only and strictly deck-N names, so nothing on the network can
+  // kill sessions; on machines without tmux this just fails silently.
+  if (req.method === 'POST' && req.url.split('?')[0] === '/deck/kill') {
+    const ra = req.socket.remoteAddress || '';
+    const local = ra === '127.0.0.1' || ra === '::1' || ra === '::ffff:127.0.0.1';
+    const m = /[?&]session=(deck-\d{1,4})(?:&|$)/.exec(req.url);
+    if (!local || !m) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end('{"ok":false}'); return; }
+    spawn('tmux', ['kill-session', '-t', m[1]], { stdio: 'ignore' }).on('error', function () {});
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{"ok":true}');
     return;
   }
 

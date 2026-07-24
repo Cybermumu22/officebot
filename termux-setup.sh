@@ -135,6 +135,8 @@ set -ga terminal-overrides ',xterm-256color:RGB'
 EOF
 echo "added pocket-deck block to ~/.tmux.conf"
 fi
+# separate from the marker block so existing installs pick it up too
+grep -q 'focus-events' ~/.tmux.conf 2>/dev/null || echo 'set -g focus-events on  # claude code asks for this' >> ~/.tmux.conf
 tmux source-file ~/.tmux.conf 2>/dev/null || true
 
 step "Termux extra keys (Esc/Tab/Ctrl/arrows row inside the Termux app itself)"

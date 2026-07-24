@@ -67,9 +67,10 @@ servers are bound to localhost so nothing is exposed to Wi-Fi.
 - **SHELL tab** → git status / commit / push, or anything else.
 - **⇄** flips between terminal and office. **⚙** opens settings: layout
   (Flip / Split / Collapsible), font size, key bar, keep-screen-awake.
-- Closing a tab (or the app, or the screen turning off) only **detaches** —
-  tmux keeps your session running. Reopen and it snaps back, mid-output.
-  A session only truly ends when you type `exit` inside it.
+- Leaving the app or the screen turning off only **detaches** — tmux keeps
+  your session running; reopen and it snaps back mid-output. Closing a TAB
+  (tap ✕, then "end?") **ends that session for real** — the office shows it
+  signing off. `exit` inside a session ends it too.
 - `deck-stop` stops the servers (sessions stay alive).
 
 ## What carries over from the PC — and what doesn't

@@ -3155,6 +3155,35 @@ function refreshUsagePanel(){
 refreshUsagePanel();
 setInterval(refreshUsagePanel, 60000);
 
+/* Ghost-buster: a session that stops sending events WITHOUT a SessionEnd
+   (deck tab killed, claude crashed, tmux ended abruptly) used to haunt the
+   office until the server's own prune. After 12 silent minutes, walk it out
+   exactly like a SessionEnd would. A false positive is cheap — the next
+   prompt's hooks recreate the session and the office pops right back. */
+const CLIENT_STALE_MS = 12 * 60 * 1000;
+setInterval(function(){
+  const now = Date.now();
+  let changed = false;
+  sessions.forEach(function(s, sid){
+    if(s.status === 'offline') return;
+    if(now - (s.lastEventAt || 0) < CLIENT_STALE_MS) return;
+    changed = true;
+    s.status = 'offline'; s.zone = 'exit'; s.bubble = 'Gone quiet — signing off.';
+    s.courier = null; clearCourierTimers(s);
+    s.departing = null; clearDepartTimers(s);
+    s.subagents.forEach(function(a){
+      if(a.removeTimer){ clearTimeout(a.removeTimer); a.removeTimer = null; }
+      if(a.settleTimer){ clearTimeout(a.settleTimer); a.settleTimer = null; }
+      if(a.bubbleFadeTimer){ clearTimeout(a.bubbleFadeTimer); a.bubbleFadeTimer = null; }
+      a.status = 'offline'; a.zone = 'exit'; a.bubble = null;
+    });
+    logMoment('👋 ' + displayName(s) + ' went quiet — office closed (' + s.cwd + ')');
+    if(s.removeTimer) clearTimeout(s.removeTimer);
+    s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 8000);
+  });
+  if(changed) render();
+}, 60000);
+
 function connect(){
   const es = new EventSource('/events');
   es.onopen = function(){ connDot.classList.add('on'); connText.textContent = 'live'; };

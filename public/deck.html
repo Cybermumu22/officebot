@@ -24,6 +24,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 .tab{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:#141830;color:#8fa0c5;border:1px solid #1e2338;font-size:12px;cursor:pointer}
 .tab.active{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
 .tab .x{opacity:.55;padding:0 2px;font-size:13px}
+.tab .x.arm{opacity:1;color:#ff9db1;font-weight:700}
 #bar button{flex:0 0 auto;width:32px;height:32px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #1e2338;font-size:15px;cursor:pointer}
 .layout-split #flipBtn{display:none}
 
@@ -205,7 +206,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   </div>
   <div class="sec"><div class="lbl">Terminal port</div>
     <input type="number" id="numPort" min="1" max="65535">
-    <div class="note">Where ttyd listens (deck-start uses 7681). Closing a tab only detaches it — the session keeps running until you type <b>exit</b> in it.</div>
+    <div class="note">Where ttyd listens (deck-start uses 7681). Closing a tab (tap ✕, then "end?") ENDS its session. Leaving the app or switching tabs only detaches — sessions keep running.</div>
   </div>
   <div class="actions">
     <button id="btnReconnect">Reconnect</button>
@@ -534,7 +535,13 @@ function renderTabs(){
     if(i === S.active && S.tabs.length > 1){
       const x = document.createElement('span');
       x.className = 'x'; x.textContent = '×';
-      x.addEventListener('click', function(e){ e.stopPropagation(); closeTab(i); });
+      // two-tap arm: first tap asks, second within 2.6s really ends the session
+      x.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(x.dataset.arm){ closeTab(i); return; }
+        x.dataset.arm = '1'; x.textContent = 'end?'; x.classList.add('arm');
+        setTimeout(function(){ delete x.dataset.arm; x.textContent = '×'; x.classList.remove('arm'); }, 2600);
+      });
       b.appendChild(x);
     }
     b.addEventListener('click', function(){ switchTab(i); });
@@ -555,6 +562,9 @@ function addTab(){
 }
 function closeTab(i){
   if(S.tabs.length <= 1) return;
+  // closing a tab ENDS its tmux session — a deleted tab must not keep a
+  // hidden Claude running (it kept haunting the office as a ghost)
+  fetch('/deck/kill?session=' + encodeURIComponent(S.tabs[i].session), {method:'POST'}).catch(function(){});
   S.tabs.splice(i, 1);
   if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
   save(); renderTabs();
