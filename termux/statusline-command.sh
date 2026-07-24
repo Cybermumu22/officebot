@@ -25,7 +25,7 @@ datetime=$(date "+%Y-%m-%d %H:%M")
 # Section 1: Directory
 dir_section=""
 if [ -n "$cwd" ]; then
-    dir_section="$(printf '\033[1;34m\xf0\x9f\x93\x82 %s\033[0m' "$cwd")"
+    dir_section="$(printf '\033[1;34m\360\237\223\202 %s\033[0m' "$cwd")"
 fi
 
 # Section 2: Git repo + branch
