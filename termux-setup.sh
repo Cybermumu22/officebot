@@ -244,7 +244,7 @@ while true; do
   case "$RAW" in
     *"% used"*) printf '%s' "$RAW" | curl -s -m 6 -X POST -H 'Content-Type: text/plain' --data-binary @- http://127.0.0.1:4317/api/realusage >/dev/null 2>&1 ;;
   esac
-  sleep 300
+  sleep 180   # 3 min
 done
 EOF
 chmod 700 ~/bin/deck-usage-poll
