@@ -396,7 +396,9 @@ async function connect(){
     retryDelay = 250;
     setConn('connected', true);
     setTimeout(function(){ if(g === gen && ws === sock) hideConn(); }, 1200);
-    term.focus();
+    // Don't auto-focus on connect — every tab switch reconnects, and focusing
+    // popped the soft keyboard each time. The keyboard now appears only when
+    // you actually tap the terminal to type.
   };
   sock.onmessage = function(e){
     if(g !== gen) return;
