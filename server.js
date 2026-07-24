@@ -59,6 +59,55 @@ const speechSent = new Map(); // session_id -> last text broadcast
 const modelSent = new Map(); // session_id -> last model broadcast
 const sessionDeckTab = {};   // session_id -> deck tab (deck-1…), stamped onto every event so per-tab views survive reloads
 
+// ---- REAL usage from /usage (pushed by the deck-usage-poll poller) ----
+// officebot normally ESTIMATES usage from local token counts; the poller drives
+// a hidden claude session to run /usage every few minutes and POSTs the screen,
+// giving us the account's TRUE 5-hour / weekly / model percentages. Parsed here
+// and, while fresh, overrides the estimate in usageSummary().
+let _realUsage = null;
+const REAL_USAGE_TTL_MS = 12 * 60 * 1000;   // fresh window; poller runs every ~5 min
+function parseUsageText(raw) {
+  if (!raw) return null;
+  const txt = String(raw).replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '');
+  function pctAfter(label) {
+    const i = txt.indexOf(label); if (i < 0) return null;
+    const m = txt.slice(i, i + 220).match(/(\d+)\s*%\s*used/i);
+    return m ? Math.min(100, parseInt(m[1], 10)) : null;
+  }
+  function resetAfter(label) {
+    const i = txt.indexOf(label); if (i < 0) return null;
+    const m = txt.slice(i, i + 220).match(/Resets\s+([^\n\r]+)/i);
+    return m ? m[1].trim() : null;
+  }
+  const sess = pctAfter('Current session');
+  const week = pctAfter('Current week (all models)');
+  let modelPct = null, modelReset = null, m2; const re = /Current week \(([^)]+)\)/g;
+  while ((m2 = re.exec(txt))) {
+    if (/all models/i.test(m2[1])) continue;
+    const seg = txt.slice(m2.index, m2.index + 220), pm = seg.match(/(\d+)\s*%\s*used/i);
+    if (pm) { modelPct = Math.min(100, parseInt(pm[1], 10)); const rm = seg.match(/Resets\s+([^\n\r]+)/i); modelReset = rm ? rm[1].trim() : null; break; }
+  }
+  if (sess == null && week == null && modelPct == null) return null; // not a /usage screen
+  return {
+    sessionPct: sess, weekPct: week, fablePct: modelPct,
+    sessionReset: resetAfter('Current session'), weekReset: resetAfter('Current week (all models)'), fableReset: modelReset,
+    at: Date.now(),
+  };
+}
+// "9:30pm (UTC)" -> ms until that reset (roll forward by the 5h window if past)
+function sessionResetMs(str) {
+  if (!str) return null;
+  const m = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10) % 12; if (/pm/i.test(m[3])) h += 12;
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const d = new Date(); d.setUTCHours(h, min, 0, 0);
+  let t = d.getTime();
+  while (t <= Date.now()) t += 5 * 3600000;
+  return t - Date.now();
+}
+function realUsageFresh() { return _realUsage && (Date.now() - _realUsage.at < REAL_USAGE_TTL_MS) ? _realUsage : null; }
+
 function cacheEvent(evt) {
   const sid = evt.session_id || 'unknown-session';
   let entry = sessionCache.get(sid);
@@ -668,14 +717,33 @@ function usageSummary() {
 
   updateUsageHistory();
 
+  const weekly = weeklyStats();
+
+  // REAL /usage overrides the estimate while fresh — the true account numbers.
+  const ru = realUsageFresh();
+  if (ru) {
+    if (ru.sessionPct != null) {
+      block.usedPct = ru.sessionPct; block.source = 'real';
+      const rms = sessionResetMs(ru.sessionReset);
+      if (rms != null) block.resetInMs = rms;
+      block.resetLabel = ru.sessionReset || null;
+    }
+    if (ru.weekPct != null) { weekly.usedPct = ru.weekPct; weekly.source = 'anchored'; weekly.resetLabel = ru.weekReset || null; }
+    if (ru.fablePct != null) {
+      if (!weekly.fable) weekly.fable = {};
+      weekly.fable.usedPct = ru.fablePct; weekly.fable.resetLabel = ru.fableReset || null;
+    }
+  }
+
   return {
     five: five,
     week: week,
     block: block,
-    weekly: weeklyStats(),
+    weekly: weekly,
     allTimeTotal: allTimeTotal(),
     latest: latest ? { model: latest.model, effort: latest.effort, at: latest.t } : null,
     warning: liveUsageWarning(),
+    real: !!ru,
     refreshedAt: usageLastRefresh,
   };
 }
@@ -773,6 +841,11 @@ const server = http.createServer(function (req, res) {
       let evt;
       try { evt = JSON.parse(body || '{}'); } catch (e) { evt = { raw: body }; }
       evt._receivedAt = Date.now();
+      // The hidden usage-poller runs its own claude session; drop its events so
+      // it never shows up as an office (it exists only to scrape /usage).
+      if (evt.cwd && String(evt.cwd).replace(/[\\/]+$/, '').split(/[\\/]/).pop() === 'usagepoll') {
+        res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true,"hidden":true}'); return;
+      }
       // The `claude` wrapper's opener SessionStart carries the deck tag and
       // pins the same session id claude runs under, so opener and real events
       // share a session with no folder-matching. Claude's own hooks don't
@@ -840,6 +913,24 @@ const server = http.createServer(function (req, res) {
     try { summary = widgetSummary(); } catch (e) { summary = { error: String(e && e.message) }; }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     res.end(JSON.stringify(summary));
+    return;
+  }
+
+  // The usage poller POSTs the raw /usage screen here; we parse it and, while
+  // fresh, the real numbers override the estimated monitors. Loopback only.
+  if (req.method === 'POST' && req.url === '/api/realusage') {
+    const ra = req.socket.remoteAddress || '';
+    if (!(ra === '127.0.0.1' || ra === '::1' || ra === '::ffff:127.0.0.1')) { res.writeHead(403); res.end(); return; }
+    let body = '';
+    req.on('data', function (c) { body += c; if (body.length > 2e5) req.destroy(); });
+    req.on('end', function () {
+      let raw = body;
+      try { const j = JSON.parse(body); if (j && (j.text || j.raw)) raw = j.text || j.raw; } catch (e) { /* raw text body */ }
+      const parsed = parseUsageText(raw);
+      if (parsed) _realUsage = parsed;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: !!parsed, parsed: parsed || null }));
+    });
     return;
   }
 

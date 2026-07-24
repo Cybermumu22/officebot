@@ -208,6 +208,9 @@ if ! pgrep -f 'ttyd.*-p 7681' >/dev/null 2>&1; then
   nohup ttyd -p 7681 -i 127.0.0.1 -W -a -t disableLeaveAlert=true \
     tmux new -A -s >> ~/.deck/ttyd.log 2>&1 &
 fi
+if ! pgrep -f 'deck-usage-poll' >/dev/null 2>&1; then
+  nohup ~/bin/deck-usage-poll >> ~/.deck/usage-poll.log 2>&1 &   # real /usage -> monitors
+fi
 sleep 2
 if curl -sf -o /dev/null http://127.0.0.1:4317/; then echo "office:   OK"; else echo "office:   FAILED (see ~/.deck/officebot.log)"; fi
 if curl -sf -o /dev/null http://127.0.0.1:7681/token; then echo "terminal: OK"; else echo "terminal: FAILED (see ~/.deck/ttyd.log and ANDROID.md)"; fi
@@ -216,13 +219,45 @@ termux-open-url http://localhost:4317/deck.html 2>/dev/null
 EOF
 chmod 700 ~/bin/deck-start
 
+# Usage poller: drives a hidden claude session to run /usage every 5 min and
+# pushes the REAL numbers to officebot's monitors (free — /usage costs no
+# tokens). The session lives in ~/.deck/usagepoll so officebot hides it from
+# the office.
+cat > ~/bin/deck-usage-poll <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+. ~/.profile 2>/dev/null
+SESS=usagepoll
+DIR="$HOME/.deck/usagepoll"
+mkdir -p "$DIR"
+start_claude(){
+  tmux new-session -d -s "$SESS" -c "$DIR" 2>/dev/null
+  tmux send-keys -t "$SESS" 'claude' Enter 2>/dev/null
+  sleep 14   # boot + auth + prompt ready
+}
+tmux has-session -t "$SESS" 2>/dev/null || start_claude
+while true; do
+  tmux has-session -t "$SESS" 2>/dev/null || start_claude
+  tmux send-keys -t "$SESS" '/usage' Enter 2>/dev/null
+  sleep 4
+  RAW=$(tmux capture-pane -t "$SESS" -p -S -120 2>/dev/null)
+  tmux send-keys -t "$SESS" Escape 2>/dev/null
+  case "$RAW" in
+    *"% used"*) printf '%s' "$RAW" | curl -s -m 6 -X POST -H 'Content-Type: text/plain' --data-binary @- http://127.0.0.1:4317/api/realusage >/dev/null 2>&1 ;;
+  esac
+  sleep 300
+done
+EOF
+chmod 700 ~/bin/deck-usage-poll
+
 cat > ~/bin/deck-stop <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
+pkill -f 'deck-usage-poll' 2>/dev/null
+tmux kill-session -t usagepoll 2>/dev/null   # the poller's hidden claude
 pkill -f 'officebot/server.js' 2>/dev/null
 pkill -f 'ttyd.*-p 7681' 2>/dev/null
 termux-wake-unlock 2>/dev/null
-echo "stopped officebot + ttyd."
-echo "tmux sessions (your shells / Claude) are still alive."
+echo "stopped officebot + ttyd + usage poller."
+echo "your OWN tmux sessions (deck tabs) are still alive."
 echo "to end those too: tmux kill-server"
 EOF
 chmod 700 ~/bin/deck-stop
