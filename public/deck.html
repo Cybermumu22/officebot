@@ -82,9 +82,9 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   border:1px solid rgba(150,180,255,.22);
   box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14)}
 #chatOvHead{flex:0 0 auto;padding:7px 12px 3px;font-size:9px;letter-spacing:2px;color:#9db4ff}
-/* shared chat feed styling — font matches the office speech bubbles (~11px) */
-.chatlog{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;
-  padding:2px 10px 8px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace}
+/* shared chat feed styling — natural top-to-bottom order, size is user-set */
+.chatlog{flex:1;min-height:0;overflow-y:auto;
+  padding:2px 10px 8px;font:var(--chat-fs,11px)/1.5 ui-monospace,Menlo,Consolas,monospace}
 .chatlog .cline{word-break:break-word;margin-top:4px}
 .chatlog .t{color:#4a5070;margin-right:5px}
 .chatlog .who{margin-right:5px}
@@ -218,6 +218,9 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   <div class="sec"><div class="lbl">Terminal font size</div>
     <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
   </div>
+  <div class="sec"><div class="lbl">Chat text size</div>
+    <div class="rowset"><button id="chatMinus">−</button><span class="val" id="chatVal"></span><button id="chatPlus">+</button></div>
+  </div>
   <div class="sec">
     <label class="togglerow">Smooth typing bar<input type="checkbox" id="chkInputBar"></label>
     <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
@@ -265,7 +268,7 @@ const DEFAULTS = {
   // The native typing bar is OPT-IN (settings) — the user prefers typing
   // straight into the terminal; direct mode gets IME-calming attributes and
   // debounced refits instead.
-  rev:2, inputBar:false, font:'jetbrains',
+  rev:2, inputBar:false, font:'jetbrains', chatFs:10,
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
 };
@@ -555,10 +558,23 @@ function chatSrcEl(){
 }
 function chatMirror(){
   const src = chatSrcEl();
-  const html = (src && src.children.length)
-    ? src.innerHTML
-    : '<div class="cline k-status"><span class="txt">no chatter yet — this fills up as agents work</span></div>';
-  document.querySelectorAll('.chatlog').forEach(function(el){ el.innerHTML = html; });
+  // The office feed is newest-FIRST; show it newest-LAST here (natural chat
+  // order, latest at the bottom) so reading works like a messaging app.
+  let html;
+  if(src && src.children.length){
+    html = Array.prototype.slice.call(src.children).reverse().map(function(c){ return c.outerHTML; }).join('');
+  } else {
+    html = '<div class="cline k-status"><span class="txt">no chatter yet — this fills up as agents work</span></div>';
+  }
+  document.querySelectorAll('.chatlog').forEach(function(el){
+    // Preserve the reader's position across the swap: if they're at the bottom
+    // (following the latest) keep them pinned there; if they've scrolled up to
+    // read history, DON'T yank them back — that was the jank.
+    const atBottom = (el.scrollHeight - el.clientHeight - el.scrollTop) < 60;
+    const prevTop = el.scrollTop;
+    el.innerHTML = html;
+    el.scrollTop = atBottom ? el.scrollHeight : prevTop;
+  });
 }
 // Observer stays bound for the app's whole life — it feeds both the floating
 // overlay and the bottom chat panel, whichever is on screen.
@@ -781,6 +797,7 @@ function syncSettingsUI(){
   $('fontPreview').style.fontFamily = fontDef().css;
   $('rngSplit').value = S.splitPct;
   $('fontVal').textContent = S.fontSize;
+  $('chatVal').textContent = S.chatFs;
   $('chkInputBar').checked = S.inputBar;
   $('chkKeybar').checked = S.keybar;
   $('chkAwake').checked = S.keepAwake;
@@ -822,6 +839,13 @@ function bumpFont(d){
   save(); $('fontVal').textContent = S.fontSize;
   term.options.fontSize = S.fontSize; fitSoon();
 }
+function applyChatFs(){ document.documentElement.style.setProperty('--chat-fs', S.chatFs + 'px'); }
+$('chatMinus').addEventListener('click', function(){ bumpChat(-1); });
+$('chatPlus').addEventListener('click', function(){ bumpChat(1); });
+function bumpChat(d){
+  S.chatFs = Math.max(8, Math.min(18, S.chatFs + d));
+  save(); $('chatVal').textContent = S.chatFs; applyChatFs();
+}
 $('chkInputBar').addEventListener('change', function(){
   S.inputBar = this.checked; save(); applyLayout(); applyInputMode();
 });
@@ -845,6 +869,7 @@ $('btnReload').addEventListener('click', function(){ location.reload(); });
 applyLayout();
 applyInputMode();
 applyFont();     // load + apply the chosen terminal font
+applyChatFs();   // chat text size
 renderTabs();
 syncOffice();    // point the office at the active tab's session
 updateWake();

@@ -651,6 +651,19 @@ const PROPS = [
 
 const sessions = new Map();
 const _endedSessions = {};   // sid -> true: tombstone so a killed session can't be resurrected by trailing SpeechTicks
+// Sessions we've already played the arrival ceremony for — PERSISTED in
+// sessionStorage so an office reload (the deck auto-refreshes when you return
+// to the app) staffs the office instantly instead of re-running "coming to
+// work". A genuinely new claude run has a new id, so it still gets its arrival.
+var _welcomed = {};
+try { (JSON.parse(sessionStorage.getItem('officebot.welcomed') || '[]') || []).forEach(function(id){ _welcomed[id] = 1; }); } catch(e){}
+function _markWelcomed(sid){
+  if(_welcomed[sid]) return;
+  _welcomed[sid] = 1;
+  var ids = Object.keys(_welcomed);
+  if(ids.length > 60){ ids = ids.slice(-60); var keep = {}; ids.forEach(function(k){ keep[k] = 1; }); _welcomed = keep; }
+  try { sessionStorage.setItem('officebot.welcomed', JSON.stringify(ids)); } catch(e){}
+}
 const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
 let evtCount = 0;
 
@@ -1300,7 +1313,7 @@ function handleEvent(evt){
   // honest: a REPLAYED old event means an established session — staff the
   // office instantly, no theatre.
   const evtAge = Date.now() - (evt._receivedAt || Date.now());
-  if(isNewSession && !officeEls.get(sid) && name !== 'SessionEnd' && evtAge < 15000){
+  if(isNewSession && !officeEls.get(sid) && name !== 'SessionEnd' && evtAge < 15000 && !_welcomed[sid]){
     playOpening(sid);
   }
   const aid = evt.agent_id || null;
@@ -1327,8 +1340,9 @@ function handleEvent(evt){
       if(s.arriving) break;   // the first-sight hook above already opened up
       // A fresh office (or one that emptied/was closing) gets the full
       // arrival ceremony — boss first, Tally, crew one by one. An office
-      // that's already staffed (resume into a live one) skips the theatre.
-      if(!officeEls.get(sid) || s.closing || s.bossGone || (s.crewGone && s.crewGone.length)){
+      // that's already staffed, OR one we've already welcomed this browser
+      // session (office reload on app-return), skips the theatre.
+      if(!_welcomed[sid] && (!officeEls.get(sid) || s.closing || s.bossGone || (s.crewGone && s.crewGone.length))){
         playOpening(sid);
       } else {
         s.status = 'idle'; s.zone = 'terminal';
@@ -2832,6 +2846,7 @@ function crewHomeZone(cn){
 function playOpening(sid){
   const s = sessions.get(sid);
   if(!s) return;
+  _markWelcomed(sid);   // so a later office reload doesn't replay this arrival
   clearDepartTimers(s);
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
   s.closing = false; s.arriving = true; s.leaving = false;
