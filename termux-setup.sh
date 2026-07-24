@@ -69,18 +69,21 @@ fi
 cat >> ~/.profile <<'EOF'
 # >>> pocket-deck-claude-fn >>>
 claude() {
-  if command -v curl >/dev/null 2>&1; then
+  # Pin a session id we generate, so officebot can tag THIS exact session with
+  # its deck tab — reliable even with several tabs in the same folder (folder
+  # matching can't tell those apart). The office opener uses the same id, so
+  # the ceremony starts at launch and Claude's own events merge into it.
+  _sid=""; [ -r /proc/sys/kernel/random/uuid ] && _sid=$(cat /proc/sys/kernel/random/uuid)
+  if command -v curl >/dev/null 2>&1 && [ -n "$_sid" ]; then
     _m=$(jq -r '.model // "fable"' ~/.claude/settings.json 2>/dev/null || echo fable)
-    # The tmux session name (deck-1, deck-2…) IS the deck tab — tag the office
-    # opener with it so each tab gets its own office view.
-    _tab=$(tmux display-message -p '#S' 2>/dev/null || echo '')
-    # Subshell + backgrounding INSIDE it, so the interactive shell prints no
-    # "[1] <pid>" job notice before claude starts.
+    _tab=$(tmux display-message -p '#S' 2>/dev/null || echo '')   # deck-1, deck-2… = the tab
     ( curl -s -m 2 -o /dev/null -X POST -H 'Content-Type: application/json' \
-        -d "{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",\"_opener\":true,\"model\":\"$_m\",\"deckTab\":\"$_tab\",\"session_id\":\"office-open-$$-$RANDOM\",\"cwd\":\"$PWD\"}" \
+        -d "{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",\"_opener\":true,\"model\":\"$_m\",\"deckTab\":\"$_tab\",\"session_id\":\"$_sid\",\"cwd\":\"$PWD\"}" \
         http://127.0.0.1:4317/event >/dev/null 2>&1 & ) >/dev/null 2>&1
+    command claude --session-id "$_sid" "$@"
+  else
+    command claude "$@"
   fi
-  command claude "$@"
 }
 # <<< pocket-deck-claude-fn <<<
 EOF

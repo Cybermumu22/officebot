@@ -668,6 +668,18 @@ function _sessionShown(s){
   if(ONLY_TAB) return !!(s && s.deckTab === ONLY_TAB);   // strict: this tab's session only
   return !ONLY_PROJECT || (s && s.cwd === ONLY_PROJECT);
 }
+// The Pocket Deck switches tabs by sending a message, NOT reloading the iframe
+// — reloading replayed the session and re-ran the whole entrance ceremony on
+// every tab switch. All sessions are already in memory (the SSE stream isn't
+// filtered), so changing the filter just swaps which one is visible, instantly,
+// with no ceremony re-run.
+window.addEventListener('message', function(e){
+  var d = e.data;
+  if(d && d.type === 'deckTab'){
+    var t = d.tab || '';
+    if(t !== ONLY_TAB){ ONLY_TAB = t; if(typeof render === 'function') render(); }
+  }
+});
 const floorEl = document.getElementById('floor');
 let placeholderShown = false;
 const logEl = document.getElementById('log');
@@ -1238,28 +1250,17 @@ function handleEvent(evt){
   // killed session's last SpeechTick would conjure a ghost office.
   if((name === 'SpeechTick' || name === 'ModelTick') && isNewSession) return;
 
-  // ---- Opener handoff (shell `claude` wrapper) ----
-  // A synthetic SessionStart with _opener:true opens the office the instant
-  // you launch claude. When the REAL session's first event arrives, it
-  // ADOPTS that already-staffed office (re-keys it to the real id) so the
-  // ceremony flows straight into the work — no second office, no re-run.
-  // sessions store cwd as a BASENAME (see ensureSession) — compare like-for-like
-  const evtCwdBase = evt.cwd ? basename(evt.cwd) : '';
-  if(isNewSession && !evt._opener && name !== 'SessionEnd' && evtCwdBase){
-    let openerSid = null;
-    sessions.forEach(function(os, oid){ if(os._opener && os.cwd === evtCwdBase) openerSid = oid; });
-    if(openerSid){
-      const os = sessions.get(openerSid), oo = officeEls.get(openerSid);
-      sessions.delete(openerSid); officeEls.delete(openerSid);
-      os._opener = false;
-      sessions.set(sid, os); if(oo) officeEls.set(sid, oo);
-    }
-  }
-  // An opener for a cwd a live session already covers is redundant — ignore.
-  if(evt._opener){
-    let covered = false;
-    sessions.forEach(function(os){ if(!os._opener && os.cwd === evtCwdBase && !os.closing) covered = true; });
-    if(covered) return;
+  // ---- Office opener (shell `claude` wrapper) ----
+  // The wrapper pins a session id (claude --session-id) and fires an early
+  // SessionStart carrying that SAME id plus the deck tab, so the office opens
+  // the instant you launch claude and Claude's own events merge into the same
+  // session — no folder-matching, so two tabs in one folder stay distinct.
+  // (Skip the opener only if THIS tab already has a live session, so a stray
+  // replay can't re-run the ceremony for a tab that's already up.)
+  if(evt._opener && evt.deckTab){
+    let dup = false;
+    sessions.forEach(function(os, oid){ if(oid !== sid && os.deckTab === evt.deckTab && !os.closing && !_endedSessions[oid]) dup = true; });
+    if(dup) return;
   }
 
   const s = ensureSession(sid, evt);

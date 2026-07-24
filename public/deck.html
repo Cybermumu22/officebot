@@ -533,7 +533,12 @@ $('chatFab').addEventListener('click', function(){
   ov.classList.toggle('hidden', !opening);
   this.classList.toggle('on', opening);
 });
-$('office').addEventListener('load', chatBind);
+$('office').addEventListener('load', function(){
+  chatBind();
+  // re-assert the active tab after ANY (re)load (auto-refresh, manual) so the
+  // office never reverts to a stale filter baked into the iframe URL
+  try{ $('office').contentWindow.postMessage({type:'deckTab', tab:S.tabs[S.active].session}, '*'); }catch(e){}
+});
 
 // ---------- tabs (each = a named tmux session; closing only detaches) ----------
 function renderTabs(){
@@ -565,9 +570,17 @@ function renderTabs(){
 // tag = the tmux session name). Switching tabs points the office at the active
 // tab, so you always see just this tab's Claude — not a soup of every session.
 function syncOffice(){
-  const f = $('office');
-  const want = '/?tab=' + encodeURIComponent(S.tabs[S.active].session);
-  if(f.getAttribute('src') !== want) f.setAttribute('src', want);  // setting src reloads the iframe
+  const f = $('office'), tab = S.tabs[S.active].session;
+  const cur = f.getAttribute('src') || '';
+  if(!cur || cur === '/'){
+    // first time: one real load with the filter baked into the URL
+    f.setAttribute('src', '/?tab=' + encodeURIComponent(tab));
+  } else {
+    // already loaded: switch the filter IN PLACE — no reload, so the office
+    // doesn't replay the session and re-run the entrance ceremony each switch
+    try{ f.contentWindow.postMessage({type:'deckTab', tab:tab}, '*'); }
+    catch(e){ f.setAttribute('src', '/?tab=' + encodeURIComponent(tab)); }
+  }
 }
 function switchTab(i){
   if(i === S.active || i < 0 || i >= S.tabs.length) return;
