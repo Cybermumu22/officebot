@@ -658,8 +658,16 @@ let evtCount = 0;
 // basename) matches — used by the Command Deck to watch just its own runs.
 // Empty (the normal case) shows every session, unchanged.
 var ONLY_PROJECT = '';
-try { ONLY_PROJECT = (new URLSearchParams(location.search)).get('only') || ''; } catch (e) {}
-function _sessionShown(s){ return !ONLY_PROJECT || (s && s.cwd === ONLY_PROJECT); }
+var ONLY_TAB = '';   // Pocket Deck: one office view per tab, keyed by the tab's tmux session (deck-1, deck-2…)
+try {
+  var _qs = new URLSearchParams(location.search);
+  ONLY_PROJECT = _qs.get('only') || '';
+  ONLY_TAB = _qs.get('tab') || '';
+} catch (e) {}
+function _sessionShown(s){
+  if(ONLY_TAB) return !!(s && s.deckTab === ONLY_TAB);   // strict: this tab's session only
+  return !ONLY_PROJECT || (s && s.cwd === ONLY_PROJECT);
+}
 const floorEl = document.getElementById('floor');
 let placeholderShown = false;
 const logEl = document.getElementById('log');
@@ -1256,6 +1264,9 @@ function handleEvent(evt){
 
   const s = ensureSession(sid, evt);
   if(evt._opener) s._opener = true;
+  // Which deck tab this session belongs to (the opener carries it; adoption
+  // copies the whole session object, so it follows to the real session).
+  if(evt.deckTab && !s.deckTab) s.deckTab = evt.deckTab;
   // The office opens the moment a session is FIRST SEEN — whatever event
   // that is. SessionStart is the usual door-opener but it can be missed
   // (confirmed on the phone), and then the first prompt materialized a
@@ -1785,7 +1796,9 @@ function ensureOffice(sid, s){
     applyUsageToScreens(); // freshly built wall monitor gets the last reading now, not at the next poll
   }
   o.root.querySelector('.office-plaque').textContent = displayName(s);
-  o.root.querySelector('.office-cwd').textContent = '— ' + s.cwd;
+  // In a per-tab view, badge which deck tab this office belongs to.
+  o.root.querySelector('.office-cwd').textContent = '— ' + s.cwd
+    + (ONLY_TAB && s.deckTab ? '  ▪ ' + s.deckTab.toUpperCase() : '');
   // live per-session token counter on the 5-HOUR monitor: climbs (animated)
   // as new usage lands, glows while the session is actively working
   const tokEl = o.root.querySelector('.ws-stok');

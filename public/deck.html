@@ -561,16 +561,24 @@ function renderTabs(){
     nav.appendChild(b);
   });
 }
+// Each tab has its OWN office view, filtered to that tab's session (the deck
+// tag = the tmux session name). Switching tabs points the office at the active
+// tab, so you always see just this tab's Claude — not a soup of every session.
+function syncOffice(){
+  const f = $('office');
+  const want = '/?tab=' + encodeURIComponent(S.tabs[S.active].session);
+  if(f.getAttribute('src') !== want) f.setAttribute('src', want);  // setting src reloads the iframe
+}
 function switchTab(i){
   if(i === S.active || i < 0 || i >= S.tabs.length) return;
-  S.active = i; save(); renderTabs();
+  S.active = i; save(); renderTabs(); syncOffice();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 }
 function addTab(){
   const n = S.nextTab++;
   S.tabs.push({label:'TERM ' + n, session:'deck-' + n});
   S.active = S.tabs.length - 1;
-  save(); renderTabs();
+  save(); renderTabs(); syncOffice();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 }
 function closeTab(i){
@@ -580,7 +588,7 @@ function closeTab(i){
   fetch('/deck/kill?session=' + encodeURIComponent(S.tabs[i].session), {method:'POST'}).catch(function(){});
   S.tabs.splice(i, 1);
   if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
-  save(); renderTabs();
+  save(); renderTabs(); syncOffice();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 }
 $('addTab').addEventListener('click', addTab);
@@ -746,6 +754,7 @@ $('btnReload').addEventListener('click', function(){ location.reload(); });
 applyLayout();
 applyInputMode();
 renderTabs();
+syncOffice();    // point the office at the active tab's session
 updateWake();
 chatBind();      // iframe 'load' rebinds once the office finishes loading
 if(S.engine === 'pocket') connect(); else applyEngine();
