@@ -646,8 +646,9 @@ function closeTab(i){
     f.contentWindow.postMessage({type:'closeTab', tab:tab}, '*');  // run the shutdown ceremony
   }catch(e){ finishTabClose(tab); return; }
   _pendingClose = { tab:tab, done:false };
-  // safety net if the office never reports back
-  setTimeout(function(){ if(_pendingClose && !_pendingClose.done && _pendingClose.tab === tab){ finishTabClose(tab); } }, 20000);
+  // safety net if the office never reports back — longer than the office's own
+  // cap so its natural "ceremony finished" signal always wins
+  setTimeout(function(){ if(_pendingClose && !_pendingClose.done && _pendingClose.tab === tab){ finishTabClose(tab); } }, 65000);
 }
 function finishTabClose(tab){
   if(_pendingClose){ _pendingClose.done = true; _pendingClose = null; }

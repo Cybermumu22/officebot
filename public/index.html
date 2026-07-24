@@ -695,10 +695,14 @@ window.addEventListener('message', function(e){
     if(s){ s.courier = null; if(typeof clearCourierTimers === 'function') clearCourierTimers(s); }
     logMoment('👋 Closing ' + tab.toUpperCase() + ' — office shutting down');
     playClosing(sid);
+    // Report the moment the office is actually empty (session removed). The
+    // cap is only a hang-guard, generous enough for the WHOLE crew + Tally +
+    // boss to leave — a short cap used to cut Tally/boss off and close the tab
+    // early.
     var t0 = Date.now();
     var poll = setInterval(function(){
-      if(!sessions.has(sid) || Date.now() - t0 > 20000){ clearInterval(poll); tell(); }
-    }, 400);
+      if(!sessions.has(sid) || Date.now() - t0 > 60000){ clearInterval(poll); tell(); }
+    }, 300);
   }
 });
 const floorEl = document.getElementById('floor');
@@ -2633,9 +2637,14 @@ const BOSS_BYE = {
 // crew first (in order), then Tally, then the boss LAST. Each says a
 // farewell, walks to the exit door, and vanishes. Slow on purpose (only one
 // leaves at a time), so the office drains gradually.
-function stepDeparture(o, s, mode, cast){
+function stepDeparture(o, s, mode, cast, fast){
   if(s.leaving) return; // someone's mid-exit — wait for them to clear the door
   const gone = s.crewGone || (s.crewGone = []);
+  // fast = a user-initiated close (tab close / SessionEnd) where they're
+  // waiting; the ambient limit-theatre keeps the leisurely pace.
+  const cX = fast ? 900 : 2200, cG = fast ? 1700 : 4400;   // crew: to-exit, gone
+  const tX = fast ? 800 : 2200, tF = fast ? 1400 : 3600, tG = fast ? 1900 : 4700; // tally
+  const bX = fast ? 800 : 2200, bG = fast ? 1900 : 4600;   // boss
 
   // 1) crew, in order
   const cn = CREW_ORDER.find(function(n){ return gone.indexOf(n) === -1 && cast[n]; });
@@ -2645,8 +2654,8 @@ function stepDeparture(o, s, mode, cast){
     s.crewLeaver = { codename: cn, zone: 'lounge', bubble: bye };
     chatLog(cn, bye, mode === 'holiday' ? 'handback' : 'status');
     render();
-    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ s.crewLeaver.zone = 'exit'; render(); } }, 2200));
-    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ gone.push(cn); s.crewLeaver = null; s.leaving = false; render(); } }, 4400));
+    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ s.crewLeaver.zone = 'exit'; render(); } }, cX));
+    s.departTimers.push(setTimeout(function(){ if(s.crewLeaver && s.crewLeaver.codename === cn){ gone.push(cn); s.crewLeaver = null; s.leaving = false; render(); } }, cG));
     return;
   }
 
@@ -2656,9 +2665,9 @@ function stepDeparture(o, s, mode, cast){
     s.leaving = true;
     sayStaffLine(o, pick(TALLY_BYE[mode] || ['Books closed. Bye.']));
     const staff = o.root.querySelector('.staff');
-    s.departTimers.push(setTimeout(function(){ if(staff){ staff.style.transition = 'left 1.2s ease, top 1.2s ease, opacity .6s'; staff.style.left = '84%'; staff.style.top = '9%'; } }, 2200));
-    s.departTimers.push(setTimeout(function(){ if(staff) staff.style.opacity = '0'; }, 3600));
-    s.departTimers.push(setTimeout(function(){ s.tallyGone = true; s.leaving = false; if(staff) staff.style.display = 'none'; render(); }, 4700));
+    s.departTimers.push(setTimeout(function(){ if(staff){ staff.style.transition = 'left 1.2s ease, top 1.2s ease, opacity .6s'; staff.style.left = '84%'; staff.style.top = '9%'; } }, tX));
+    s.departTimers.push(setTimeout(function(){ if(staff) staff.style.opacity = '0'; }, tF));
+    s.departTimers.push(setTimeout(function(){ s.tallyGone = true; s.leaving = false; if(staff) staff.style.display = 'none'; render(); }, tG));
     return;
   }
 
@@ -2669,14 +2678,14 @@ function stepDeparture(o, s, mode, cast){
     s.bossLeaving = { zone: 'lounge', bubble: bye };
     chatLog(displayName(s), bye, 'delegate');
     render();
-    s.departTimers.push(setTimeout(function(){ if(s.bossLeaving){ s.bossLeaving.zone = 'exit'; render(); } }, 2200));
+    s.departTimers.push(setTimeout(function(){ if(s.bossLeaving){ s.bossLeaving.zone = 'exit'; render(); } }, bX));
     s.departTimers.push(setTimeout(function(){
       if(s.bossLeaving){
         s.bossGone = true; s.bossLeaving = null; s.leaving = false;
         logMoment((mode === 'holiday' ? '🏖 ' : '🏠 ') + 'Whole office ' + (mode === 'holiday' ? 'on holiday' : 'clocked out') + ' — everyone left');
         render();
       }
-    }, 4600));
+    }, bG));
     return;
   }
 }
@@ -2935,12 +2944,12 @@ function playClosing(sid){
       const n = t.lastName;
       if(n && CHARACTER_SOLO[n]) cast[n] = t;
     });
-    stepDeparture(o, s, 'home', cast);
+    stepDeparture(o, s, 'home', cast, true);   // brisk: the user's waiting to close
     if(s.bossGone){
-      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 2600);
+      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 1200);
       return;
     }
-    s.departTimers.push(setTimeout(step, 1300));
+    s.departTimers.push(setTimeout(step, 700));
   };
   step();
 }
