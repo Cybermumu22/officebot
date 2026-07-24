@@ -1255,8 +1255,10 @@ function handleEvent(evt){
   const target = aid ? ensureSubagent(s, aid, evt) : s;
   maybeSetModel(target, evt);
   if(evt._sessionTokens != null) s.sessionTokens = evt._sessionTokens; // live per-session counter
-  // real work resuming reopens an office that had emptied for a limit
-  if(name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'SubagentStart') reopenOffice(sid);
+  // ANY sign of life (except a formal end / the open ceremony) cancels an
+  // in-progress close and brings the office back — a session that's emitting
+  // hooks is working, so the boss must not be walking out.
+  if(name !== 'SessionEnd' && name !== 'SessionStart' && name !== 'ModelTick') reopenOffice(sid);
 
   // Track whether the current bubble is actual SPEECH (transcript text) vs
   // a mechanical status line — Stop uses it to let just-said words linger.
@@ -2627,12 +2629,25 @@ function stepDeparture(o, s, mode, cast){
 function reopenOffice(sid){
   const s = sessions.get(sid);
   if(!s) return;
-  if(s.closing || s.arriving) return; // ceremonies own the roster right now
-  if(!(s.crewGone && s.crewGone.length) && !s.tallyGone && !s.bossGone && !s.leaving && !s.crewLeaver && !s.bossLeaving) return;
-  s.crewGone = []; s.crewLeaver = null; s.tallyGone = false; s.bossGone = false; s.bossLeaving = null; s.leaving = false;
+  if(s.arriving) return; // the opening ceremony owns the roster
+  // "Work resumed" always beats "going home": CANCEL an in-progress close
+  // (ghost-sweep fired during a backgrounded SSE gap, a stale limit signal,
+  // etc.) instead of bailing on it — the boss must never walk out while the
+  // terminal is actively working.
+  const drained = s.closing || (s.crewGone && s.crewGone.length) || s.tallyGone
+    || s.bossGone || s.leaving || s.crewLeaver || s.bossLeaving;
+  if(!drained) return;
+  const wasClosing = s.closing;
+  s.closing = false;
+  s.crewGone = []; s.crewLeaver = null; s.tallyGone = false; s.bossGone = false;
+  s.bossLeaving = null; s.leaving = false;
   clearDepartTimers(s);
+  if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  // a boss caught mid-exit returns to his desk, not the lounge
+  if(wasClosing || s.status === 'offline'){ s.status = 'idle'; if(s.zone === 'exit' || s.zone === 'lounge') s.zone = 'terminal'; }
   const o = officeEls.get(sid);
   if(o){
+    o.root.classList.remove('closing');
     const staff = o.root.querySelector('.staff');
     if(staff){ staff.style.display = ''; staff.style.opacity = ''; staff.style.transition = ''; staff.style.left = '53%'; staff.style.top = '17.5%'; }
   }
@@ -2831,6 +2846,7 @@ function playClosing(sid){
   });
   const step = function(){
     if(!sessions.has(sid)) return;
+    if(!s.closing) return;   // reopenOffice cancelled the close — abort the exodus
     const cast = {};
     if(o) o.tokens.forEach(function(t, tid){
       if(tid === '__main__'){ cast.boss = t; return; }
@@ -3483,8 +3499,15 @@ setInterval(refreshUsagePanel, 60000);
    exactly like a SessionEnd would. A false positive is cheap — the next
    prompt's hooks recreate the session and the office pops right back. */
 const CLIENT_STALE_MS = 12 * 60 * 1000;
+let _sseReopenAt = 0;   // when the SSE last (re)connected — replay is in flight
 setInterval(function(){
   const now = Date.now();
+  // Grace after a (re)connect: the phone drops the SSE while backgrounded, so
+  // on resume the client has seen no events for the whole gap even though work
+  // continued server-side. Replaying the snapshot refreshes lastEventAt — but
+  // don't sweep in the ~2 min while that's landing, or a live session gets
+  // wrongly clocked out the instant the screen comes back on.
+  if(now - _sseReopenAt < 120000) return;
   let changed = false;
   sessions.forEach(function(s, sid){
     if(s.status === 'offline' || s.closing) return;
@@ -3500,7 +3523,7 @@ setInterval(function(){
 
 function connect(){
   const es = new EventSource('/events');
-  es.onopen = function(){ connDot.classList.add('on'); connText.textContent = 'live'; };
+  es.onopen = function(){ connDot.classList.add('on'); connText.textContent = 'live'; _sseReopenAt = Date.now(); };
   es.onerror = function(){ connDot.classList.remove('on'); connText.textContent = 'reconnecting…'; };
   es.onmessage = function(e){
     try{ handleEvent(JSON.parse(e.data)); }catch(err){ /* ignore malformed */ }
