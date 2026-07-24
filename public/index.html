@@ -2728,7 +2728,12 @@ function runChatTick(){
       const warn = !!_usageData.warning;
       const weeklyOut = anchored && ((wk.usedPct || 0) >= 100 || (wk.fable && (wk.fable.usedPct || 0) >= 100));
       const blockOut = warn;
-      const limitMode = weeklyOut ? 'holiday' : blockOut ? 'home' : null;
+      // A session that is ACTIVELY WORKING never gets sent home — usage
+      // credits mean hitting the window doesn't stop real work, and a
+      // lounging avatar over a busy terminal reads as "officebot broke".
+      const busy = s && (s.status === 'active' || s.status === 'thinking' || s.status === 'calm'
+        || (Date.now() - (s.lastEventAt || 0)) < 180000);
+      const limitMode = busy ? null : weeklyOut ? 'holiday' : blockOut ? 'home' : null;
       if(limitMode){
         // the office is closing: send the crew home ONE AT A TIME (slow,
         // each with a farewell), and occasionally play a group limit line

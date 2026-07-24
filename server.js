@@ -277,6 +277,13 @@ const usageFiles = new Map();   // path -> { offset, leftover }
 let usageEvents = [];           // { t, model, effort, in, out, cr, cw } — NOT sorted (files interleave)
 let usageSeenIds = new Set();   // message ids (multi-block messages repeat usage per line)
 let usageWarning = null;        // { t, text } newest limit-ish system message
+// A warning describes a moment, not a state: with usage credits a session
+// keeps working right through its 5h window, so an old warning must not
+// keep the office closed for long. 20 minutes of silence = all clear.
+const WARN_TTL_MS = 20 * 60 * 1000;
+function liveUsageWarning() {
+  return (usageWarning && Date.now() - usageWarning.t < WARN_TTL_MS) ? usageWarning : null;
+}
 let usageLastRefresh = 0;
 
 function ingestUsageLine(line) {
@@ -311,7 +318,11 @@ function ingestUsageLine(line) {
     // fixed phrasings Anthropic/Claude Code use — not the bare word "limit".
     const txt = typeof o.content === 'string' ? o.content
       : (o.message && typeof o.message.content === 'string' ? o.message.content : '');
-    const RATELIMIT_SIG = /(rate[\s-]?limit|usage limit|too many requests|\b429\b|limit (?:reached|exceeded)|reached your .{0,20}limit|approaching your .{0,20}limit)/i;
+    // NOTE: no bare "usage limit" here — the Fable 5 promo banner ("50% of
+    // your weekly usage limit... if you hit your limit, you can continue with
+    // usage credits") is a system entry and used to trip this, clocking the
+    // office out at login. Require a "limit was actually hit" phrasing.
+    const RATELIMIT_SIG = /(rate[\s-]?limit|too many requests|\b429\b|limit (?:reached|exceeded)|reached your .{0,20}limit|approaching your .{0,20}limit)/i;
     if (o.type === 'system' && txt && RATELIMIT_SIG.test(txt)) {
       if (!usageWarning || t > usageWarning.t) usageWarning = { t: t, text: txt.slice(0, 220) };
     }
@@ -660,7 +671,7 @@ function usageSummary() {
     weekly: weeklyStats(),
     allTimeTotal: allTimeTotal(),
     latest: latest ? { model: latest.model, effort: latest.effort, at: latest.t } : null,
-    warning: usageWarning,
+    warning: liveUsageWarning(),
     refreshedAt: usageLastRefresh,
   };
 }
@@ -705,7 +716,7 @@ function widgetSummary() {
     effort: u.latest ? (u.latest.effort || null) : null,
     online: sessions.length,
     sessions: sessions,
-    warning: usageWarning ? usageWarning.text : null,
+    warning: liveUsageWarning() ? liveUsageWarning().text : null,
     at: now,
   };
 }
