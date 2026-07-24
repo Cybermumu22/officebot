@@ -1411,8 +1411,12 @@ function handleEvent(evt){
   }
   // every event's resulting bubble fades after a while unless replaced —
   // no more bubbles stuck over an avatar's head until the next time it speaks
-  // (ModelTick changes no bubble, so don't reset the current one's fade clock)
-  if(name !== 'SessionEnd' && name !== 'ModelTick') armBubbleFade(target, 12000);
+  // (ModelTick changes no bubble, so don't reset the current one's fade clock).
+  // REAL SPEECH (the closing words of an answer) lingers much longer than
+  // status chatter — 12s meant the user flipped to the office and found the
+  // boss "not answering"; the full text always lives in DIALOGUE regardless.
+  if(name !== 'SessionEnd' && name !== 'ModelTick')
+    armBubbleFade(target, target.speechBubble ? 60000 : 12000);
   render();
 }
 
