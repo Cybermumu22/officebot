@@ -235,9 +235,10 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 const DEFAULTS = {
   layout:'flip', showing:'term', splitPct:38, collapsed:false, bottomPanel:'term',
   fontSize:14, keybar:true, engine:'pocket', keepAwake:true, wsPort:7681,
-  // Android soft keyboards garble direct xterm typing (IME composition), so
-  // touch devices default to the native typing bar; hardware keyboards don't.
-  inputBar:('ontouchstart' in window),
+  // The native typing bar is OPT-IN (settings) — the user prefers typing
+  // straight into the terminal; direct mode gets IME-calming attributes and
+  // debounced refits instead.
+  rev:2, inputBar:false,
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
 };
@@ -245,7 +246,13 @@ let S = loadSettings();
 function loadSettings(){
   try{
     const raw = localStorage.getItem('pocketDeck.v1');
-    if(raw){ return Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(raw)); }
+    if(raw){
+      const stored = JSON.parse(raw);
+      const s = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), stored);
+      // check the STORED rev — the DEFAULTS merge would mask it
+      if(!stored.rev || stored.rev < 2){ s.rev = 2; s.inputBar = false; }  // typing bar became opt-in
+      return s;
+    }
   }catch(e){}
   return JSON.parse(JSON.stringify(DEFAULTS));
 }
@@ -275,7 +282,14 @@ function fitSoon(){
   requestAnimationFrame(function(){ fitQ = false; fitNow(); });
 }
 new ResizeObserver(fitSoon).observe($('xtermHost'));
-if(window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
+// Debounced, not per-event: the keyboard's suggestion strip pops in and out
+// on EVERY word, and refitting each time forced a full terminal re-layout
+// mid-typing — the "janky typing" feel. Let the viewport settle first.
+let vvT = null;
+if(window.visualViewport) visualViewport.addEventListener('resize', function(){
+  if(vvT) clearTimeout(vvT);
+  vvT = setTimeout(fitNow, 220);
+});
 window.addEventListener('orientationchange', function(){ setTimeout(fitSoon, 300); });
 
 // ---------- ttyd connection ----------
@@ -378,9 +392,18 @@ term.onResize(function(sz){
 // swipe-typing all behave), then the finished line goes to the pty in one
 // clean burst — no per-keystroke IME garbling, no round-trip jank.
 function applyInputMode(){
+  const ta = term.textarea;
+  if(!ta) return;
   // With the bar on, tapping the terminal must not pop the soft keyboard —
   // the terminal becomes read/scroll/select only; keybar still sends keys.
-  if(term.textarea) term.textarea.setAttribute('inputmode', S.inputBar ? 'none' : '');
+  ta.setAttribute('inputmode', S.inputBar ? 'none' : '');
+  // Direct-typing mode: calm the soft keyboard. Autocorrect rewrites words
+  // after the fact — over a terminal wire that becomes duplicated garbage —
+  // and auto-caps fights shell commands. Ask the keyboard for none of it.
+  ta.setAttribute('autocomplete', 'off');
+  ta.setAttribute('autocorrect', 'off');
+  ta.setAttribute('autocapitalize', 'none');
+  ta.setAttribute('spellcheck', 'false');
 }
 function inputAutogrow(){
   const t = $('inputText');
