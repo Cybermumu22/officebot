@@ -1209,7 +1209,33 @@ function handleEvent(evt){
 
   const sid = evt.session_id || 'unknown-session';
   const isNewSession = !sessions.has(sid);
+
+  // ---- Opener handoff (shell `claude` wrapper) ----
+  // A synthetic SessionStart with _opener:true opens the office the instant
+  // you launch claude. When the REAL session's first event arrives, it
+  // ADOPTS that already-staffed office (re-keys it to the real id) so the
+  // ceremony flows straight into the work — no second office, no re-run.
+  // sessions store cwd as a BASENAME (see ensureSession) — compare like-for-like
+  const evtCwdBase = evt.cwd ? basename(evt.cwd) : '';
+  if(isNewSession && !evt._opener && name !== 'SessionEnd' && evtCwdBase){
+    let openerSid = null;
+    sessions.forEach(function(os, oid){ if(os._opener && os.cwd === evtCwdBase) openerSid = oid; });
+    if(openerSid){
+      const os = sessions.get(openerSid), oo = officeEls.get(openerSid);
+      sessions.delete(openerSid); officeEls.delete(openerSid);
+      os._opener = false;
+      sessions.set(sid, os); if(oo) officeEls.set(sid, oo);
+    }
+  }
+  // An opener for a cwd a live session already covers is redundant — ignore.
+  if(evt._opener){
+    let covered = false;
+    sessions.forEach(function(os){ if(!os._opener && os.cwd === evtCwdBase && !os.closing) covered = true; });
+    if(covered) return;
+  }
+
   const s = ensureSession(sid, evt);
+  if(evt._opener) s._opener = true;
   // The office opens the moment a session is FIRST SEEN — whatever event
   // that is. SessionStart is the usual door-opener but it can be missed
   // (confirmed on the phone), and then the first prompt materialized a

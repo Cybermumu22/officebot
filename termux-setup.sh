@@ -56,6 +56,26 @@ export PATH="$HOME/bin:$PATH"
 export USE_BUILTIN_RIPGREP=0
 export DISABLE_AUTOUPDATER=1
 
+# Separate marker block so existing installs pick up the office-opener wrapper
+# on a re-run. Launching `claude` pings officebot to run the arrival ceremony
+# right away (the phone's real SessionStart hook is unreliable); the real
+# session then adopts that already-open office, so there's never a duplicate.
+if ! grep -q '# >>> pocket-deck-claude-fn >>>' ~/.profile 2>/dev/null; then
+cat >> ~/.profile <<'EOF'
+# >>> pocket-deck-claude-fn >>>
+claude() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -s -m 2 -o /dev/null -X POST -H 'Content-Type: application/json' \
+      -d "{\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",\"_opener\":true,\"session_id\":\"office-open-$$-$RANDOM\",\"cwd\":\"$PWD\"}" \
+      http://127.0.0.1:4317/event >/dev/null 2>&1 &
+  fi
+  command claude "$@"
+}
+# <<< pocket-deck-claude-fn >>>
+EOF
+echo "added claude office-opener wrapper to ~/.profile"
+fi
+
 step "Cloning repos (into Termux home — NOT /sdcard, git breaks there)"
 mkdir -p ~/work
 if [ -d ~/officebot/.git ]; then

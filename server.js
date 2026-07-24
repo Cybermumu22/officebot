@@ -771,6 +771,27 @@ const server = http.createServer(function (req, res) {
       let evt;
       try { evt = JSON.parse(body || '{}'); } catch (e) { evt = { raw: body }; }
       evt._receivedAt = Date.now();
+      // Opener handoff (the shell `claude` wrapper fires a synthetic
+      // SessionStart with _opener:true so the office opens the instant you
+      // launch claude, not on the first prompt — the phone's real
+      // SessionStart hook is unreliable). Two rules keep it from ever
+      // showing a duplicate office:
+      //   • a real event for a cwd → evict any cached opener for that cwd
+      //     (the real session has taken over; the client adopts it live)
+      //   • an opener for a cwd that a real session already covers → drop it
+      if (evt.cwd && !evt._opener) {
+        sessionCache.forEach(function (entry, osid) {
+          if (entry.lastEvent && entry.lastEvent._opener && entry.lastEvent.cwd === evt.cwd && osid !== evt.session_id) {
+            sessionCache.delete(osid); speechSent.delete(osid); modelSent.delete(osid); sessionTokens.delete(osid);
+          }
+        });
+      } else if (evt.cwd && evt._opener) {
+        let covered = false;
+        sessionCache.forEach(function (entry) {
+          if (entry.lastEvent && !entry.lastEvent._opener && entry.lastEvent.cwd === evt.cwd) covered = true;
+        });
+        if (covered) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true,"skipped":"covered"}'); return; }
+      }
       if (!evt.agent_id && evt.transcript_path) {
         const info = resolveTranscriptInfo(evt.transcript_path);
         if (!evt.model && info.model) evt.model = info.model;
