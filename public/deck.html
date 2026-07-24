@@ -39,8 +39,8 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 
 /* flip: one pane at a time, whole screen each */
 .layout-flip #officePane{display:none}
-.layout-flip.show-office #officePane{display:flex}
-.layout-flip.show-office #termPane{display:none}
+.layout-flip.show-office #officePane{display:flex;flex:1}
+.layout-flip.show-office #stack{display:none}
 /* split + collapsible: office above (beside, in landscape), terminal fills the rest */
 .layout-split #officePane,.layout-collapse #officePane{flex:0 0 var(--office-size,38%)}
 .layout-collapse #officeHandle{display:flex}
@@ -53,24 +53,45 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   .layout-collapse.collapsed #officeHandle{writing-mode:vertical-rl;flex:1;padding:10px 0;justify-content:flex-start}
 }
 
-/* ---- office chat overlay ---- */
+/* ---- office chat: floating glass overlay + bottom-panel mode ---- */
 #chatFab{position:absolute;right:12px;bottom:14px;z-index:8;width:46px;height:46px;border-radius:50%;background:#141830ee;color:#22d3ee;border:1px solid #2a3560;font-size:20px;box-shadow:0 2px 12px #000a;cursor:pointer}
 #chatFab.on{background:#1d2440;border-color:#22d3ee;box-shadow:0 0 10px #22d3ee55}
-#chatOv{position:absolute;left:0;right:0;bottom:0;top:30%;z-index:7;background:#0a0d18e8;border-top:1px solid #263056;display:flex;flex-direction:column}
-#chatOvHead{flex:0 0 auto;padding:8px 64px 6px 12px;font-size:10px;letter-spacing:2px;color:#7c9eff}
-#chatOvLog{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;padding:4px 12px 10px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
-#chatOvLog .cline{word-break:break-word;margin-top:5px}
-#chatOvLog .t{color:#3f4468;margin-right:6px}
-#chatOvLog .who{margin-right:6px}
-#chatOvLog .cline-more{display:none}
-#chatOvLog .k-speech .who{color:#22d3ee}   #chatOvLog .k-speech .txt{color:#e2e4f0}
-#chatOvLog .k-prompt .who{color:#f59e0b}   #chatOvLog .k-prompt .txt{color:#e8d5a8}
-#chatOvLog .k-delegate .who{color:#a78bfa} #chatOvLog .k-delegate .txt{color:#cfc3f7}
-#chatOvLog .k-arrive .who,#chatOvLog .k-handback .who{color:#10b981}
-#chatOvLog .k-arrive .txt,#chatOvLog .k-handback .txt{color:#9fdec4}
-#chatOvLog .k-error .who{color:#e63946}    #chatOvLog .k-error .txt{color:#f3a7ae}
-#chatOvLog .k-status .who{color:#7c8ab0}   #chatOvLog .k-status .txt{color:#6b7094}
-#chatOvLog .k-banter .who{color:#8890b8}   #chatOvLog .k-banter .txt{color:#7d84ad;font-style:italic}
+/* liquid glass: heavy blur + saturation, glossy top edge, rounded card */
+#chatOv{position:absolute;right:10px;bottom:70px;z-index:7;width:min(80%,330px);max-height:56%;
+  display:flex;flex-direction:column;overflow:hidden;border-radius:16px;
+  background:rgba(15,19,37,.46);
+  -webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);
+  border:1px solid rgba(150,180,255,.22);
+  box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14)}
+#chatOvHead{flex:0 0 auto;padding:7px 12px 3px;font-size:9px;letter-spacing:2px;color:#9db4ff}
+/* shared chat feed styling — font matches the office speech bubbles (~11px) */
+.chatlog{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;
+  padding:2px 10px 8px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.chatlog .cline{word-break:break-word;margin-top:4px}
+.chatlog .t{color:#4a5070;margin-right:5px}
+.chatlog .who{margin-right:5px}
+.chatlog .cline-more{display:none}
+.chatlog .k-speech .who{color:#22d3ee}   .chatlog .k-speech .txt{color:#e2e4f0}
+.chatlog .k-prompt .who{color:#f59e0b}   .chatlog .k-prompt .txt{color:#e8d5a8}
+.chatlog .k-delegate .who{color:#a78bfa} .chatlog .k-delegate .txt{color:#cfc3f7}
+.chatlog .k-arrive .who,.chatlog .k-handback .who{color:#10b981}
+.chatlog .k-arrive .txt,.chatlog .k-handback .txt{color:#9fdec4}
+.chatlog .k-error .who{color:#e63946}    .chatlog .k-error .txt{color:#f3a7ae}
+.chatlog .k-status .who{color:#7c8ab0}   .chatlog .k-status .txt{color:#6b7094}
+.chatlog .k-banter .who{color:#8890b8}   .chatlog .k-banter .txt{color:#7d84ad;font-style:italic}
+/* bottom-panel switcher (split layouts): TERMINAL <-> CHAT */
+#stack{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0}
+.layout-flip.show-office #stack{display:none}
+#paneBar{display:none;flex:0 0 30px;align-items:center;gap:6px;padding:0 8px;background:#0f1220;border-bottom:1px solid #1e2338}
+.layout-split #paneBar,.layout-collapse #paneBar{display:flex}
+#paneBar button{flex:0 0 auto;padding:4px 12px;border-radius:12px;background:transparent;color:#6b7aa5;border:1px solid transparent;font-size:11px;letter-spacing:1px;cursor:pointer}
+#paneBar button.pb-on{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
+#chatPane{display:none;flex:1;min-height:0;flex-direction:column;background:#0b0e17}
+#chatPane .chatlog{padding:8px 12px}
+.layout-split.bp-chat #termPane,.layout-collapse.bp-chat #termPane{display:none}
+.layout-split.bp-chat #chatPane,.layout-collapse.bp-chat #chatPane{display:flex}
+/* chat already on screen -> the floating button is redundant */
+.layout-split.bp-chat #chatFab,.layout-collapse.bp-chat #chatFab{display:none}
 
 /* ---- connection pill ---- */
 #conn{position:absolute;top:6px;right:10px;z-index:5;padding:4px 10px;border-radius:12px;font-size:11px;background:#3b1d24;color:#ff9db1;border:1px solid #7a2f42;cursor:pointer}
@@ -123,14 +144,21 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
       <iframe id="office" src="/" title="Office viewer"></iframe>
       <div id="chatOv" class="hidden">
         <div id="chatOvHead">AGENT CHAT — LIVE</div>
-        <div id="chatOvLog"></div>
+        <div id="chatOvLog" class="chatlog"></div>
       </div>
       <button id="chatFab" title="Agent chat">💬</button>
     </div>
-    <div id="termPane">
-      <div id="xtermHost"></div>
-      <div id="conn" class="hidden"></div>
-      <div id="keybar"></div>
+    <div id="stack">
+      <div id="paneBar">
+        <button id="pbTerm">⌨ TERMINAL</button>
+        <button id="pbChat">💬 CHAT</button>
+      </div>
+      <div id="termPane">
+        <div id="xtermHost"></div>
+        <div id="conn" class="hidden"></div>
+        <div id="keybar"></div>
+      </div>
+      <div id="chatPane"><div id="chatPaneLog" class="chatlog"></div></div>
     </div>
   </div>
 </div>
@@ -191,7 +219,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 
 // ---------- settings ----------
 const DEFAULTS = {
-  layout:'flip', showing:'term', splitPct:38, collapsed:false,
+  layout:'flip', showing:'term', splitPct:38, collapsed:false, bottomPanel:'term',
   fontSize:14, keybar:true, engine:'pocket', keepAwake:true, wsPort:7681,
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
@@ -402,10 +430,13 @@ function chatSrcEl(){
 }
 function chatMirror(){
   const src = chatSrcEl();
-  $('chatOvLog').innerHTML = (src && src.children.length)
+  const html = (src && src.children.length)
     ? src.innerHTML
     : '<div class="cline k-status"><span class="txt">no chatter yet — this fills up as agents work</span></div>';
+  document.querySelectorAll('.chatlog').forEach(function(el){ el.innerHTML = html; });
 }
+// Observer stays bound for the app's whole life — it feeds both the floating
+// overlay and the bottom chat panel, whichever is on screen.
 function chatBind(){
   if(chatObs){ chatObs.disconnect(); chatObs = null; }
   chatMirror();
@@ -414,16 +445,11 @@ function chatBind(){
 }
 $('chatFab').addEventListener('click', function(){
   const ov = $('chatOv');
-  if(ov.classList.contains('hidden')){
-    ov.classList.remove('hidden'); this.classList.add('on'); chatBind();
-  } else {
-    ov.classList.add('hidden'); this.classList.remove('on');
-    if(chatObs){ chatObs.disconnect(); chatObs = null; }
-  }
+  const opening = ov.classList.contains('hidden');
+  ov.classList.toggle('hidden', !opening);
+  this.classList.toggle('on', opening);
 });
-$('office').addEventListener('load', function(){
-  if(!$('chatOv').classList.contains('hidden')) chatBind();
-});
+$('office').addEventListener('load', chatBind);
 
 // ---------- tabs (each = a named tmux session; closing only detaches) ----------
 function renderTabs(){
@@ -472,12 +498,21 @@ function applyLayout(){
   app.className = 'layout-' + S.layout
     + (S.showing === 'office' ? ' show-office' : ' show-term')
     + (S.collapsed ? ' collapsed' : '')
+    + (S.bottomPanel === 'chat' ? ' bp-chat' : '')
     + (S.keybar ? '' : ' keybar-off')
     + (S.engine === 'ttyd' ? ' engine-ttyd' : '');
   app.style.setProperty('--office-size', S.splitPct + '%');
   $('officeArrow').textContent = S.collapsed ? '▸' : '▾';
+  $('pbTerm').className = S.bottomPanel === 'chat' ? '' : 'pb-on';
+  $('pbChat').className = S.bottomPanel === 'chat' ? 'pb-on' : '';
   fitSoon();
 }
+$('pbTerm').addEventListener('click', function(){
+  if(S.bottomPanel !== 'term'){ S.bottomPanel = 'term'; save(); applyLayout(); term.focus(); }
+});
+$('pbChat').addEventListener('click', function(){
+  if(S.bottomPanel !== 'chat'){ S.bottomPanel = 'chat'; save(); applyLayout(); }
+});
 $('flipBtn').addEventListener('click', function(){
   if(S.layout === 'flip'){
     S.showing = (S.showing === 'term') ? 'office' : 'term';
@@ -600,6 +635,7 @@ $('btnReload').addEventListener('click', function(){ location.reload(); });
 applyLayout();
 renderTabs();
 updateWake();
+chatBind();      // iframe 'load' rebinds once the office finishes loading
 if(S.engine === 'pocket') connect(); else applyEngine();
 if('serviceWorker' in navigator && window.isSecureContext){
   navigator.serviceWorker.register('/sw.js').catch(function(){});
