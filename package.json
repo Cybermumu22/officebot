@@ -38,6 +38,7 @@
     "public/deck.webmanifest",
     "public/deck-icon-192.png",
     "public/deck-icon-512.png",
+    "public/widget.html",
     "public/vendor/",
     "termux-setup.sh",
     "termux/",
