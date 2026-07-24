@@ -889,7 +889,7 @@ function ensureSession(sid, evt){
   if(!s){
     s = {
       id: sid, cwd: basename(evt.cwd), avatar: avatarForSession(sid), modelNickname: null,
-      status: 'idle', zone: 'lounge', bubble: null, lastEventAt: Date.now(),
+      status: 'idle', zone: 'terminal', bubble: null, lastEventAt: Date.now(),
       subagents: new Map(), removeTimer: null,
       lastDelegation: null, lastDelegationAt: 0, pendingAgentTypes: [],
       courier: null, courierTimers: [],
@@ -1356,6 +1356,11 @@ function handleEvent(evt){
       // after a SpeechTick already showed the final line). Either way it's
       // said once and then fades (armIdleFade).
       target.status = 'idle';
+      // …and never leave a LIVE session parked loungeside: a page reload
+      // replays only this Stop into a fresh session object, so without an
+      // explicit desk here the boss sat in the default zone until the next
+      // prompt — which used to be the lounge.
+      if(target.zone === 'lounge' || target.zone === 'exit') target.zone = 'terminal';
       if(s._didWork){ _fxFor(sid, null, 'confetti'); s._didWork = false; } // turn wrapped cleanly 🎉
       if(evt._speech){
         target.bubble = cleanSpeech(evt._speech, 220);
