@@ -29,7 +29,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 
 /* ---- panes ---- */
 #main{flex:1;display:flex;flex-direction:column;min-height:0}
-#officePane{display:flex;flex-direction:column;min-height:0;min-width:0;background:#000}
+#officePane{display:flex;flex-direction:column;min-height:0;min-width:0;background:#000;position:relative}
 #officeHandle{display:none;flex:0 0 30px;align-items:center;gap:8px;padding:0 10px;background:#0f1220;border-bottom:1px solid #1e2338;color:#7c9eff;font-size:11px;letter-spacing:1px;cursor:pointer;user-select:none}
 #office{flex:1;border:0;width:100%;background:#000}
 #termPane{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;background:#0b0e17}
@@ -52,6 +52,25 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   /* collapsed sideways: thin vertical strip, arrow only */
   .layout-collapse.collapsed #officeHandle{writing-mode:vertical-rl;flex:1;padding:10px 0;justify-content:flex-start}
 }
+
+/* ---- office chat overlay ---- */
+#chatFab{position:absolute;right:12px;bottom:14px;z-index:8;width:46px;height:46px;border-radius:50%;background:#141830ee;color:#22d3ee;border:1px solid #2a3560;font-size:20px;box-shadow:0 2px 12px #000a;cursor:pointer}
+#chatFab.on{background:#1d2440;border-color:#22d3ee;box-shadow:0 0 10px #22d3ee55}
+#chatOv{position:absolute;left:0;right:0;bottom:0;top:30%;z-index:7;background:#0a0d18e8;border-top:1px solid #263056;display:flex;flex-direction:column}
+#chatOvHead{flex:0 0 auto;padding:8px 64px 6px 12px;font-size:10px;letter-spacing:2px;color:#7c9eff}
+#chatOvLog{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;padding:4px 12px 10px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+#chatOvLog .cline{word-break:break-word;margin-top:5px}
+#chatOvLog .t{color:#3f4468;margin-right:6px}
+#chatOvLog .who{margin-right:6px}
+#chatOvLog .cline-more{display:none}
+#chatOvLog .k-speech .who{color:#22d3ee}   #chatOvLog .k-speech .txt{color:#e2e4f0}
+#chatOvLog .k-prompt .who{color:#f59e0b}   #chatOvLog .k-prompt .txt{color:#e8d5a8}
+#chatOvLog .k-delegate .who{color:#a78bfa} #chatOvLog .k-delegate .txt{color:#cfc3f7}
+#chatOvLog .k-arrive .who,#chatOvLog .k-handback .who{color:#10b981}
+#chatOvLog .k-arrive .txt,#chatOvLog .k-handback .txt{color:#9fdec4}
+#chatOvLog .k-error .who{color:#e63946}    #chatOvLog .k-error .txt{color:#f3a7ae}
+#chatOvLog .k-status .who{color:#7c8ab0}   #chatOvLog .k-status .txt{color:#6b7094}
+#chatOvLog .k-banter .who{color:#8890b8}   #chatOvLog .k-banter .txt{color:#7d84ad;font-style:italic}
 
 /* ---- connection pill ---- */
 #conn{position:absolute;top:6px;right:10px;z-index:5;padding:4px 10px;border-radius:12px;font-size:11px;background:#3b1d24;color:#ff9db1;border:1px solid #7a2f42;cursor:pointer}
@@ -102,6 +121,11 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
     <div id="officePane">
       <div id="officeHandle"><span id="officeArrow">▾</span> THE OFFICE</div>
       <iframe id="office" src="/" title="Office viewer"></iframe>
+      <div id="chatOv" class="hidden">
+        <div id="chatOvHead">AGENT CHAT — LIVE</div>
+        <div id="chatOvLog"></div>
+      </div>
+      <button id="chatFab" title="Agent chat">💬</button>
     </div>
     <div id="termPane">
       <div id="xtermHost"></div>
@@ -330,6 +354,75 @@ function syncCtrlBtn(){ if(ctrlBtn) ctrlBtn.className = ctrlSticky ? 'on' : ''; 
     bar.appendChild(b);
   });
 })();
+
+// ---------- touch scrolling (swipe the terminal like a page) ----------
+// xterm.js has no touch scrolling of its own. A swipe becomes either a
+// viewport scroll (normal screen) or SGR mouse-wheel codes (when the app —
+// tmux, which always requests SGR encoding — is tracking the mouse, so
+// swiping inside Claude/tmux scrolls history there too).
+function scrollTerm(steps){                       // + = finger up = scroll down
+  if(!steps) return;
+  let mode = 'none';
+  try{ mode = term.modes.mouseTrackingMode; }catch(e){}
+  if(mode !== 'none'){
+    const b = steps > 0 ? 65 : 64, n = Math.min(40, Math.abs(steps));
+    const col = (term.buffer.active.cursorX|0) + 1, row = (term.buffer.active.cursorY|0) + 1;
+    let s = '';
+    for(let i = 0; i < n; i++) s += '\x1b[<' + b + ';' + col + ';' + row + 'M';
+    if(ws && ws.readyState === 1 && inited) ws.send(enc.encode('0' + s));
+  } else {
+    term.scrollLines(steps);
+  }
+}
+(function(){
+  const host = $('xtermHost');
+  let lastY = null, acc = 0;
+  host.addEventListener('touchstart', function(e){
+    if(e.touches.length === 1){ lastY = e.touches[0].clientY; acc = 0; }
+  }, {passive:true});
+  host.addEventListener('touchmove', function(e){
+    if(lastY === null || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    acc += lastY - y; lastY = y;
+    const line = Math.max(12, Math.round(S.fontSize * 1.4));
+    const steps = Math.trunc(acc / line);
+    if(steps !== 0){ acc -= steps * line; scrollTerm(steps); }
+    e.preventDefault();               // the swipe is ours — no page panning
+  }, {passive:false});
+  host.addEventListener('touchend', function(){ lastY = null; }, {passive:true});
+})();
+
+// ---------- office chat overlay (mirrors the office's DIALOGUE feed) ----------
+// Same origin as the office iframe, so we mirror its #chat DOM directly —
+// the overlay always matches what the office itself would show.
+let chatObs = null;
+function chatSrcEl(){
+  try{ return $('office').contentDocument.getElementById('chat'); }catch(e){ return null; }
+}
+function chatMirror(){
+  const src = chatSrcEl();
+  $('chatOvLog').innerHTML = (src && src.children.length)
+    ? src.innerHTML
+    : '<div class="cline k-status"><span class="txt">no chatter yet — this fills up as agents work</span></div>';
+}
+function chatBind(){
+  if(chatObs){ chatObs.disconnect(); chatObs = null; }
+  chatMirror();
+  const src = chatSrcEl();
+  if(src){ chatObs = new MutationObserver(chatMirror); chatObs.observe(src, {childList:true}); }
+}
+$('chatFab').addEventListener('click', function(){
+  const ov = $('chatOv');
+  if(ov.classList.contains('hidden')){
+    ov.classList.remove('hidden'); this.classList.add('on'); chatBind();
+  } else {
+    ov.classList.add('hidden'); this.classList.remove('on');
+    if(chatObs){ chatObs.disconnect(); chatObs = null; }
+  }
+});
+$('office').addEventListener('load', function(){
+  if(!$('chatOv').classList.contains('hidden')) chatBind();
+});
 
 // ---------- tabs (each = a named tmux session; closing only detaches) ----------
 function renderTabs(){
