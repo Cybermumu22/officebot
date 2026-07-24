@@ -1259,6 +1259,8 @@ function handleEvent(evt){
   // in-progress close and brings the office back — a session that's emitting
   // hooks is working, so the boss must not be walking out.
   if(name !== 'SessionEnd' && name !== 'SessionStart' && name !== 'ModelTick') reopenOffice(sid);
+  // Real work started while the crew were still strolling in? Rush them.
+  if(s.arriving && (name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'SubagentStart')) _rushOpening(sid);
 
   // Track whether the current bubble is actual SPEECH (transcript text) vs
   // a mechanical status line — Stop uses it to let just-said words linger.
@@ -2828,6 +2830,31 @@ function playOpening(sid){
     });
     playCastExchange(o, pick(MORNING_EXCHANGES), cast, 800);
   }, CREW_FROM_MS + CREW_ARRIVE_ORDER.length * CREW_STEP_MS + 4800));
+}
+// Started working mid-arrival? The leisurely 5s-per-crew trickle would drag
+// on for most of a minute while you're already busy — reads as "the office
+// stalled." Rush everyone still outside in fast (~0.5s apart) and wrap the
+// ceremony, so the office fills right up the moment real work begins.
+function _rushOpening(sid){
+  const s = sessions.get(sid);
+  if(!s || !s.arriving) return;
+  clearDepartTimers(s);          // cancel the slow trickle + its end timer
+  s.crewArriver = null;
+  const remaining = (s.crewGone || []).slice();
+  remaining.forEach(function(cn, i){
+    s.departTimers.push(setTimeout(function(){
+      if(!sessions.has(sid)) return;
+      const gi = s.crewGone.indexOf(cn);
+      if(gi !== -1) s.crewGone.splice(gi, 1);
+      render();
+    }, i * 480));
+  });
+  s.departTimers.push(setTimeout(function(){
+    if(!sessions.has(sid)) return;
+    s.arriving = false;
+    const o = officeEls.get(sid); if(o) o.root.classList.remove('ceremony');
+    render();
+  }, remaining.length * 480 + 300));
 }
 function playClosing(sid){
   const s = sessions.get(sid);
