@@ -12,6 +12,14 @@
 <link rel="stylesheet" href="/vendor/xterm.css">
 <title>Pocket Deck</title>
 <style>
+/* Bundled coding fonts (offline) — a nicer, softer look than raw terminal mono.
+   All are strictly monospace (xterm needs a fixed grid). */
+@font-face{font-family:'JetBrains Mono';font-weight:400;font-display:swap;src:url('/vendor/fonts/jetbrains-mono-400.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:700;font-display:swap;src:url('/vendor/fonts/jetbrains-mono-700.woff2') format('woff2')}
+@font-face{font-family:'Fira Code';font-weight:400;font-display:swap;src:url('/vendor/fonts/fira-code-400.woff2') format('woff2')}
+@font-face{font-family:'Fira Code';font-weight:700;font-display:swap;src:url('/vendor/fonts/fira-code-700.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:400;font-display:swap;src:url('/vendor/fonts/ibm-plex-mono-400.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:700;font-display:swap;src:url('/vendor/fonts/ibm-plex-mono-700.woff2') format('woff2')}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
 #app{display:flex;flex-direction:column;height:100dvh}
@@ -195,6 +203,15 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   <div class="sec"><div class="lbl">Office pane size</div>
     <input type="range" id="rngSplit" min="25" max="60" step="1">
   </div>
+  <div class="sec"><div class="lbl">Terminal font</div>
+    <div class="seg" id="segFont">
+      <button data-v="jetbrains">JetBrains</button>
+      <button data-v="fira">Fira Code</button>
+      <button data-v="plex">IBM Plex</button>
+      <button data-v="system">System</button>
+    </div>
+    <div id="fontPreview" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#0b0e17;border:1px solid #232a4a;font-size:13px;color:#9fe0c0;white-space:pre;overflow-x:auto">const ok = (a) =&gt; a !== null;  // 0O1lI</div>
+  </div>
   <div class="sec"><div class="lbl">Terminal font size</div>
     <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
   </div>
@@ -245,7 +262,7 @@ const DEFAULTS = {
   // The native typing bar is OPT-IN (settings) — the user prefers typing
   // straight into the terminal; direct mode gets IME-calming attributes and
   // debounced refits instead.
-  rev:2, inputBar:false,
+  rev:2, inputBar:false, font:'jetbrains',
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
 };
@@ -268,9 +285,19 @@ function save(){ try{ localStorage.setItem('pocketDeck.v1', JSON.stringify(S)); 
 const $ = id => document.getElementById(id);
 
 // ---------- terminal ----------
+// Terminal fonts — all strictly monospace (xterm needs a fixed grid). `probe`
+// is what document.fonts.load() waits on before applying, so xterm measures
+// the real glyph metrics, not a fallback.
+const FONTS = {
+  jetbrains: { css:"'JetBrains Mono', ui-monospace, monospace", probe:'"JetBrains Mono"', web:true },
+  fira:      { css:"'Fira Code', ui-monospace, monospace",      probe:'"Fira Code"',      web:true },
+  plex:      { css:"'IBM Plex Mono', ui-monospace, monospace",  probe:'"IBM Plex Mono"',  web:true },
+  system:    { css:'ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace', web:false },
+};
+function fontDef(){ return FONTS[S.font] || FONTS.system; }
 const term = new Terminal({
   fontSize:S.fontSize,
-  fontFamily:'ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace',
+  fontFamily:fontDef().css,
   cursorBlink:true, scrollback:3000,
   theme:{ background:'#0b0e17', foreground:'#d6e0f5', cursor:'#37f5ff',
           selectionBackground:'#2a3560' }
@@ -278,6 +305,17 @@ const term = new Terminal({
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($('xtermHost'));
+// Apply the chosen font, waiting for a web font to actually load first so the
+// terminal grid measures correct glyph widths (else it renders on fallback
+// metrics and looks squished until the next resize).
+function applyFont(){
+  const f = fontDef();
+  const set = function(){ term.options.fontFamily = f.css; fitSoon(); };
+  if(f.web && document.fonts && document.fonts.load){
+    Promise.all([document.fonts.load('400 16px ' + f.probe), document.fonts.load('700 16px ' + f.probe)])
+      .then(set).catch(set);
+  } else set();
+}
 // WebGL renderer: much smoother than the DOM renderer on phones.
 // Falls back silently (DOM renderer) where WebGL2 is unavailable.
 try{ term.loadAddon(new WebglAddon.WebglAddon()); }catch(e){}
@@ -706,6 +744,10 @@ function syncSettingsUI(){
   Array.prototype.forEach.call($('segEngine').children, function(b){
     b.className = (b.dataset.v === S.engine) ? 'on' : '';
   });
+  Array.prototype.forEach.call($('segFont').children, function(b){
+    b.className = (b.dataset.v === S.font) ? 'on' : '';
+  });
+  $('fontPreview').style.fontFamily = fontDef().css;
   $('rngSplit').value = S.splitPct;
   $('fontVal').textContent = S.fontSize;
   $('chkInputBar').checked = S.inputBar;
@@ -733,6 +775,11 @@ $('segEngine').addEventListener('click', function(e){
   const v = e.target.dataset && e.target.dataset.v;
   if(!v || v === S.engine) return;
   S.engine = v; save(); syncSettingsUI(); applyEngine();
+});
+$('segFont').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v || v === S.font) return;
+  S.font = v; save(); syncSettingsUI(); applyFont();
 });
 $('rngSplit').addEventListener('input', function(){
   S.splitPct = Number(this.value); save(); applyLayout();
@@ -766,6 +813,7 @@ $('btnReload').addEventListener('click', function(){ location.reload(); });
 // ---------- boot ----------
 applyLayout();
 applyInputMode();
+applyFont();     // load + apply the chosen terminal font
 renderTabs();
 syncOffice();    // point the office at the active tab's session
 updateWake();

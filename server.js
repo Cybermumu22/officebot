@@ -19,6 +19,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.apk': 'application/vnd.android.package-archive',
   '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2',
 };
 
 let sseClients = [];
