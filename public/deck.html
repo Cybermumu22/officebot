@@ -168,6 +168,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
   </div>
   <div class="actions">
     <button id="btnReconnect">Reconnect</button>
+    <button id="btnReload" title="Reload the app (after updates)">⟳ Reload</button>
     <button id="btnCloseSettings">Close</button>
   </div>
 </aside>
@@ -593,6 +594,7 @@ $('btnReconnect').addEventListener('click', function(){
   closeSettings();
   if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
 });
+$('btnReload').addEventListener('click', function(){ location.reload(); });
 
 // ---------- boot ----------
 applyLayout();
