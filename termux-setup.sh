@@ -192,6 +192,16 @@ echo "to end those too: tmux kill-server"
 EOF
 chmod 700 ~/bin/deck-stop
 
+cat > ~/bin/deck-restart <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+# Safe to run from INSIDE a deck tab: this shell lives in tmux, which
+# survives deck-stop — the deck just reconnects once deck-start is back.
+~/bin/deck-stop
+sleep 1
+exec ~/bin/deck-start
+EOF
+chmod 700 ~/bin/deck-restart
+
 cp ~/bin/deck-start ~/.shortcuts/Pocket-Deck && chmod 700 ~/.shortcuts/Pocket-Deck
 cp ~/bin/deck-start ~/.termux/boot/deck-start.sh && chmod 700 ~/.termux/boot/deck-start.sh
 echo "created: deck-start, deck-stop, home-screen widget (needs Termux:Widget), boot script (needs Termux:Boot)"
