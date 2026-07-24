@@ -6,6 +6,7 @@ Committed dist files so the phone needs no CDN and the repo stays zero-dependenc
 |---|---|---|
 | `xterm.js`, `xterm.css` | `@xterm/xterm` | 5.5.0 |
 | `addon-fit.js` | `@xterm/addon-fit` | 0.10.0 |
+| `addon-webgl.js` | `@xterm/addon-webgl` | 0.18.0 |
 
 To upgrade: `npm pack @xterm/xterm @xterm/addon-fit`, copy `lib/xterm.js`,
 `css/xterm.css`, `lib/addon-fit.js` here, update this table, and retest

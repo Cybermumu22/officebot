@@ -98,6 +98,14 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 #conn.ok{background:#12301f;color:#7ce6a8;border-color:#1f7a4a}
 #conn.hidden{display:none}
 
+/* ---- smooth typing bar (native input: autocorrect/swipe work properly) ---- */
+#inputBar{display:none;flex:0 0 auto;align-items:flex-end;gap:6px;padding:6px 8px;background:#0f1220;border-top:1px solid #1e2338}
+.inputbar-on #inputBar{display:flex}
+#inputText{flex:1;min-height:40px;max-height:120px;resize:none;padding:10px 12px;border-radius:12px;background:#141830;color:#e2e6f5;border:1px solid #2a3560;font:15px/1.4 system-ui,sans-serif;outline:none}
+#inputText:focus{border-color:#3b4a7a}
+#inputSend{flex:0 0 auto;width:44px;height:40px;border-radius:12px;background:#1d2440;color:#37f5ff;border:1px solid #3b4a7a;font-size:17px;cursor:pointer}
+.engine-ttyd #inputBar{display:none}
+
 /* ---- key bar ---- */
 #keybar{flex:0 0 auto;display:flex;gap:4px;padding:4px 6px calc(4px + env(safe-area-inset-bottom));overflow-x:auto;background:#0f1220;border-top:1px solid #1e2338;scrollbar-width:none}
 #keybar::-webkit-scrollbar{display:none}
@@ -156,6 +164,10 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
       <div id="termPane">
         <div id="xtermHost"></div>
         <div id="conn" class="hidden"></div>
+        <div id="inputBar">
+          <textarea id="inputText" rows="1" placeholder="Type here — ⏎ sends" autocomplete="on" autocapitalize="sentences"></textarea>
+          <button id="inputSend" title="Send">➤</button>
+        </div>
         <div id="keybar"></div>
       </div>
       <div id="chatPane"><div id="chatPaneLog" class="chatlog"></div></div>
@@ -180,6 +192,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
     <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
   </div>
   <div class="sec">
+    <label class="togglerow">Smooth typing bar<input type="checkbox" id="chkInputBar"></label>
     <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
     <label class="togglerow">Keep screen awake<input type="checkbox" id="chkAwake"></label>
   </div>
@@ -202,6 +215,7 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 </aside>
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
+<script src="/vendor/addon-webgl.js"></script>
 <script>
 'use strict';
 /* Pocket Deck — phone CLI + office viewer in one page.
@@ -221,6 +235,9 @@ html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,san
 const DEFAULTS = {
   layout:'flip', showing:'term', splitPct:38, collapsed:false, bottomPanel:'term',
   fontSize:14, keybar:true, engine:'pocket', keepAwake:true, wsPort:7681,
+  // Android soft keyboards garble direct xterm typing (IME composition), so
+  // touch devices default to the native typing bar; hardware keyboards don't.
+  inputBar:('ontouchstart' in window),
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
 };
@@ -247,6 +264,9 @@ const term = new Terminal({
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($('xtermHost'));
+// WebGL renderer: much smoother than the DOM renderer on phones.
+// Falls back silently (DOM renderer) where WebGL2 is unavailable.
+try{ term.loadAddon(new WebglAddon.WebglAddon()); }catch(e){}
 
 let fitQ = false;
 function fitNow(){ try{ fit.fit(); }catch(e){} }
@@ -352,6 +372,33 @@ term.onResize(function(sz){
   if(ws && ws.readyState === 1 && inited)
     ws.send(enc.encode('1' + JSON.stringify({columns:sz.cols, rows:sz.rows})));
 });
+
+// ---------- smooth typing bar ----------
+// The soft keyboard edits a REAL textarea (composition, autocorrect and
+// swipe-typing all behave), then the finished line goes to the pty in one
+// clean burst — no per-keystroke IME garbling, no round-trip jank.
+function applyInputMode(){
+  // With the bar on, tapping the terminal must not pop the soft keyboard —
+  // the terminal becomes read/scroll/select only; keybar still sends keys.
+  if(term.textarea) term.textarea.setAttribute('inputmode', S.inputBar ? 'none' : '');
+}
+function inputAutogrow(){
+  const t = $('inputText');
+  t.style.height = 'auto';
+  t.style.height = Math.min(120, t.scrollHeight) + 'px';
+}
+function inputSendNow(){
+  const t = $('inputText');
+  if(!t.value) return;
+  sendInput(t.value + '\r');
+  t.value = ''; inputAutogrow(); t.focus();
+}
+$('inputText').addEventListener('input', inputAutogrow);
+$('inputText').addEventListener('keydown', function(e){
+  if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); inputSendNow(); }
+});
+$('inputSend').addEventListener('pointerdown', function(e){ e.preventDefault(); });  // keep textarea focus
+$('inputSend').addEventListener('click', inputSendNow);
 
 // ---------- key bar ----------
 const KEYS = [
@@ -500,6 +547,7 @@ function applyLayout(){
     + (S.collapsed ? ' collapsed' : '')
     + (S.bottomPanel === 'chat' ? ' bp-chat' : '')
     + (S.keybar ? '' : ' keybar-off')
+    + (S.inputBar ? ' inputbar-on' : '')
     + (S.engine === 'ttyd' ? ' engine-ttyd' : '');
   app.style.setProperty('--office-size', S.splitPct + '%');
   $('officeArrow').textContent = S.collapsed ? '▸' : '▾';
@@ -580,6 +628,7 @@ function syncSettingsUI(){
   });
   $('rngSplit').value = S.splitPct;
   $('fontVal').textContent = S.fontSize;
+  $('chkInputBar').checked = S.inputBar;
   $('chkKeybar').checked = S.keybar;
   $('chkAwake').checked = S.keepAwake;
   $('numPort').value = S.wsPort;
@@ -615,6 +664,9 @@ function bumpFont(d){
   save(); $('fontVal').textContent = S.fontSize;
   term.options.fontSize = S.fontSize; fitSoon();
 }
+$('chkInputBar').addEventListener('change', function(){
+  S.inputBar = this.checked; save(); applyLayout(); applyInputMode();
+});
 $('chkKeybar').addEventListener('change', function(){
   S.keybar = this.checked; save(); applyLayout();
 });
@@ -633,6 +685,7 @@ $('btnReload').addEventListener('click', function(){ location.reload(); });
 
 // ---------- boot ----------
 applyLayout();
+applyInputMode();
 renderTabs();
 updateWake();
 chatBind();      // iframe 'load' rebinds once the office finishes loading
