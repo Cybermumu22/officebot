@@ -650,6 +650,7 @@ const PROPS = [
 ];
 
 const sessions = new Map();
+const _endedSessions = {};   // sid -> true: tombstone so a killed session can't be resurrected by trailing SpeechTicks
 const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
 let evtCount = 0;
 
@@ -1213,7 +1214,21 @@ function handleEvent(evt){
   }
 
   const sid = evt.session_id || 'unknown-session';
+  // A session that has ENDED stays ended. The server keeps re-reading a killed
+  // session's leftover transcript and emitting SpeechTicks (and a dying claude
+  // can dribble trailing events) — without this guard those RECREATE the
+  // office and re-run the whole ceremony, so a closed tab pops right back and
+  // sits there forever. A genuinely new run has a new id; a SessionStart that
+  // reuses this id (rare) clears the tombstone.
+  if(_endedSessions[sid]){
+    if(name === 'SessionStart'){ delete _endedSessions[sid]; }
+    else return;
+  }
   const isNewSession = !sessions.has(sid);
+  // Passive tickers (server-side transcript watchers) must never SPAWN an
+  // office — only real hooks do. Otherwise a fresh page load that replays a
+  // killed session's last SpeechTick would conjure a ghost office.
+  if((name === 'SpeechTick' || name === 'ModelTick') && isNewSession) return;
 
   // ---- Opener handoff (shell `claude` wrapper) ----
   // A synthetic SessionStart with _opener:true opens the office the instant
@@ -1255,10 +1270,13 @@ function handleEvent(evt){
   const target = aid ? ensureSubagent(s, aid, evt) : s;
   maybeSetModel(target, evt);
   if(evt._sessionTokens != null) s.sessionTokens = evt._sessionTokens; // live per-session counter
-  // ANY sign of life (except a formal end / the open ceremony) cancels an
-  // in-progress close and brings the office back — a session that's emitting
-  // hooks is working, so the boss must not be walking out.
-  if(name !== 'SessionEnd' && name !== 'SessionStart' && name !== 'ModelTick') reopenOffice(sid);
+  // A REAL work hook (not the passive SpeechTick/ModelTick tickers, which the
+  // server emits from transcripts and would keep firing for a dead session)
+  // cancels an in-progress close and brings the office back — actual activity
+  // means the session is alive, so the boss must not be walking out.
+  if(name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'PostToolUse'
+     || name === 'PostToolUseFailure' || name === 'SubagentStart' || name === 'SubagentStop'
+     || name === 'Stop') reopenOffice(sid);
   // Real work started while the crew were still strolling in? Rush them.
   if(s.arriving && (name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'SubagentStart')) _rushOpening(sid);
 
@@ -1499,6 +1517,7 @@ function handleEvent(evt){
       // Nobody blinks out of existence: the closing ceremony drains the
       // office one at a time — crew (brisker: work's over), Tally closes
       // the books, the boss last. playClosing owns removal.
+      _endedSessions[sid] = true;   // tombstone — trailing SpeechTicks can't resurrect it
       s.courier = null; clearCourierTimers(s);
       s.departing = null;
       chatLog(displayName(s), "That's the session — closing up.", 'status');
@@ -2631,6 +2650,7 @@ function stepDeparture(o, s, mode, cast){
 function reopenOffice(sid){
   const s = sessions.get(sid);
   if(!s) return;
+  if(_endedSessions[sid]) return; // a genuinely-ended session never comes back
   if(s.arriving) return; // the opening ceremony owns the roster
   // "Work resumed" always beats "going home": CANCEL an in-progress close
   // (ghost-sweep fired during a backgrounded SSE gap, a stale limit signal,
@@ -3540,6 +3560,7 @@ setInterval(function(){
     if(s.status === 'offline' || s.closing) return;
     if(now - (s.lastEventAt || 0) < CLIENT_STALE_MS) return;
     changed = true;
+    _endedSessions[sid] = true;   // same tombstone as SessionEnd
     s.courier = null; clearCourierTimers(s);
     s.departing = null;
     logMoment('👋 ' + displayName(s) + ' went quiet — office closing (' + s.cwd + ')');
