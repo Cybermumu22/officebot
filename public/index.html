@@ -1301,6 +1301,20 @@ function handleEvent(evt){
           a2.bubble = pick(TEMP_ARRIVE_LINES);
           chatLog(displayName(a2), a2.bubble, 'arrive');
           render();
+          // a present staffer ribs the new intern; sometimes they fire back.
+          // throttled so a 4-temp surge doesn't turn into a wall of teases.
+          if(Math.random() < 0.6 && (Date.now() - (s._lastTease || 0) > 2600)){
+            s._lastTease = Date.now();
+            setTimeout(function(){
+              const o = officeEls.get(sid); if(!o) return;
+              const reactor = _pickTeaser(o, aid);
+              if(!reactor) return;
+              sayBanter(reactor, pick(INTERN_TEASES));
+              if(Math.random() < 0.5){
+                setTimeout(function(){ if(s.subagents.has(aid)) sayBanter(a2, pick(INTERN_REPLIES)); }, 1800);
+              }
+            }, 1400);
+          }
         }, 400); })(target);
         break;
       }
@@ -2674,6 +2688,32 @@ const TEMP_BYE_LINES = [
   'Back to the pool. Later.', 'Contract fulfilled. Bye.',
   'Out I go — call again.', 'Wrapped. Off I pop.',
 ];
+// The permanent staff rib the temps/interns when they show up for a surge.
+const INTERN_TEASES = [
+  'Fresh blood. Don’t touch the good chair.',
+  'Intern alert — hide the good snacks.',
+  'Coffee machine’s permanent-staff only. Kidding. Mostly.',
+  'New hands! Know where anything is? Didn’t think so.',
+  'Another temp. Payroll’s overjoyed.',
+  'The couch is load-bearing. Don’t sit on it.',
+  'Look alive — we’ve got HELP.',
+  'Temp squad. Try to keep up.',
+];
+const INTERN_REPLIES = [
+  'I’m just here for the tokens.',
+  'Respect the temp — we do the real work.',
+  'I’ve done this before, thanks.',
+  'Contractually, I ignore that.',
+  'Intern today, running the place next window.',
+  'Big talk from the permanent couch.',
+];
+// A present permanent crew member to deliver the tease (never the boss — he's
+// working — and never the arriving temp itself).
+function _pickTeaser(o, excludeKey){
+  const c = [];
+  o.tokens.forEach(function(t, k){ if(k !== excludeKey && k.indexOf('crew-') === 0 && t.lastName) c.push(t); });
+  return c.length ? c[Math.floor(Math.random() * c.length)] : null;
+}
 const CREW_ARRIVE_ORDER = ['Scout', 'Blueprint', 'Bookworm', 'Tinker', 'Twin', 'Nitpick', 'Ace', 'Jack'];
 const BOSS_HI = [
   "Morning. Unlock, lights, coffee — in that order.",
