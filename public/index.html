@@ -185,6 +185,12 @@
      brisker (work's over, home beckons). Normal hustle is 1.7s. */
   .office.ceremony .agent-token{transition-duration:3.4s,3.4s;}
   .office.closing .agent-token{transition-duration:2.6s,2.6s;}
+  /* A temp's entrance is the LONGEST walk on the floor — front door all the way
+     to the war room — and every token shares one fixed duration, so covering
+     more ground in the same 1.7s made them look like they were sprinting in.
+     Stretched for the entrance only, then removed so their ordinary
+     room-to-room moves stay at everyone else's pace. */
+  .agent-token.is-entering{transition-duration:3.2s,3.2s;}
   /* No session = nobody inside. Not even the accountant. */
   .office-placeholder .staff{display:none;}
 
@@ -1580,11 +1586,20 @@ function handleEvent(evt){
         // Temp reinforcement: enter through the door, then walk to the war
         // room — so extras visibly ARRIVE from outside, not pop into place.
         target.status = 'thinking'; target.zone = 'exit'; target.bubble = null;
+        // Beat at the door before setting off (was 400ms, which read as barging
+        // straight through), then a stretched transition for the long walk in.
         (function(a2){ setTimeout(function(){
           if(!s.subagents.has(aid)) return;
           a2.zone = 'warroom';
           a2.bubble = pick(TEMP_ARRIVE_LINES);
           chatLog(displayName(a2), a2.bubble, 'arrive');
+          // slow this one move down, then hand them back to normal walking
+          // speed so it only ever affects the entrance
+          const _o = officeEls.get(sid), _t = _o && _o.tokens.get(aid);
+          if(_t){
+            _t.wrap.classList.add('is-entering');
+            setTimeout(function(){ _t.wrap.classList.remove('is-entering'); }, 3400);
+          }
           render();
           // a present staffer ribs the new intern; sometimes they fire back.
           // throttled so a 4-temp surge doesn't turn into a wall of teases.
@@ -1600,7 +1615,7 @@ function handleEvent(evt){
               }
             }, 1400);
           }
-        }, 400); })(target);
+        }, 900); })(target);
         break;
       }
       target.status = 'thinking'; target.zone = 'warroom';
