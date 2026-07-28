@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Widget</title>
+<style>
+/* A compact, self-contained LIVE tile for a home-screen web-page widget.
+   Polls /api/widget and repaints — no external files, so a widget host's
+   WebView renders it standalone. Scales to whatever size the widget host gives. */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;width:100%;overflow:hidden;background:transparent;
+  font-family:ui-monospace,Menlo,Consolas,"Cascadia Mono",monospace;color:#cfd8ea}
+#card{height:100%;width:100%;padding:clamp(8px,4vw,16px);display:flex;flex-direction:column;gap:clamp(4px,1.5vw,9px);
+  background:linear-gradient(160deg,#0f1220 0%,#0a0d18 100%);
+  border:1px solid #232a4a;border-radius:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+#top{display:flex;align-items:center;gap:8px}
+#brand{font-weight:700;letter-spacing:1.5px;color:#7c9eff;font-size:clamp(11px,3.6vw,15px)}
+#dot{width:9px;height:9px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;margin-left:auto;
+  animation:pulse 1.8s ease-in-out infinite}
+#dot.off{background:#e63946;box-shadow:0 0 8px #e63946;animation:none}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+#status{color:#8fa0c5;font-size:clamp(9px,3vw,12px)}
+#big{font-size:clamp(15px,5.5vw,24px);color:#e6ecff;font-weight:700;line-height:1.1}
+#big b{color:#37f5ff}
+.bar{height:clamp(6px,2vw,9px);border-radius:6px;background:#1a2036;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#7c3aed,#37f5ff);transition:width .6s}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:clamp(9px,2.9vw,12px)}
+.row .k{color:#6b7aa5;letter-spacing:1px}
+.row .v{color:#aebbdd}
+.row .v b{color:#37f5b0}
+#warn{color:#ffb347;font-size:clamp(8px,2.6vw,11px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#foot{margin-top:auto;display:flex;justify-content:space-between;font-size:clamp(8px,2.5vw,10px);color:#4a5070}
+.mono-dim{color:#5f6c92}
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="top"><span id="brand">◆ OFFICE</span><span id="dot"></span></div>
+  <div id="big"><b id="online">–</b> <span id="onlineLbl">sessions</span></div>
+  <div id="status">connecting…</div>
+  <div class="bar"><i id="fill" style="width:0%"></i></div>
+  <div class="row"><span class="k">5-HOUR</span><span class="v"><b id="pctLeft">–</b> left · <span id="resets">–</span></span></div>
+  <div class="row"><span class="k">TOKENS</span><span class="v"><span id="tokens">–</span> · <span id="model" class="mono-dim">–</span></span></div>
+  <div id="warn"></div>
+  <div id="foot"><span id="updated">–</span><span class="mono-dim">tap to open</span></div>
+</div>
+<script>
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+function paint(d){
+  $('dot').classList.remove('off');
+  var n = d.online || 0;
+  var working = (d.sessions || []).filter(function(s){ return s.working; }).length;
+  $('online').textContent = n;
+  $('onlineLbl').textContent = n === 1 ? 'session' : 'sessions';
+  $('status').textContent = n === 0 ? 'office empty — standby'
+    : (working + ' working · ' + Math.max(0, n - working) + ' idle');
+  var pl = d.pctLeft != null ? d.pctLeft : 0;
+  $('fill').style.width = pl + '%';
+  $('pctLeft').textContent = pl + '%';
+  $('resets').textContent = d.resetsIn != null ? ('resets ' + d.resetsIn) : '–';
+  $('tokens').innerHTML = '<b>' + (d.blockTokens || '0') + '</b>';
+  $('model').textContent = d.model || '–';
+  $('warn').textContent = d.warning ? '⚠ ' + d.warning : '';
+  var t = new Date();
+  $('updated').textContent = t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function offline(){
+  $('dot').classList.add('off');
+  $('status').textContent = 'officebot offline — start the deck';
+}
+function tick(){
+  fetch('/api/widget', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(paint)
+    .catch(offline);
+}
+// tapping the widget opens the full deck
+document.getElementById('card').addEventListener('click', function(){
+  try{ location.href = '/deck.html'; }catch(e){}
+});
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+{
+  "name": "@cybermu22/officebot",
+  "version": "1.0.17",
+  "description": "A live pixel-art 'office' dashboard for your Claude Code sessions — watch your agents work, delegate, and clock out, with usage tracking. Zero dependencies, fully local. Not affiliated with, endorsed, or sponsored by Anthropic.",
+  "author": "Mumudrummer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cybermumu22/officebot.git"
+  },
+  "homepage": "https://github.com/Cybermumu22/officebot#readme",
+  "bugs": {
+    "url": "https://github.com/Cybermumu22/officebot/issues"
+  },
+  "bin": {
+    "officebot": "cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node cli.js start",
+    "setup": "node cli.js setup",
+    "demo": "node cli.js demo"
+  },
+  "files": [
+    "cli.js",
+    "server.js",
+    "snapshot.js",
+    "demo.js",
+    "public/index.html",
+    "public/avatars.js",
+    "public/manifest.json",
+    "public/sw.js",
+    "public/icon-192.png",
+    "public/icon-512.png",
+    "public/deck.html",
+    "public/deck.webmanifest",
+    "public/deck-icon-192.png",
+    "public/deck-icon-512.png",
+    "public/widget.html",
+    "public/vendor/",
+    "termux-setup.sh",
+    "termux/",
+    "README.md",
+    "ANDROID.md",
+    "ARCHITECTURE.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "dashboard",
+    "hooks",
+    "visualization",
+    "agents",
+    "observability"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}

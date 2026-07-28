@@ -1,0 +1,3332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- interactive-widget=resizes-content: Chrome 108+ shrinks the layout when the
+     soft keyboard opens, so the terminal input line stays visible. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0f1220">
+<link rel="manifest" href="/deck.webmanifest">
+<link rel="icon" href="/deck-icon-192.png">
+<link rel="apple-touch-icon" href="/deck-icon-192.png">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<title>Pocket Deck</title>
+<style>
+/* Bundled coding fonts (offline) — a nicer, softer look than raw terminal mono.
+   All are strictly monospace (xterm needs a fixed grid). */
+@font-face{font-family:'JetBrains Mono';font-weight:400;font-display:swap;src:url('/vendor/fonts/jetbrains-mono-400.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:700;font-display:swap;src:url('/vendor/fonts/jetbrains-mono-700.woff2') format('woff2')}
+@font-face{font-family:'Fira Code';font-weight:400;font-display:swap;src:url('/vendor/fonts/fira-code-400.woff2') format('woff2')}
+@font-face{font-family:'Fira Code';font-weight:700;font-display:swap;src:url('/vendor/fonts/fira-code-700.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:400;font-display:swap;src:url('/vendor/fonts/ibm-plex-mono-400.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:700;font-display:swap;src:url('/vendor/fonts/ibm-plex-mono-700.woff2') format('woff2')}
+/* CLAUDE-pane reading fonts (bundled so every option actually renders on the
+   phone — Android has almost no built-in variety). Comfortaa also makes the
+   pre-existing "Rounded" stack resolve instead of falling through. */
+@font-face{font-family:'Press Start 2P';font-weight:400;font-display:swap;src:url('/vendor/fonts/pixel-400.woff2') format('woff2')}
+@font-face{font-family:'VT323';font-weight:400;font-display:swap;src:url('/vendor/fonts/vt323-400.woff2') format('woff2')}
+@font-face{font-family:'Caveat';font-weight:400;font-display:swap;src:url('/vendor/fonts/caveat-400.woff2') format('woff2')}
+@font-face{font-family:'Lora';font-weight:400;font-display:swap;src:url('/vendor/fonts/lora-400.woff2') format('woff2')}
+@font-face{font-family:'Comfortaa';font-weight:400;font-display:swap;src:url('/vendor/fonts/comfortaa-400.woff2') format('woff2')}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+/* app feel, not website feel: no tap flash, no focus rings, no accidental
+   text selection on chrome (content areas — terminal, chat logs — keep it) */
+*{-webkit-tap-highlight-color:transparent}
+button{outline:none;-webkit-user-select:none;user-select:none}
+#bar,#paneBar,#keybar,#officeHandle,#brand,.tab,.togglerow,.lbl{-webkit-user-select:none;user-select:none}
+.tab span.editing{-webkit-user-select:text;user-select:text}   /* rename needs a caret */
+/* pixel icon set (see pxSvg) — sized per site, colored by the button */
+.pxi{display:block;flex:0 0 auto}
+#brand .pxi{width:12px;height:12px}
+#bar button .pxi{width:14px;height:14px}
+#bar button,#convoAttach{display:inline-flex;align-items:center;justify-content:center}
+#convoAttach .pxi{width:13px;height:18px}
+#paneBar button{display:inline-flex;align-items:center;gap:6px}
+#paneBar button span{font-family:'Press Start 2P',monospace;font-size:7.5px;letter-spacing:.5px}
+#paneBar button .pxi{width:13px;height:11px}
+#keybar button .pxi{width:13px;height:15px;margin:0 auto}
+/* identity colors: each pane icon wears its accent (labels stay neutral) —
+   CLAUDE gets Claude's iconic terracotta, TERMINAL the prompt green, CHAT
+   the office-chat cyan (matching the floating bubble), brand diamond cyan */
+#pbConvo .pxi{color:#d97757}
+#pbTerm .pxi{color:#4ade80}
+#pbChat .pxi{color:#22d3ee}
+#brand .pxi{color:#22d3ee}
+/* the agent figure is taller than the other pane icons — its own box (two ids
+   beat the generic #paneBar button .pxi sizing) */
+#paneBar #pbChat .pxi{width:12px;height:14px}
+/* "Coloured pane labels" toggle: the label text joins its icon's color.
+   A span color beats the .pb-on button color (inheritance loses to a direct
+   rule), so the tint holds on the active pill too. */
+.lbltint #pbTerm span{color:#4ade80}
+.lbltint #pbChat span{color:#22d3ee}
+.lbltint #pbConvo span{color:#d97757}
+#paneBar button.drag{opacity:.85;position:relative;z-index:5;transition:none}
+#app{display:flex;flex-direction:column;height:100dvh}
+
+/* ---- top bar ---- */
+#bar{flex:0 0 44px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#0f1220;border-bottom:1px solid #1e2338}
+#brand{display:inline-flex;align-items:center;gap:7px;font-family:'Press Start 2P',monospace;
+  font-size:9px;letter-spacing:1px;color:#7c9eff;white-space:nowrap}
+#tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:#141830;color:#8fa0c5;border:1px solid #1e2338;font-family:'VT323',ui-monospace,monospace;font-size:17px;letter-spacing:.5px;cursor:pointer}
+.tab.active{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
+.tab .x{opacity:.55;padding:0 2px;font-size:13px}
+.tab .x.arm{opacity:1;color:#ff9db1;font-weight:700}
+.tab span.editing{outline:1px solid #4d5fa5;border-radius:3px;padding:0 3px;background:#0b0e17;min-width:20px}
+.tab.closing{background:#2a1d24;border-color:#7a2f42;color:#ff9db1}
+.tab.closing span{animation:tabClosingPulse 1.1s ease-in-out infinite}
+@keyframes tabClosingPulse{0%,100%{opacity:.55}50%{opacity:1}}
+#bar button{flex:0 0 auto;width:32px;height:32px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #1e2338;font-size:15px;cursor:pointer}
+.layout-split #flipBtn{display:none}
+
+/* ---- panes ---- */
+#main{flex:1;display:flex;flex-direction:column;min-height:0}
+#officePane{display:flex;flex-direction:column;min-height:0;min-width:0;background:#000;position:relative}
+#officeHandle{display:none;flex:0 0 30px;align-items:center;gap:8px;padding:0 10px;background:#0f1220;border-bottom:1px solid #1e2338;color:#7c9eff;font-family:'Press Start 2P',monospace;font-size:7.5px;letter-spacing:1px;cursor:pointer;user-select:none}
+#office{flex:1;border:0;width:100%;background:#000}
+#termPane{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;background:#0b0e17}
+#xtermHost{flex:1;min-height:0;padding:2px 0 0 4px}
+#xtermHost .xterm{height:100%}
+/* invisible IME bridge for direct typing (typing bar OFF): the soft keyboard
+   edits this offscreen textarea natively — predictions, swipe and revisions
+   all behave — and the diff engine streams the edits into the pty */
+#dtBridge{position:absolute;left:6px;bottom:6px;width:2px;height:2px;opacity:0;
+  border:0;padding:0;resize:none;background:transparent;color:transparent;
+  caret-color:transparent;font-size:16px;pointer-events:none;overflow:hidden}
+#ttydFrame{flex:1;border:0;width:100%;background:#000}
+
+/* flip: one pane at a time, whole screen each */
+.layout-flip #officePane{display:none}
+.layout-flip.show-office #officePane{display:flex;flex:1}
+.layout-flip.show-office #stack{display:none}
+/* split + collapsible: office above (beside, in landscape), terminal fills the rest */
+.layout-split #officePane,.layout-collapse #officePane{flex:0 0 var(--office-size,38%)}
+.layout-collapse #officeHandle{display:flex}
+.layout-collapse.collapsed #officePane{flex:0 0 30px}
+.layout-collapse.collapsed #office{display:none}
+@media (orientation:landscape){
+  .layout-split #main,.layout-collapse #main{flex-direction:row}
+  .layout-split #officePane,.layout-collapse #officePane{border-right:1px solid #1e2338}
+  /* collapsed sideways: thin vertical strip, arrow only */
+  .layout-collapse.collapsed #officeHandle{writing-mode:vertical-rl;flex:1;padding:10px 0;justify-content:flex-start}
+}
+/* The soft keyboard no longer changes the layout. The old .kbd-open rule that
+   hid the office in the split/collapse layouts while typing fought the user's
+   chosen layout (office vanished + slid back on every keyboard show/hide), so
+   it was removed — .kbd-open / .kbd-bars now have zero CSS consumers. */
+
+/* ---- office chat: bottom-panel (Scuttlebutt) mode. The old floating
+   overlay (#chatFab/#chatOv) was removed — redundant with the Scuttlebutt
+   pane below. ---- */
+/* shared chat feed styling — natural top-to-bottom order, size is user-set */
+.chatlog{flex:1;min-height:0;overflow-y:auto;
+  padding:2px 10px 8px;font:var(--chat-fs,11px)/1.5 ui-monospace,Menlo,Consolas,monospace}
+.chatlog .cline{word-break:break-word;margin-top:4px}
+.chatlog .t{color:#4a5070;margin-right:5px}
+.chatlog .who{margin-right:5px}
+.chatlog .cline-more{display:none}
+.chatlog .k-speech .who{color:#22d3ee}   .chatlog .k-speech .txt{color:#e2e4f0}
+.chatlog .k-prompt .who{color:#f59e0b}   .chatlog .k-prompt .txt{color:#e8d5a8}
+.chatlog .k-delegate .who{color:#a78bfa} .chatlog .k-delegate .txt{color:#cfc3f7}
+.chatlog .k-arrive .who,.chatlog .k-handback .who{color:#10b981}
+.chatlog .k-arrive .txt,.chatlog .k-handback .txt{color:#9fdec4}
+.chatlog .k-error .who{color:#e63946}    .chatlog .k-error .txt{color:#f3a7ae}
+.chatlog .k-status .who{color:#7c8ab0}   .chatlog .k-status .txt{color:#6b7094}
+.chatlog .k-banter .who{color:#8890b8}   .chatlog .k-banter .txt{color:#7d84ad;font-style:italic}
+/* bottom-panel switcher: TERMINAL <-> CHAT <-> CONVO */
+#stack{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0}
+.layout-flip.show-office #stack{display:none}
+#paneBar{display:none;flex:0 0 30px;align-items:center;gap:4px;padding:0 6px;background:#0f1220;border-bottom:1px solid #1e2338}
+.layout-split #paneBar,.layout-collapse #paneBar{display:flex}
+/* flip layout gets the bar too (show-term only) — CONVO must be reachable in
+   every layout; #stack is display:none in show-office so this can't leak */
+.layout-flip.show-term #paneBar{display:flex}
+/* Manual chat fullscreen (#pbMax toggle → S.chatMax → .chatmax on #app): hide
+   the top bar and the office so the bottom stack (CLAUDE / SCUTTLEBUTT /
+   TERMINAL) gets the whole screen. The toggle itself lives in the CLAUDE
+   composer now (beside attach), so it's only present on the CLAUDE panel —
+   but #paneBar stays visible in every layout, so the way back out is always
+   to switch to CLAUDE and toggle it off there. Replaces the old automatic
+   "big chat while typing" keyboard-driven hide, which users found jarring.
+   MUST sit AFTER the #officePane layout rules above — equal specificity, so
+   source order is what lets the hide win. */
+.chatmax #bar{display:none}
+.chatmax #officePane{display:none}
+#paneBar button{flex:0 0 auto;padding:4px 8px;border-radius:12px;background:transparent;color:#6b7aa5;border:1px solid transparent;font-size:11px;letter-spacing:1px;cursor:pointer}
+#paneBar button.pb-on{background:#1d2440;color:#e6ecff;border-color:#3b4a7a}
+/* right-hand shortcut cluster: spacer pushes the icon buttons to the end
+   (order:8+ keeps them past the reorderable pane buttons, which use 0–2) */
+#paneBar .pb-spacer{flex:1;order:8}
+#paneBar button.pb-icon{order:9;flex:0 0 auto;padding:3px 5px;min-width:0;color:#8fa0c5}
+#paneBar button.pb-icon:last-child{order:10}
+#paneBar button.pb-icon .pxi{width:14px;height:14px;display:block}
+#paneBar button.pb-icon:active{background:#141830;border-color:#2a3560}
+#pbReload .pxi{color:#5ec9ff}
+#pbGear .pxi{color:#a9b6d8}
+/* fullscreen-chat toggle — relocated into the CLAUDE composer, beside the
+   attach button. Styled to match #convoAttach's round icon button. Active
+   (S.chatMax) = accent tint + an arrows-in icon, both synced in applyLayout
+   via .cv-on / the PX.compress swap. */
+#pbMax{display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:50%;background:transparent;color:#aebbdd;
+  border:1px solid transparent;cursor:pointer;
+  transition:transform .12s ease,background .15s ease,color .15s ease,border-color .15s ease}
+#pbMax .pxi{width:16px;height:16px}
+#pbMax:active{transform:scale(.92)}
+#pbMax.cv-on{background:rgba(55,245,255,.12);color:var(--cv-accent,#37f5ff);border-color:rgba(55,245,255,.42)}
+/* very narrow phones: shrink the pixel labels so the shortcuts still fit */
+@media(max-width:400px){
+  #paneBar button span{font-size:6.5px}
+  #paneBar button{padding:4px 6px}
+  #paneBar{gap:3px}
+}
+#chatPane{display:none;flex:1;min-height:0;flex-direction:column;background:#0b0e17}
+#chatPane .chatlog{padding:8px 12px}
+.bp-chat #termPane,.bp-convo #termPane{display:none}
+.bp-chat #chatPane{display:flex}
+.bp-convo #convoPane{display:flex}
+
+/* ---- CONVO pane: liquid-glass chat with Claude ---- */
+#convoPane{display:none;flex:1;min-height:0;flex-direction:column;position:relative;
+  background:linear-gradient(160deg,#0b0e17 0%,#0e1322 55%,#101326 100%)}
+#convoLog{flex:1;min-height:0;overflow-y:auto;padding:12px 10px 8px;
+  font-size:calc(var(--chat-fs,11px) + 3px);line-height:1.5;
+  font-family:var(--cv-ff,system-ui,-apple-system,sans-serif);
+  display:flex;flex-direction:column;gap:8px}
+.cvmsg{max-width:86%;padding:9px 12px;border-radius:16px;white-space:pre-wrap;
+  word-break:break-word;position:relative;
+  -webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 16px rgba(0,0,0,.35)}
+.cv-user{align-self:flex-end;border-bottom-right-radius:5px;color:var(--cvu-fg,#f2e3bd);
+  background:linear-gradient(150deg,var(--cvu-a,rgba(245,158,11,.20)),var(--cvu-b,rgba(180,110,20,.10)));
+  border-color:var(--cvu-bd,rgba(245,158,11,.28))}
+.cv-asst{align-self:flex-start;border-bottom-left-radius:5px;color:var(--cva-fg,#dbe7f5);
+  background:linear-gradient(150deg,var(--cva-a,rgba(55,180,245,.14)),var(--cva-b,rgba(60,80,160,.10)));
+  border-color:var(--cva-bd,rgba(120,160,255,.22))}
+.cv-pending{opacity:.55}
+.cv-pending.cv-sent{opacity:1}
+/* a send whose bytes never reached the terminal (still queued when the delivery
+   watch timed out) — reddish + tappable to re-attempt. See _cvMarkFailed/_cvFire */
+.cv-failed{opacity:1;border-color:rgba(230,57,70,.6);border-style:dashed;cursor:pointer}
+.cv-failed .cvbody::after{content:'⚠ not delivered — tap to retry';display:block;margin-top:5px;
+  font-size:9px;letter-spacing:.3px;color:#f3a7ae;opacity:.92}
+/* dialog-action echoes: your answer to a prompt, styled quieter than a real
+   message (it lives only in this view — dialog answers aren't transcript) */
+.cv-dlg{font-size:.9em;font-style:italic;opacity:.85;border-style:dashed}
+.cvts{display:block;font-size:9px;opacity:.45;margin-top:4px;text-align:right}
+.cvfoot{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:4px}
+.cvfoot .cvts{margin-top:0}
+.cv-copy{background:none;border:none;color:inherit;opacity:.45;font-size:13px;
+  padding:2px 6px;cursor:pointer;line-height:1}
+.cv-copy:active{opacity:1}
+.cvmsg pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px;margin:6px 0;
+  font:calc(var(--chat-fs,11px) + 1px)/1.45 ui-monospace,Menlo,Consolas,monospace}
+.cvmsg code{background:rgba(0,0,0,.30);border-radius:4px;padding:1px 5px;
+  font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace}
+.cvmsg .cvh{display:block;font-weight:700;margin:4px 0 2px}
+.cv-note{align-self:center;font-size:11px;color:#5f6c92;font-style:italic;padding:8px}
+/* buttery pop-in: transform+opacity only, spring overshoot, blooms from its corner */
+.cv-in{animation:cvPop .32s cubic-bezier(.34,1.56,.64,1) both}
+.cv-user.cv-in{transform-origin:100% 100%}
+.cv-asst.cv-in{transform-origin:0 100%}
+@keyframes cvPop{0%{opacity:0;transform:scale(.86) translateY(10px)}100%{opacity:1;transform:none}}
+#convoTicker{flex:0 0 auto;padding:5px 14px;font-size:11px;font-style:italic;color:#7d9ac9;
+  background:rgba(20,26,48,.5);border-top:1px solid #171c30;animation:cvTick 1.6s ease-in-out infinite}
+@keyframes cvTick{0%,100%{opacity:.55}50%{opacity:1}}
+#convoTicker .cv-star{display:inline-block;font-style:normal;color:#c9a6ff;
+  animation:cvStar 2.4s linear infinite}
+@keyframes cvStar{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+#convoTicker .cv-word{color:#bcd0f7;display:inline-block;
+  transition:opacity .2s ease,transform .2s ease}
+#convoTicker .cv-meta{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion: reduce){
+  #convoTicker .cv-star,#convoTicker .cv-word{animation:none}
+}
+/* The dialog card and the ⚡ options sheet FLOAT over the log as bottom
+   sheets (anchored above the composer, JS keeps --cv-dock current). As flex
+   strips they stacked with ticker+composer and, on a split-layout phone,
+   swallowed the whole chat area — a permission prompt left "nothing visible"
+   (confirmed by screenshot). max-height + internal scroll keeps even long
+   option lists inside the pane; the glass blur keeps the log readable
+   underneath. */
+#convoCard{position:fixed;left:8px;right:8px;bottom:var(--cv-dock,150px);z-index:30;
+  max-height:62vh;overflow-y:auto;margin:0;padding:10px 12px;border-radius:14px;
+  -webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);
+  background:linear-gradient(150deg,rgba(124,58,237,.22),rgba(30,24,66,.55));
+  border:1px solid rgba(160,120,255,.30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 16px rgba(0,0,0,.4);
+  animation:cvPop .32s cubic-bezier(.34,1.56,.64,1) both;transform-origin:50% 100%}
+#convoCard .cvhead{display:flex;align-items:flex-start;gap:8px}
+#convoCard .cvq{flex:1;font-size:12px;color:#d9ccff;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+#convoCard .cvmin{flex:0 0 auto;width:26px;height:26px;border-radius:8px;background:rgba(20,24,48,.7);
+  color:#9fb0d5;border:1px solid #232a4a;font-size:14px;line-height:1;cursor:pointer;padding:0}
+/* minimised: a one-line pill you can tap to re-expand — the question stays
+   reachable without blocking the view */
+#convoCard.min{cursor:pointer;opacity:.92;overflow:hidden}
+#convoCard.min .cvpre,#convoCard.min .cvopt,#convoCard.min .cvkeys{display:none}
+#convoCard.min .cvq{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#convoCard.min .cvmin{display:none}
+#convoCard .cvpre{font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c4d2ef;
+  background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);border-radius:8px;
+  padding:8px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+#convoCard .cvopt{display:block;width:100%;text-align:left;margin-top:6px;padding:9px 12px;border-radius:10px;
+  background:rgba(29,36,64,.75);color:#e6ecff;border:1px solid #3b4a7a;font-size:13px;cursor:pointer}
+#convoCard .cvopt:active{background:#2a3560}
+#convoCard .cvopt .cvod{display:block;font-size:11px;opacity:.6;margin-top:2px;font-weight:400}
+#convoCard .cvsubmit{border-color:#37f5ff;color:#bff4ff;text-align:center;font-weight:600;margin-top:10px}
+#convoCard .cvkeys{display:flex;gap:6px;margin-top:8px}
+#convoCard .cvkeys button{flex:1;padding:6px 0;border-radius:8px;background:rgba(20,24,48,.7);
+  color:#9fb0d5;border:1px solid #232a4a;font-size:12px;cursor:pointer}
+#convoBar{flex:0 0 auto;display:flex;flex-direction:column;
+  margin:6px 8px calc(8px + env(safe-area-inset-bottom));padding:10px 12px 10px;border-radius:22px;
+  background-color:rgba(22,27,50,.60);
+  background-image:var(--cvbar-bg,none);
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);
+  border:1px solid var(--cvbar-bd,rgba(130,150,225,.28));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 6px 20px rgba(0,0,0,.40)}
+#convoBar:focus-within{border-color:#5a6faf}
+#convoText{width:100%;min-height:44px;max-height:140px;resize:none;padding:2px 2px 8px;
+  background:transparent;color:#e2e6f5;border:none;font:15px/1.45 system-ui,sans-serif;outline:none}
+#cvChips{display:flex;gap:8px;flex-wrap:wrap}
+#cvChips:not(:empty){padding:0 0 8px}
+.cv-chip{position:relative;width:52px;height:52px;border-radius:10px;overflow:hidden;
+  border:1px solid rgba(130,150,225,.35);background:#0b0e17}
+.cv-chip img{width:100%;height:100%;object-fit:cover;display:block}
+.cv-chip button{position:absolute;top:1px;right:1px;width:18px;height:18px;border-radius:50%;
+  background:rgba(0,0,0,.65);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;padding:0}
+#convoBtns{display:flex;align-items:center;gap:10px}
+.cv-spacer{flex:1}
+#cvOpts{padding:8px 14px;border-radius:18px;font-size:12px;font-weight:600;letter-spacing:.3px;
+  color:#e6ecff;background:rgba(12,15,30,.85);border:1px solid rgba(130,150,225,.30);cursor:pointer;
+  max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#convoAttach{width:38px;height:38px;border-radius:50%;background:transparent;color:#aebbdd;
+  border:none;font-size:18px;cursor:pointer}
+#convoSend{width:40px;height:40px;border-radius:50%;
+  background:var(--cv-accent,#37f5ff);color:#0b0e17;
+  border:none;font-size:17px;font-weight:700;cursor:pointer;
+  box-shadow:0 2px 10px var(--cv-accent-glow,rgba(55,245,255,.35));
+  transition:transform .12s ease,box-shadow .2s ease}
+#convoSend:disabled,#convoAttach:disabled,#cvOpts:disabled{opacity:.35}
+/* buttons feel like buttons: no Android tap-highlight or text selection,
+   squish on press, springy pop on release */
+#convoPane button,#convoBar button,#inputBar button,#keybar button{
+  -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+#convoSend:active{transform:scale(.84)}
+#cvOpts,#convoAttach{transition:transform .12s ease}
+#cvOpts:active,#convoAttach:active{transform:scale(.92)}
+/* ⚡ pill: pixel-art SVG bolt (not the emoji) + press/loading animations */
+#cvOpts{display:inline-flex;align-items:center;gap:7px}
+#cvOpts .cvbolt{width:11px;height:16px;flex:0 0 auto;color:var(--cv-accent,#37f5ff);
+  filter:drop-shadow(0 0 3px var(--cv-accent-glow,rgba(55,245,255,.35)))}
+#cvOpts .cvopt-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cvOpts.pop{animation:cvBtnPop .38s cubic-bezier(.34,1.8,.5,1)}
+/* press: a quick dim ripple sweeps pixel-by-pixel through the icon. Total
+   run (delays + duration) MUST stay under cvBtnPop's .38s — the pop's
+   animationend removes the class, which cancels any ripple still going. */
+#cvOpts.pop .cvbolt rect{animation:cvPixFlash .18s ease both;animation-delay:calc(var(--i)*7ms)}
+@keyframes cvPixFlash{0%{opacity:1}35%{opacity:.15}100%{opacity:1}}
+/* loading — a picked option is waiting for the terminal to confirm: a smooth
+   wave keeps flowing through the pixels until the real state lands. Declared
+   AFTER the press rules so busy wins while both classes are on. */
+#cvOpts.busy .cvbolt rect{animation:cvPixWave 1.05s ease-in-out infinite;animation-delay:calc(var(--i)*48ms)}
+/* ➤ send buttons, both composers: same pixel treatment (SVG injected at boot;
+   fill inherits each button's own icon color) */
+#convoSend,#inputSend{display:inline-flex;align-items:center;justify-content:center}
+.cvarrow{width:17px;height:17px;display:block}
+#convoSend.pop .cvarrow rect,#inputSend.pop .cvarrow rect{animation:cvPixFlash .18s ease both;animation-delay:calc(var(--i)*7ms)}
+/* CONVO send waves while a sent message is still unconfirmed (.cv-pending) */
+#convoSend.busy .cvarrow rect{animation:cvPixWave 1.05s ease-in-out infinite;animation-delay:calc(var(--i)*40ms)}
+@keyframes cvPixWave{0%,100%{opacity:1}50%{opacity:.16}}
+#convoCard .cvopt:active,#convoPick .cvopt:active,#convoPick .cv-optrow button:active{transform:scale(.985)}
+#convoSend.pop,#inputSend.pop{animation:cvBtnPop .38s cubic-bezier(.34,1.8,.5,1)}
+@keyframes cvBtnPop{0%{transform:scale(.84)}55%{transform:scale(1.14) rotate(6deg)}80%{transform:scale(.97) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
+@media (prefers-reduced-motion: reduce){ #convoSend.pop,#inputSend.pop,#cvOpts.pop,#cvOpts.pop .cvbolt rect,#cvOpts.busy .cvbolt rect,#convoSend.pop .cvarrow rect,#inputSend.pop .cvarrow rect,#convoSend.busy .cvarrow rect{animation:none} }
+/* combined options sheet rows */
+#convoPick .cv-optrow{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+#convoPick .cv-optrow button{flex:1 1 auto;min-width:64px;padding:8px 10px;border-radius:10px;
+  background:rgba(29,36,64,.75);color:#e6ecff;border:1px solid #3b4a7a;font-size:12px;cursor:pointer}
+#convoPick .cv-optrow button.sel{border-color:#37f5ff;color:#bff4ff}
+#convoPick .cv-optlbl{font-size:10px;letter-spacing:1px;color:#7c9eff;text-transform:uppercase}
+@media (prefers-reduced-motion: reduce){
+  .cv-in,#convoCard{animation:none}
+  #convoTicker{animation:none;opacity:.8}
+}
+/* CONVO composer card — app-style: text on top, controls in the card's
+   bottom row (⚡ options pill · 📎 attach · ➤ send). Enter = newline;
+   ONLY the arrow sends. */
+#convoPick{position:fixed;left:8px;right:8px;bottom:var(--cv-dock,150px);z-index:30;
+  max-height:62vh;overflow-y:auto;margin:0;padding:10px 12px;border-radius:14px;
+  -webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);
+  background:linear-gradient(150deg,rgba(55,180,245,.18),rgba(24,34,66,.60));
+  border:1px solid rgba(120,160,255,.30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 16px rgba(0,0,0,.4);
+  animation:cvPop .32s cubic-bezier(.34,1.56,.64,1) both;transform-origin:50% 100%}
+#convoPick .cvq{font-size:12px;color:#cfe3ff;margin-bottom:6px}
+#convoPick .cvopt{display:block;width:100%;text-align:left;margin-top:6px;padding:9px 12px;border-radius:10px;
+  background:rgba(29,36,64,.75);color:#e6ecff;border:1px solid #3b4a7a;font-size:13px;cursor:pointer}
+#convoPick .cvopt.sel{border-color:#37f5ff;color:#bff4ff}
+/* settings drawer: CONVO bubble tint swatches */
+.cv-swrow{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.cv-swrow span{font-size:12px;color:#9fb0d5}
+.cv-swatches{display:flex;gap:8px}
+.cv-swatches button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.cv-swatches button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+
+/* ---- connection pill ---- */
+#conn{position:absolute;top:6px;right:10px;z-index:5;padding:3px 10px;border-radius:12px;font-family:'VT323',monospace;font-size:15px;letter-spacing:.5px;background:#3b1d24;color:#ff9db1;border:1px solid #7a2f42;cursor:pointer}
+#conn.ok{background:#12301f;color:#7ce6a8;border-color:#1f7a4a}
+#conn.hidden{display:none}
+
+/* ---- smooth typing bar (native input: autocorrect/swipe work properly) ---- */
+#inputBar{display:none;flex:0 0 auto;align-items:flex-end;gap:6px;padding:6px 8px;background:#0f1220;border-top:1px solid #1e2338}
+.inputbar-on #inputBar{display:flex}
+#inputText{flex:1;min-height:40px;max-height:120px;resize:none;padding:10px 12px;border-radius:12px;background:#141830;color:#e2e6f5;border:1px solid #2a3560;font:15px/1.4 system-ui,sans-serif;outline:none}
+#inputText:focus{border-color:#3b4a7a}
+#inputSend{flex:0 0 auto;width:44px;height:40px;border-radius:12px;background:#1d2440;color:#37f5ff;border:1px solid #3b4a7a;font-size:17px;cursor:pointer}
+.engine-ttyd #inputBar{display:none}
+
+/* ---- key bar ---- */
+#keybar{flex:0 0 auto;display:flex;gap:4px;padding:4px 6px calc(4px + env(safe-area-inset-bottom));overflow-x:auto;background:#0f1220;border-top:1px solid #1e2338;scrollbar-width:none}
+#keybar::-webkit-scrollbar{display:none}
+#keybar button{flex:0 0 auto;min-width:38px;height:34px;padding:0 9px;border-radius:6px;background:#141830;color:#aebbdd;border:1px solid #232a4a;font-size:16px;font-family:'VT323',ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+#keybar button.on{background:#2a3560;color:#fff;border-color:#4d5fa5}
+.keybar-off #keybar{display:none}
+.engine-ttyd #keybar{display:none}
+.engine-ttyd #xtermHost{display:none}
+
+/* ---- settings drawer ---- */
+#backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40}
+#settings{position:fixed;top:0;right:0;bottom:0;width:min(320px,86vw);z-index:41;background:#0f1220;border-left:1px solid #263056;padding:16px 14px;overflow-y:auto}
+#settings h2{font-size:13px;letter-spacing:2px;color:#7c9eff;margin-bottom:14px}
+#settings .sec{margin-bottom:16px}
+#settings .lbl{font-family:'Press Start 2P',monospace;font-size:7px;letter-spacing:1px;color:#6b7aa5;margin-bottom:7px;text-transform:uppercase}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:70px;padding:8px 6px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:12px;cursor:pointer}
+.seg button.on{background:#1d2440;color:#e6ecff;border-color:#4d5fa5}
+/* font picker: each option previews ITSELF (a native <select> can't — Android
+   ignores option styling in its system picker) */
+#cvFontGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#cvFontGrid button{font-size:14px;min-height:40px}
+.tab.drag{opacity:.85;z-index:5;position:relative;transition:none}
+.rowset{display:flex;align-items:center;gap:10px}
+.rowset button{width:34px;height:34px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:16px;cursor:pointer}
+.rowset .val{min-width:34px;text-align:center;font-size:13px}
+.togglerow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #171c30;font-size:13px}
+.togglerow input{width:18px;height:18px;accent-color:#4d5fa5}
+#settings input[type=range]{width:100%;accent-color:#4d5fa5}
+#settings input[type=number]{width:90px;padding:7px;border-radius:6px;background:#141830;color:#cfd8ea;border:1px solid #232a4a;font-size:13px}
+.calrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px}
+.calrow span{font-size:12px;color:#9fb0d5}
+.calrow input[type=number]{width:82px;text-align:right}
+#settings .note{font-size:11px;color:#5f6c92;margin-top:6px;line-height:1.5}
+#settings .actions{display:flex;gap:8px;margin-top:18px}
+#settings .actions button{flex:1;padding:10px;border-radius:6px;background:#1d2440;color:#e6ecff;border:1px solid #3b4a7a;font-size:13px;cursor:pointer}
+/* sessions cleanup (settings drawer) */
+.sess-refresh{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;margin-left:6px;vertical-align:middle;border:1px solid #232a4a;border-radius:5px;background:#141830;color:#8fa0c5;cursor:pointer}
+.sess-refresh .pxi{width:11px;height:11px;display:block}
+.sess-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #171c30}
+.sess-info{min-width:0;flex:1}
+.sess-name{font-size:12px;color:#cfd8ea;word-break:break-all}
+.sess-tag{color:#7c9eff}
+.sess-orphan{color:#f0b366}
+.sess-meta{font-size:10.5px;color:#5f6c92;margin-top:2px}
+.sess-close{flex:0 0 auto;padding:6px 10px;border-radius:6px;background:#2a1622;color:#f8a0a0;border:1px solid #5a2740;font-size:11px;cursor:pointer}
+/* stale-session banner (top of app, under the header) */
+#staleBanner{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#241a12;border-bottom:1px solid #5a3f24;color:#f0c9a0;font-size:12px}
+#staleBanner #staleMsg{flex:1;min-width:0;line-height:1.4}
+#staleBanner button{flex:0 0 auto;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #6b4a2a;background:#33240f;color:#f4d3a6}
+#staleBanner #staleDismiss{padding:6px 9px;color:#c9a06a}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="app" class="layout-flip show-term">
+  <header id="bar">
+    <span id="brand">◆ DECK</span>
+    <nav id="tabs"></nav>
+    <button id="addTab" title="New tab">+</button>
+    <button id="flipBtn" title="Terminal / Office">⇄</button>
+    <button id="gearBtn" title="Settings">⚙</button>
+  </header>
+  <div id="staleBanner" class="hidden">
+    <span id="staleMsg"></span>
+    <button id="staleCleanup">Clean up</button>
+    <button id="staleDismiss" title="Dismiss">×</button>
+  </div>
+  <div id="main">
+    <div id="officePane">
+      <div id="officeHandle"><span id="officeArrow">▾</span> THE OFFICE</div>
+      <iframe id="office" src="/" title="Office viewer"></iframe>
+    </div>
+    <div id="stack">
+      <div id="paneBar">
+        <button id="pbTerm">⌨ TERMINAL</button>
+        <button id="pbChat">💬 CHAT</button>
+        <button id="pbConvo">🗨 CLAUDE</button>
+        <span class="pb-spacer"></span>
+        <button id="pbReload" class="pb-icon" title="Reload the deck (after updates)"></button>
+        <button id="pbGear" class="pb-icon" title="Settings"></button>
+      </div>
+      <div id="termPane">
+        <div id="xtermHost"></div>
+        <div id="conn" class="hidden"></div>
+        <textarea id="dtBridge" rows="1" autocomplete="on" autocapitalize="none" enterkeyhint="send" aria-hidden="true" tabindex="-1"></textarea>
+        <div id="inputBar">
+          <textarea id="inputText" rows="1" placeholder="Type here — ⏎ sends" autocomplete="on" autocapitalize="sentences" enterkeyhint="send"></textarea>
+          <button id="inputSend" title="Send">➤</button>
+        </div>
+        <div id="keybar"></div>
+      </div>
+      <div id="chatPane"><div id="chatPaneLog" class="chatlog"></div></div>
+      <div id="convoPane">
+        <div id="convoLog"></div>
+        <div id="convoTicker" class="hidden"></div>
+        <div id="convoCard" class="hidden"></div>
+        <div id="convoPick" class="hidden"></div>
+        <div id="convoBar">
+          <textarea id="convoText" rows="1" placeholder="Message Claude…" autocomplete="on" autocapitalize="sentences"></textarea>
+          <div id="cvChips"></div>
+          <div id="convoBtns">
+            <button id="cvOpts" title="Model · effort · mode">—</button>
+            <span class="cv-spacer"></span>
+            <button id="convoAttach" title="Attach image">📎</button>
+            <button id="pbMax" title="Fullscreen chat"></button>
+            <button id="convoSend" title="Send">➤</button>
+          </div>
+          <input type="file" id="cvFile" accept="image/*" multiple class="hidden">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="backdrop" class="hidden"></div>
+<aside id="settings" class="hidden">
+  <h2>POCKET DECK — SETTINGS</h2>
+  <div class="sec"><div class="lbl">Layout</div>
+    <div class="seg" id="segLayout">
+      <button data-v="flip">Flip</button>
+      <button data-v="split">Split</button>
+      <button data-v="collapse">Collapsible</button>
+    </div>
+    <div class="note">Flip: one full screen at a time (⇄ swaps). Split: office above the terminal. Collapsible: split, but the office folds to a strip.</div>
+  </div>
+  <div class="sec"><div class="lbl">Office pane size</div>
+    <input type="range" id="rngSplit" min="25" max="60" step="1">
+  </div>
+  <div class="sec"><div class="lbl">Terminal font</div>
+    <div class="seg" id="segFont">
+      <button data-v="jetbrains">JetBrains</button>
+      <button data-v="fira">Fira Code</button>
+      <button data-v="plex">IBM Plex</button>
+      <button data-v="system">System</button>
+    </div>
+    <div id="fontPreview" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#0b0e17;border:1px solid #232a4a;font-size:13px;color:#9fe0c0;white-space:pre;overflow-x:auto">const ok = (a) =&gt; a !== null;  // 0O1lI</div>
+  </div>
+  <div class="sec"><div class="lbl">Terminal font size</div>
+    <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
+  </div>
+  <div class="sec"><div class="lbl">Chat text size</div>
+    <div class="rowset"><button id="chatMinus">−</button><span class="val" id="chatVal"></span><button id="chatPlus">+</button></div>
+    <div class="note">Scales the agent chat AND the CLAUDE-pane bubbles.</div>
+  </div>
+  <div class="sec"><div class="lbl">Claude font</div>
+    <div class="seg" id="cvFontGrid"></div>
+    <div class="note">Each option shows its own look. If two look identical, the phone lacks that font — Lora, Handwriting, Arcade, Retro and the three monos ship with the deck, so they always work.</div>
+  </div>
+  <div class="sec"><div class="lbl">Claude bubbles</div>
+    <div class="cv-swrow"><span>You</span><div class="cv-swatches" id="swMe"></div></div>
+    <div class="cv-swrow"><span>Claude</span><div class="cv-swatches" id="swAi"></div></div>
+    <div class="cv-swrow"><span>Input box</span><div class="cv-swatches" id="swBox"></div></div>
+  </div>
+  <div class="sec">
+    <label class="togglerow">Smooth typing bar<input type="checkbox" id="chkInputBar"></label>
+    <div class="note">On = compose in a box, whole line sends at once. Off = type straight into the terminal — predictions and swipe still work (an invisible bridge streams them in live).</div>
+    <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
+    <label class="togglerow">Coloured pane labels<input type="checkbox" id="chkTintLabels"></label>
+    <div class="note">TERMINAL / CHAT / CLAUDE text in their icon's colour. Off = neutral text, coloured icons only.</div>
+    <label class="togglerow">Keep screen awake<input type="checkbox" id="chkAwake"></label>
+    <label class="togglerow">Notify when Claude asks<input type="checkbox" id="chkNotify"></label>
+    <div class="note">While the app is hidden, approval prompts become notifications with Approve / Deny buttons — they answer the terminal directly.</div>
+    <label class="togglerow">Allow auto-rotate<input type="checkbox" id="chkRotate"></label>
+    <div class="note" id="rotateNote">Off = the deck stays portrait.</div>
+  </div>
+  <div class="sec"><div class="lbl">Terminal engine</div>
+    <div class="seg" id="segEngine">
+      <button data-v="pocket">Pocket</button>
+      <button data-v="ttyd">ttyd page</button>
+    </div>
+    <div class="note">Pocket is the built-in terminal (key bar, tabs, auto-reconnect). "ttyd page" embeds ttyd's own UI — fallback if Pocket misbehaves.</div>
+  </div>
+  <div class="sec"><div class="lbl">Terminal port</div>
+    <input type="number" id="numPort" min="1" max="65535">
+    <div class="note">Where ttyd listens (deck-start uses 7681). Closing a tab (tap ✕, then "end?") ENDS its session. Leaving the app or switching tabs only detaches — sessions keep running.</div>
+  </div>
+  <div class="sec"><div class="lbl">Usage % — calibrate</div>
+    <div class="note">A fresh install can't work out a weekly % on its own — that needs weeks of history. Open Claude's <b>/usage</b>, read your real percentages, and type them here; the monitor panels anchor to them straight away. Leave any field blank to skip it.</div>
+    <div class="calrow"><span>Weekly used %</span><input type="number" id="calWeek" min="0" max="100" step="1" inputmode="numeric" placeholder="e.g. 42"></div>
+    <div class="calrow"><span>Fable used %</span><input type="number" id="calFable" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
+    <div class="calrow"><span>Weekly resets in (days)</span><input type="number" id="calWeekDays" min="1" max="7" step="1" inputmode="numeric" placeholder="optional"></div>
+    <div class="calrow"><span>5-hour used %</span><input type="number" id="calFive" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
+    <div class="calrow"><span>5-hour resets in (min)</span><input type="number" id="calFiveMins" min="1" max="300" step="1" inputmode="numeric" placeholder="optional"></div>
+    <div class="rowset" style="margin-top:9px;gap:8px"><button id="btnCalSave" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Save calibration</button><button id="btnCalClear" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Clear</button></div>
+    <div class="note" id="calStatus"></div>
+    <div class="note" style="margin-top:11px">Or pull the real numbers straight from Claude — needs the usage poller running on a device (the phone does; a bare desktop doesn't).</div>
+    <div class="rowset" style="margin-top:6px"><button id="btnUsageRefresh" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">↻ Refresh real usage now</button></div>
+    <div class="note" id="usagePokeStatus"></div>
+  </div>
+  <div class="sec"><div class="lbl">Sessions<button id="sessRefresh" class="sess-refresh" title="Refresh session list"></button></div>
+    <div class="note">Each tab runs as a tmux session that keeps its Claude alive in the background. Closing the app mid-farewell can leave one running with no tab ("orphan"). Review and close them here.</div>
+    <div id="sessList"></div>
+    <div class="rowset" style="margin-top:9px"><button id="btnCloseStale" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Close all stale</button></div>
+    <div class="note">Stale = detached and idle 12h+ (never the current tab).</div>
+  </div>
+  <div class="actions">
+    <button id="btnReconnect">Reconnect</button>
+    <button id="btnReload" title="Reload the app (after updates)">⟳ Reload</button>
+    <button id="btnCloseSettings">Close</button>
+  </div>
+</aside>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script src="/vendor/addon-webgl.js"></script>
+<script>
+'use strict';
+/* Pocket Deck — phone CLI + office viewer in one page.
+ *
+ * The terminal talks ttyd's WebSocket protocol directly (ttyd 1.7.x,
+ * pinned; verified against tsl0922/ttyd src/protocol.c):
+ *   ws://host:port/ws  subprotocol "tty", binary frames
+ *   client → server:  first message = raw JSON {"columns","rows","AuthToken"}
+ *                     then '0'+bytes = input, '1'+JSON = resize
+ *   server → client:  '0'+bytes = output, '1' = title, '2' = prefs (ignored)
+ * ttyd runs `tmux new -A -s <session>` (session name arrives via ?arg=, ttyd -a),
+ * so the real shell/Claude lives in tmux and SURVIVES every disconnect —
+ * Android killing a backgrounded tab just detaches; reopening reattaches.
+ */
+
+// ---------- settings ----------
+const DEFAULTS = {
+  layout:'flip', showing:'term', splitPct:38, collapsed:false, bottomPanel:'term',
+  fontSize:14, keybar:true, engine:'pocket', keepAwake:true, wsPort:7681,
+  // The typing bar is ON by default since rev 3: predictive text inside the
+  // raw terminal canvas can't be clean (Android IME composition vs xterm's
+  // hidden textarea — an upstream limitation of every browser terminal), and
+  // the user wants Samsung predictions. The bar gives the IME a real
+  // textarea, so predictions/swipe behave natively; direct typing remains a
+  // settings toggle for anyone who prefers it with predictions off.
+  rev:5, inputBar:true, font:'jetbrains', chatFs:10,
+  chatMax:false,   // manual CLAUDE/chat fullscreen (#pbMax): hides the top bar + office so the bottom stack gets the whole screen
+  paneOrder:['term','convo','chat'],   // TERMINAL/CLAUDE/SCUTTLEBUTT button order — drag them to rearrange
+  tintLabels:true,   // pane LABELS wear their identity color too (toggle in settings; off = neutral text, colored icons only)
+  cvFont:'system', cvMe:'amber', cvAi:'cyan', cvBox:'none',   // CONVO pane: font + bubble/composer tints
+  notifyAsk:true,   // notify (with approve/deny buttons) when Claude asks while the app is hidden
+  allowRotate:false,   // portrait-locked unless the user opts into rotation
+
+  tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
+  active:0, nextTab:3
+};
+let S = loadSettings();
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem('pocketDeck.v1');
+    if(raw){
+      const stored = JSON.parse(raw);
+      const s = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), stored);
+      // check the STORED rev — the DEFAULTS merge would mask it
+      if(!stored.rev || stored.rev < 2){ s.rev = 2; s.inputBar = false; }  // typing bar became opt-in
+      // rev 3: typing bar back ON for everyone once — it's the fix for
+      // Samsung predictive text garbling the raw terminal. Still toggleable.
+      if(!stored.rev || stored.rev < 3){ s.rev = 3; s.inputBar = true; }
+      // rev 4: CLAUDE swapped ahead of SCUTTLEBUTT (was CHAT) in the pane bar
+      if(!stored.rev || stored.rev < 4){ s.rev = 4; s.paneOrder = ['term','convo','chat']; }
+      // rev 5: the automatic "big chat while typing" keyboard hide (bigType) was
+      // replaced by a manual fullscreen toggle (chatMax). Drop the stale flag and
+      // seed the new one so old saved state can't linger or leave chatMax unset.
+      if(!stored.rev || stored.rev < 5){ s.rev = 5; delete s.bigType; if(s.chatMax == null) s.chatMax = false; }
+      return s;
+    }
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+function save(){ try{ localStorage.setItem('pocketDeck.v1', JSON.stringify(S)); }catch(e){} }
+
+const $ = id => document.getElementById(id);
+
+// ---------- terminal ----------
+// Terminal fonts — all strictly monospace (xterm needs a fixed grid). `probe`
+// is what document.fonts.load() waits on before applying, so xterm measures
+// the real glyph metrics, not a fallback.
+const FONTS = {
+  jetbrains: { css:"'JetBrains Mono', ui-monospace, monospace", probe:'"JetBrains Mono"', web:true },
+  fira:      { css:"'Fira Code', ui-monospace, monospace",      probe:'"Fira Code"',      web:true },
+  plex:      { css:"'IBM Plex Mono', ui-monospace, monospace",  probe:'"IBM Plex Mono"',  web:true },
+  system:    { css:'ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace', web:false },
+};
+function fontDef(){ return FONTS[S.font] || FONTS.system; }
+const term = new Terminal({
+  fontSize:S.fontSize,
+  fontFamily:fontDef().css,
+  cursorBlink:true, scrollback:3000,
+  theme:{ background:'#0b0e17', foreground:'#d6e0f5', cursor:'#37f5ff',
+          selectionBackground:'#2a3560' }
+});
+const fit = new FitAddon.FitAddon();
+term.loadAddon(fit);
+term.open($('xtermHost'));
+// Apply the chosen font, waiting for a web font to actually load first so the
+// terminal grid measures correct glyph widths (else it renders on fallback
+// metrics and looks squished until the next resize).
+function applyFont(){
+  const f = fontDef();
+  const set = function(){ term.options.fontFamily = f.css; fitSoon(); };
+  if(f.web && document.fonts && document.fonts.load){
+    Promise.all([document.fonts.load('400 16px ' + f.probe), document.fonts.load('700 16px ' + f.probe)])
+      .then(set).catch(set);
+  } else set();
+}
+// WebGL renderer: much smoother than the DOM renderer on phones.
+// Falls back silently (DOM renderer) where WebGL2 is unavailable.
+try{ term.loadAddon(new WebglAddon.WebglAddon()); }catch(e){}
+
+let fitQ = false;
+function fitNow(){ try{ fit.fit(); }catch(e){} }
+function fitSoon(){
+  if(fitQ) return; fitQ = true;
+  requestAnimationFrame(function(){ fitQ = false; fitNow(); });
+}
+new ResizeObserver(fitSoon).observe($('xtermHost'));
+// Debounced, not per-event: the keyboard's suggestion strip pops in and out
+// on EVERY word, and refitting each time forced a full terminal re-layout
+// mid-typing — the "janky typing" feel. Let the viewport settle first.
+let vvT = null;
+// The soft keyboard no longer changes the layout. syncKbd used to toggle
+// .kbd-open / .kbd-bars, which hid the office in the split/collapse layouts
+// while typing — but that fought the user's chosen layout, so those classes
+// (and their only CSS rule) were removed. It's kept as a no-op shell so its
+// callers/listeners stay wired: they ALSO drive the xterm grid refit (the
+// visualViewport resize -> fitNow, orientationchange -> fitSoon), which must
+// keep firing on every viewport change.
+function syncKbd(){}
+if(window.visualViewport) visualViewport.addEventListener('resize', function(){
+  syncKbd();
+  if(vvT) clearTimeout(vvT);
+  vvT = setTimeout(fitNow, 220);
+});
+// under resizes-content the keyboard fires window resize, not just
+// visualViewport — and this also covers browsers with no visualViewport
+window.addEventListener('resize', syncKbd);
+// focus can move between fields while the keyboard stays open (composer →
+// tab rename); setTimeout lets activeElement settle before re-checking
+document.addEventListener('focusin', function(){ setTimeout(syncKbd, 0); });
+document.addEventListener('focusout', function(){ setTimeout(syncKbd, 0); });
+window.addEventListener('orientationchange', function(){ setTimeout(fitSoon, 300); });
+
+// ---------- ttyd connection ----------
+const enc = new TextEncoder();
+let ws = null, gen = 0, retryT = null, retryDelay = 250, retryAt = 0;
+let inited = false;   // ttyd's first frame MUST be the JSON init — gate everything else on this
+// Outbound send queue: input typed while the socket is down is QUEUED, not
+// dropped, and flushed the instant the (re)connection's init frame goes out.
+// Bounded FIFO (oldest dropped past the caps) so a long disconnect can't grow
+// it without bound. Only sendInput feeds it — resize frames are latest-only and
+// re-sent fresh by fitNow() on reconnect, so they are deliberately never queued.
+let sendQueue = [], sendQueueBytes = 0;
+const SEND_QUEUE_MAX = 64, SEND_QUEUE_BYTES = 64 * 1024;
+
+function tabSession(){ return S.tabs[S.active].session; }
+// "localhost" can resolve to ::1 first, and ttyd is bound to 127.0.0.1 (IPv4
+// only) — Chrome then hangs on the IPv6 attempt. Pin the terminal host to the
+// v4 loopback; the office iframe is same-origin and unaffected.
+function termHost(){ return location.hostname === 'localhost' ? '127.0.0.1' : location.hostname; }
+function httpBase(){ return location.protocol + '//' + termHost() + ':' + S.wsPort; }
+// Connect the terminal through officebot (SAME origin as this page), not
+// straight to ttyd's port — officebot proxies to ttyd and adds the credential
+// a browser WS can't send, so ttyd can stay locked down (CSWSH fix). The
+// ttyd-engine fallback path still uses httpBase()/wsUrlDirect for its iframe.
+function wsUrl(sess){
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return proto + '//' + location.host + '/tty?arg=' + encodeURIComponent(sess);
+}
+
+function setConn(text, ok){
+  const el = $('conn');
+  el.textContent = text;
+  el.className = ok ? 'ok' : '';
+}
+function hideConn(){ $('conn').className = 'hidden'; }
+
+async function connect(){
+  const g = ++gen;
+  closeWs();
+  setConn('connecting…', false);
+  let token = '';
+  try{
+    // Read the terminal credential from officebot (SAME origin as this page,
+    // loopback-only, no CORS) — NOT from ttyd's own /token (which is on a
+    // different port and, more importantly, would let any website read it).
+    // Without this secret a hostile page cannot open the terminal socket.
+    const r = await fetch('/deck/ttyd-token', {cache:'no-store'});
+    if(r.ok){ token = (await r.json()).token || ''; }
+  }catch(e){}
+  if(g !== gen) return;
+  let sock;
+  try{ sock = new WebSocket(wsUrl(tabSession()), ['tty']); }
+  catch(e){ scheduleRetry(); return; }
+  sock.binaryType = 'arraybuffer';
+  ws = sock;
+  sock.onopen = function(){
+    if(g !== gen){ try{ sock.close(); }catch(e){} return; }
+    term.reset();               // tmux repaints the full screen on attach
+    // Init FIRST — fitNow() can fire term.onResize synchronously, and a
+    // resize frame before the init JSON corrupts ttyd's handshake.
+    sock.send(enc.encode(JSON.stringify({AuthToken:token, columns:term.cols, rows:term.rows})));
+    inited = true;
+    // Deliver anything typed while we were disconnected. AFTER the init frame
+    // (input must never precede the JSON handshake) and inside the g===gen guard
+    // above (a stale socket's onopen never reaches here), so no stale flush.
+    flushSendQueue(sock);
+    fitNow();
+    retryDelay = 250;
+    setConn('connected', true);
+    setTimeout(function(){ if(g === gen && ws === sock) hideConn(); }, 1200);
+    // Don't auto-focus on connect — every tab switch reconnects, and focusing
+    // popped the soft keyboard each time. The keyboard now appears only when
+    // you actually tap the terminal to type.
+  };
+  sock.onmessage = function(e){
+    if(g !== gen) return;
+    if(typeof e.data === 'string'){          // defensive: ttyd sends binary
+      if(e.data[0] === '0') term.write(e.data.slice(1));
+      return;
+    }
+    const d = new Uint8Array(e.data);
+    if(d.length && d[0] === 0x30) term.write(d.subarray(1));   // '0' OUTPUT
+    // 0x31 SET_WINDOW_TITLE / 0x32 SET_PREFERENCES: ignored
+  };
+  sock.onclose = function(){ if(g !== gen) return; ws = null; scheduleRetry(); };
+  sock.onerror = function(){};
+}
+function closeWs(){
+  inited = false;
+  if(retryT){ clearTimeout(retryT); retryT = null; }
+  if(ws){ const s = ws; ws = null; s.onclose = null; try{ s.close(); }catch(e){} }
+}
+function scheduleRetry(){
+  retryDelay = Math.min(retryDelay * 2, 8000);
+  retryAt = Date.now() + retryDelay;
+  tickRetry();
+}
+function tickRetry(){
+  const left = retryAt - Date.now();
+  if(left <= 0){ retryT = null; connect(); return; }
+  setConn('reconnecting in ' + Math.ceil(left/1000) + 's — tap to retry', false);
+  retryT = setTimeout(tickRetry, 250);
+}
+$('conn').addEventListener('click', function(){ retryAt = 0; });
+
+// ---------- input ----------
+let ctrlSticky = false;
+// Returns true if the bytes went straight out to an OPEN socket, false if they
+// were queued for the next reconnect. An optional `ticket` is flipped
+// {delivered:true} the moment its bytes reach an open socket (now, or at flush
+// time) so the composer can promote a bubble honestly instead of on a blind
+// timer.
+function sendInput(data, ticket){
+  if(ctrlSticky && data.length === 1){
+    const c = data.toLowerCase().charCodeAt(0);
+    if(c >= 97 && c <= 122) data = String.fromCharCode(c - 96);
+    ctrlSticky = false; syncCtrlBtn();
+  }
+  return sendBytes(enc.encode('0' + data), ticket);
+}
+function sendBytes(payload, ticket){
+  if(ws && ws.readyState === 1 && inited){
+    ws.send(payload);
+    if(ticket) ticket.delivered = true;
+    return true;
+  }
+  // not connected — QUEUE instead of silently dropping (this was a lost keystroke)
+  sendQueue.push({ payload: payload, ticket: ticket || null });
+  sendQueueBytes += payload.length;
+  while(sendQueue.length > SEND_QUEUE_MAX || sendQueueBytes > SEND_QUEUE_BYTES){
+    const dropped = sendQueue.shift();       // drop the OLDEST past the cap
+    sendQueueBytes -= dropped.payload.length;
+  }
+  kickReconnect();
+  return false;
+}
+// Hand the whole queue to a freshly-opened socket, oldest first. Called from
+// sock.onopen right AFTER the init frame. Marks each ticket delivered so its
+// bubble promotes honestly.
+function flushSendQueue(sock){
+  if(!(sock && sock.readyState === 1)) return;
+  const q = sendQueue; sendQueue = []; sendQueueBytes = 0;
+  for(let i = 0; i < q.length; i++){
+    try{ sock.send(q[i].payload); if(q[i].ticket) q[i].ticket.delivered = true; }catch(e){}
+  }
+}
+// Nudge a reconnect after queueing when nothing is already trying. Respects the
+// existing retryT/retryDelay backoff — after a normal drop, onclose has already
+// scheduled a retry (retryT set), so this no-ops and never spins up a parallel
+// loop. Only fires when ws is null or fully CLOSED.
+function kickReconnect(){
+  if(retryT) return;
+  if(ws && ws.readyState !== 3) return;   // CONNECTING / OPEN / CLOSING — leave it
+  connect();
+}
+term.onData(sendInput);
+term.onResize(function(sz){
+  if(ws && ws.readyState === 1 && inited)
+    ws.send(enc.encode('1' + JSON.stringify({columns:sz.cols, rows:sz.rows})));
+});
+
+// ---------- smooth typing bar ----------
+// The soft keyboard edits a REAL textarea (composition, autocorrect and
+// swipe-typing all behave), then the finished line goes to the pty in one
+// clean burst — no per-keystroke IME garbling, no round-trip jank.
+function applyInputMode(){
+  const ta = term.textarea;
+  if(!ta) return;
+  // xterm's own textarea NEVER pops the soft keyboard anymore, in either
+  // mode: bar mode types through the visible bar, direct mode through the
+  // invisible #dtBridge. Letting the IME talk straight to the raw key wire
+  // was exactly what made direct typing janky (composition ate Backspace and
+  // Enter — confirmed on-device), so that path is gone entirely.
+  ta.setAttribute('inputmode', 'none');
+  ta.setAttribute('autocomplete', 'off');
+  ta.setAttribute('autocorrect', 'off');
+  ta.setAttribute('autocapitalize', 'none');
+  ta.setAttribute('spellcheck', 'false');
+  dtReset();   // mode flip = fresh bridge shadow
+}
+// Samsung's keyboard (and most Android IMEs) does NOT deliver a clean
+// keydown while predictive text is composing — Enter arrives as
+// "Unidentified"/keyCode 229, so an e.key === 'Enter' check misses it and
+// the bar inserted a newline instead of sending. beforeinput's
+// 'insertLineBreak' is the reliable Enter signal on Android (enterkeyhint=
+// "send" on the textarea also makes Samsung show an actual Send key).
+// keydown stays as the fallback for hardware/desktop keyboards. Both funnel
+// into one deferred send: the setTimeout(0) lets the IME finish committing
+// the composed word into .value before we read it, so the last word of a
+// prediction-composed line is never chopped off.
+// Shared by the terminal input bar AND the CONVO composer — per-instance
+// closures, so two composers can't trip over each other's state.
+// opts.noEnter: Enter types a plain newline and ONLY the button sends —
+// the CONVO composer works like the Claude app (multiline by default).
+function bindComposer(ta, btn, onSubmit, opts){
+  opts = opts || {};
+  let sendT = null, allowBreak = false;
+  function autogrow(){
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(140, ta.scrollHeight) + 'px';
+  }
+  function sendNow(){
+    // a line break that raced in from the IME before we intercepted it would
+    // otherwise ride along as a stray blank line
+    const v = ta.value.replace(/[\r\n]+$/, '');
+    if(!v){ ta.value = ''; autogrow(); return; }
+    if(onSubmit(v) === false) return;   // rejected (e.g. disconnected) — keep the text
+    // springy release pop — the tactile "it sent" cue
+    btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+    ta.value = ''; autogrow(); ta.focus();
+  }
+  // the icon's per-pixel ripple bubbles its animationend up too — only the
+  // button's own pop may clear the class, or the ripple cuts itself short
+  btn.addEventListener('animationend', function(e){ if(e.animationName === 'cvBtnPop') btn.classList.remove('pop'); });
+  function sendSoon(){
+    if(sendT) return;
+    sendT = setTimeout(function(){ sendT = null; sendNow(); }, 0);
+  }
+  ta.addEventListener('input', autogrow);
+  if(!opts.noEnter){
+    ta.addEventListener('beforeinput', function(e){
+      if(e.inputType !== 'insertLineBreak') return;
+      if(allowBreak){ allowBreak = false; return; }   // desktop shift+enter = real newline
+      e.preventDefault();
+      sendSoon();
+    });
+    ta.addEventListener('keydown', function(e){
+      if(e.key !== 'Enter') return;
+      if(e.shiftKey){ allowBreak = true; return; }     // let the newline through
+      if(e.isComposing) return;                        // IME Enter comes via beforeinput instead
+      e.preventDefault();
+      sendSoon();
+    });
+  }
+  btn.addEventListener('pointerdown', function(e){ e.preventDefault(); });  // keep textarea focus
+  btn.addEventListener('click', sendNow);
+}
+bindComposer($('inputText'), $('inputSend'), function(v){ sendInput(v + '\r'); });
+
+// ---------- pixel icon set (own SVGs, not emojis) ----------
+// Same construction as the CONVO bolt/arrow: 2×2 cells on a tiny grid,
+// crispEdges, currentColor — every icon takes its button's own color and
+// stays sharp at any scale. Emoji chrome read as a website; the deck draws
+// its own.
+function pxSvg(cells, cols, rows){
+  let r = '';
+  cells.forEach(function(c, i){
+    r += '<rect x="' + (c[0] * 2) + '" y="' + (c[1] * 2) + '" width="2" height="2" style="--i:' + i + '"/>';
+  });
+  return '<svg class="pxi" viewBox="0 0 ' + (cols * 2) + ' ' + (rows * 2) + '" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">' + r + '</svg>';
+}
+const PX = {
+  diamond: pxSvg([[2,0],[1,1],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[2,4]], 5, 5),
+  plus:    pxSvg([[2,0],[2,1],[0,2],[1,2],[2,2],[3,2],[4,2],[2,3],[2,4]], 5, 5),
+  gear:    pxSvg([[3,0],[1,1],[2,1],[3,1],[4,1],[5,1],[2,2],[3,2],[4,2],[0,3],[1,3],[2,3],[4,3],[5,3],[6,3],[2,4],[3,4],[4,4],[1,5],[2,5],[3,5],[4,5],[5,5],[3,6]], 7, 7),
+  term:    pxSvg([[0,0],[1,1],[2,2],[1,3],[0,4],[4,4],[5,4],[6,4]], 7, 5),
+  chat:    pxSvg([[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[0,1],[6,1],[0,2],[6,2],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[1,4],[2,4],[1,5]], 7, 6),
+  claude:  pxSvg([[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[0,1],[6,1],[0,2],[2,2],[4,2],[6,2],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[4,4],[5,4],[5,5]], 7, 6),
+  // little pixel agent (a crew member) — the Scuttlebutt feed IS the agents'
+  // chatter. Arms sit in their own columns (gap from the torso) so it reads
+  // as a person with outstretched arms, not a solid tower.
+  agent:   pxSvg([[2,0],[3,0],[4,0],[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2],[5,2],[0,3],[2,3],[3,3],[4,3],[6,3],[0,4],[2,4],[3,4],[4,4],[6,4],[2,5],[3,5],[4,5],[1,6],[2,6],[4,6],[5,6],[1,7],[2,7],[4,7],[5,7]], 7, 8),
+  clip:    pxSvg([[1,0],[2,0],[3,0],[0,1],[4,1],[0,2],[2,2],[4,2],[0,3],[2,3],[4,3],[0,4],[2,4],[4,4],[0,5],[2,5],[4,5],[1,6],[3,6]], 5, 7),
+  paste:   pxSvg([[2,0],[3,0],[4,0],[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[0,2],[6,2],[0,3],[2,3],[3,3],[4,3],[6,3],[0,4],[6,4],[0,5],[2,5],[3,5],[4,5],[6,5],[0,6],[6,6],[0,7],[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]], 7, 8),
+  // circular refresh arrow on a finer 9×9 grid — the old 7×7 shape read as a
+  // lopsided "C" on the phone (arrowhead too faint). Near-full ring + a bold
+  // up-pointing arrowhead protruding at the top-right so it can't be mistaken
+  // for a plain C. crispEdges keeps it sharp at any DPR.
+  reload:  pxSvg([[3,0],[4,0],[7,0],[1,1],[2,1],[6,1],[7,1],[8,1],[1,2],[8,2],[0,3],[8,3],[0,4],[8,4],[0,5],[8,5],[1,6],[7,6],[1,7],[2,7],[6,7],[7,7],[3,8],[4,8],[5,8]], 9, 9),
+  // fullscreen toggle (composer): expand = corner brackets pointing out;
+  // compress = corner brackets pointing in (shown while chat is maximized).
+  expand:  pxSvg([[0,0],[1,0],[5,0],[6,0],[0,1],[6,1],[0,5],[6,5],[0,6],[1,6],[5,6],[6,6]], 7, 7),
+  compress:pxSvg([[2,0],[4,0],[2,1],[4,1],[0,2],[1,2],[2,2],[4,2],[5,2],[6,2],[0,4],[1,4],[2,4],[4,4],[5,4],[6,4],[2,5],[4,5],[2,6],[4,6]], 7, 7),
+};
+$('brand').innerHTML = PX.diamond + '<span>DECK</span>';
+$('addTab').innerHTML = PX.plus;
+$('gearBtn').innerHTML = PX.gear;
+$('convoAttach').innerHTML = PX.clip;
+$('pbTerm').innerHTML = PX.term + '<span>TERMINAL</span>';
+// SCUTTLEBUTT (the agent-dialogue feed, formerly CHAT) — a pixel agent, not
+// a bubble: the old bubble sat beside CLAUDE's and read as the same thing
+$('pbChat').innerHTML = PX.agent + '<span>SCUTTLEBUTT</span>';
+$('pbConvo').innerHTML = PX.claude + '<span>CLAUDE</span>';
+$('pbReload').innerHTML = PX.reload;
+$('pbGear').innerHTML = PX.gear;
+// pane-bar shortcuts: reload the deck, and open Settings — same actions as
+// the header buttons, but reachable right where the chat tabs are.
+$('pbReload').addEventListener('click', function(){ location.reload(); });
+$('pbGear').addEventListener('click', function(){ $('gearBtn').click(); });
+// Manual fullscreen for the bottom stack: hide the top bar + office. The
+// toggle now lives in the CLAUDE composer (not the pane bar), so it's not in
+// the drag map and needs no _pbDragMoved guard. Re-pin the visible log after
+// the size change invalidates its scroll position.
+$('pbMax').addEventListener('click', function(){
+  S.chatMax = !S.chatMax; save(); applyLayout();
+  requestAnimationFrame(function(){
+    if(S.bottomPanel === 'convo') pinLogBottom('convoLog');
+    else if(S.bottomPanel === 'chat') pinLogBottom('chatPaneLog');
+  });
+});
+
+// ---------- key bar ----------
+const KEYS = [
+  {t:'Esc', s:'\x1b'}, {t:'Tab', s:'\t'}, {t:'⇧Tab', s:'\x1b[Z'}, {t:'^C', s:'\x03'},
+  {t:'↑', s:'\x1b[A'}, {t:'↓', s:'\x1b[B'}, {t:'←', s:'\x1b[D'}, {t:'→', s:'\x1b[C'},
+  {t:'/', s:'/'}, {t:'!', s:'!'}, {t:'Ctrl', ctrl:true}, {t:'⏎', s:'\r'}, {t:'📋', paste:true}
+];
+let ctrlBtn = null;
+function syncCtrlBtn(){ if(ctrlBtn) ctrlBtn.className = ctrlSticky ? 'on' : ''; }
+(function buildKeybar(){
+  const bar = $('keybar');
+  KEYS.forEach(function(k){
+    const b = document.createElement('button');
+    if(k.paste) b.innerHTML = PX.paste;   // pixel clipboard, not the emoji
+    else b.textContent = k.t;
+    // preventDefault on pointerdown keeps focus (and the soft keyboard) on xterm
+    b.addEventListener('pointerdown', function(e){ e.preventDefault(); });
+    b.addEventListener('click', function(){
+      if(k.ctrl){ ctrlSticky = !ctrlSticky; syncCtrlBtn(); return; }
+      if(k.paste){
+        navigator.clipboard.readText()
+          .then(function(t){ if(t) term.paste(t); })
+          .catch(function(){ setConn('clipboard blocked — long-press the terminal instead', false);
+                             setTimeout(hideConn, 2500); });
+        if(dtActive()) dtReset();   // pasted text bypasses the bridge's shadow
+        return;
+      }
+      sendInput(k.s);
+      // keybar keys (arrows, Esc, /, ⏎…) move the pty cursor or add chars the
+      // bridge can't see — treat the line as opaque from here
+      if(dtActive()) dtReset();
+    });
+    if(k.ctrl) ctrlBtn = b;
+    bar.appendChild(b);
+  });
+})();
+
+// ---------- direct typing: the invisible IME bridge ----------
+// With the typing bar OFF, tapping the terminal used to focus xterm's raw
+// textarea and let Samsung's predictive IME fight the key wire — composition
+// swallowed Backspace and Enter and text came out garbled ("so janky",
+// confirmed on-device). The bar fixed typing by giving the IME a REAL
+// textarea; this bridge is that same proven mechanism made invisible. The
+// keyboard edits #dtBridge natively (predictions/swipe/revisions all
+// behave), and every change is DIFFED against what was already sent,
+// streamed to the pty as backspaces + retyped tail — the line takes shape in
+// the terminal itself, and a prediction rewriting a word shows as a quick
+// in-place fixup, like a native terminal IME.
+// A run of zero-width sentinels keeps Backspace alive past the bridge's own
+// text: deleting into the sentinel still fires an input event (diffed to
+// \x7f) and the sentinel re-seeds, so held-backspace can erase pty text the
+// bridge never knew about. Anything that bypasses the bridge (keybar keys,
+// paste, Ctrl-chords) resets the shadow — typing then appends cleanly from
+// the pty's real cursor again.
+const DT_SENT = '\u200b'.repeat(24);   // 24 zero-width sentinels
+let dtPrev = DT_SENT, dtComposing = false;
+function dtActive(){ return !S.inputBar && S.engine === 'pocket'; }
+function dtReset(){
+  const b = $('dtBridge');
+  if(!b) return;
+  b.value = DT_SENT; dtPrev = DT_SENT;
+  try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){}
+}
+function dtFocus(){
+  const b = $('dtBridge');
+  if(document.activeElement !== b) b.focus();
+  try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){}
+}
+function dtDiffFlush(){
+  const b = $('dtBridge');
+  const v = b.value;
+  if(v === dtPrev) return;
+  let L = 0; const m = Math.min(v.length, dtPrev.length);
+  while(L < m && v.charCodeAt(L) === dtPrev.charCodeAt(L)) L++;
+  const del = dtPrev.length - L;
+  // sentinels never reach the pty; newlines (clipboard chips) become returns
+  const add = v.slice(L).replace(/\u200b/g, '').replace(/\r?\n/g, '\r');
+  const wasCtrl = ctrlSticky && add.length === 1 && !del;
+  let out = '';
+  for(let i = 0; i < del; i++) out += '\x7f';
+  out += add;
+  dtPrev = v;
+  if(out) sendInput(out);
+  // a Ctrl-chord consumed the char without echoing it — shadow no longer
+  // matches the pty line, start clean
+  if(wasCtrl){ dtReset(); return; }
+  // re-seed eaten sentinels — but never mid-composition (mutating the value
+  // while the IME composes aborts Samsung's composition)
+  if(v.slice(0, DT_SENT.length) !== DT_SENT && !dtComposing){
+    b.value = DT_SENT + v.replace(/\u200b/g, '');
+    dtPrev = b.value;
+    try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){}
+  }
+}
+(function(){
+  const b = $('dtBridge');
+  b.addEventListener('compositionstart', function(){ dtComposing = true; });
+  b.addEventListener('compositionend', function(){ dtComposing = false; setTimeout(dtDiffFlush, 0); });
+  b.addEventListener('input', dtDiffFlush);
+  // Enter: same Samsung reality the bar solved (see bindComposer) — the
+  // reliable IME signal is beforeinput 'insertLineBreak'; keydown covers
+  // hardware keyboards. Deferred so a just-committed prediction lands in the
+  // value first: final diff, then the return, then a fresh line.
+  let entT = null;
+  function dtEnterSoon(){
+    if(entT) return;
+    entT = setTimeout(function(){
+      entT = null;
+      dtDiffFlush();
+      sendInput('\r');
+      dtReset();
+    }, 0);
+  }
+  b.addEventListener('beforeinput', function(e){
+    if(e.inputType !== 'insertLineBreak') return;
+    e.preventDefault();
+    dtEnterSoon();
+  });
+  b.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      if(e.isComposing) return;                  // IME Enter arrives via beforeinput
+      e.preventDefault(); dtEnterSoon(); return;
+    }
+    // hardware keys with no text meaning: send the terminal code and treat
+    // the pty line as opaque from here (the cursor moves under the shadow)
+    const nav = { ArrowUp:'\x1b[A', ArrowDown:'\x1b[B', ArrowRight:'\x1b[C', ArrowLeft:'\x1b[D', Escape:'\x1b', Tab:'\t' };
+    if(nav[e.key]){ e.preventDefault(); sendInput(nav[e.key]); dtReset(); return; }
+    if(e.ctrlKey && e.key.length === 1 && /[a-z]/i.test(e.key)){
+      e.preventDefault();
+      sendInput(String.fromCharCode(e.key.toLowerCase().charCodeAt(0) - 96));
+      dtReset(); return;
+    }
+  });
+  // tapping the terminal = start typing. A swipe preventDefaults its way out
+  // of ever becoming a click, so scrolling never pops the keyboard.
+  $('xtermHost').addEventListener('click', function(){
+    if(dtActive()) dtFocus();
+  });
+  // Samsung can restore a stale caret on refocus — pin it to the end
+  b.addEventListener('focus', function(){
+    setTimeout(function(){ try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){} }, 0);
+  });
+  dtReset();
+})();
+
+// ---------- touch scrolling (swipe the terminal like a page) ----------
+// xterm.js has no touch scrolling of its own. A swipe becomes either a
+// viewport scroll (normal screen) or SGR mouse-wheel codes (when the app —
+// tmux, which always requests SGR encoding — is tracking the mouse, so
+// swiping inside Claude/tmux scrolls history there too).
+function scrollTerm(steps){                       // + = finger up = scroll down
+  if(!steps) return;
+  let mode = 'none';
+  try{ mode = term.modes.mouseTrackingMode; }catch(e){}
+  if(mode !== 'none'){
+    const b = steps > 0 ? 65 : 64, n = Math.min(40, Math.abs(steps));
+    const col = (term.buffer.active.cursorX|0) + 1, row = (term.buffer.active.cursorY|0) + 1;
+    let s = '';
+    for(let i = 0; i < n; i++) s += '\x1b[<' + b + ';' + col + ';' + row + 'M';
+    if(ws && ws.readyState === 1 && inited) ws.send(enc.encode('0' + s));
+  } else {
+    term.scrollLines(steps);
+  }
+}
+(function(){
+  const host = $('xtermHost');
+  let lastY = null, acc = 0;
+  host.addEventListener('touchstart', function(e){
+    if(e.touches.length === 1){ lastY = e.touches[0].clientY; acc = 0; }
+  }, {passive:true});
+  host.addEventListener('touchmove', function(e){
+    if(lastY === null || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    acc += lastY - y; lastY = y;
+    const line = Math.max(12, Math.round(S.fontSize * 1.4));
+    const steps = Math.trunc(acc / line);
+    if(steps !== 0){ acc -= steps * line; scrollTerm(steps); }
+    e.preventDefault();               // the swipe is ours — no page panning
+  }, {passive:false});
+  host.addEventListener('touchend', function(){ lastY = null; }, {passive:true});
+})();
+
+// ---------- office chat overlay (mirrors the office's DIALOGUE feed) ----------
+// Same origin as the office iframe, so we mirror its #chat DOM directly —
+// the overlay always matches what the office itself would show.
+let chatObs = null;
+function chatSrcEl(){
+  try{ return $('office').contentDocument.getElementById('chat'); }catch(e){ return null; }
+}
+function chatMirror(){
+  const src = chatSrcEl();
+  // The office feed is newest-FIRST; show it newest-LAST here (natural chat
+  // order, latest at the bottom) so reading works like a messaging app.
+  let html;
+  if(src && src.children.length){
+    html = Array.prototype.slice.call(src.children).reverse().map(function(c){ return c.outerHTML; }).join('');
+  } else {
+    html = '<div class="cline k-status"><span class="txt">no chatter yet — this fills up as agents work</span></div>';
+  }
+  document.querySelectorAll('.chatlog').forEach(function(el){
+    // Follow the live feed only while the reader is actually AT the bottom —
+    // the same cvAtBottom() rule the CLAUDE pane uses. Scrolled up means they
+    // are reading back through the history, and re-pinning to the newest line
+    // under them mid-sentence is exactly the bug this fixes.
+    //
+    // Measure BEFORE the rebuild, and restore explicitly afterwards: assigning
+    // innerHTML replaces every child, which resets scrollTop to 0 on its own.
+    // Preserving the offset from the TOP (rather than from the bottom) is what
+    // holds the view still, because new lines land at the BOTTOM and so leave
+    // everything above them at the same offset.
+    const stick = cvAtBottom(el);
+    const prevTop = el.scrollTop;
+    el.innerHTML = html;
+    el.scrollTop = stick ? el.scrollHeight : prevTop;
+  });
+}
+// Observer stays bound for the app's whole life — it feeds both the floating
+// overlay and the bottom chat panel, whichever is on screen.
+function chatBind(){
+  if(chatObs){ chatObs.disconnect(); chatObs = null; }
+  chatMirror();
+  const src = chatSrcEl();
+  if(src){ chatObs = new MutationObserver(chatMirror); chatObs.observe(src, {childList:true}); }
+}
+// ---------- Android back closes overlays, not the app ----------
+// The deck never claimed a history entry, so the phone's back gesture popped
+// the whole app — confirmed with the ⚡ options sheet open. Opening any
+// dismissible layer pushes ONE history entry; back pops it and we close the
+// layer in place; closing the layer any other way consumes the entry so
+// history depth stays balanced (same pattern as the office's lightbox).
+let _ovOpen = null;   // 'pick' | 'settings' | 'chatov'
+function ovPush(kind){ _ovOpen = kind; try{ history.pushState({ deckOv: kind }, ''); }catch(e){} }
+function ovConsume(kind){ if(_ovOpen === kind){ _ovOpen = null; try{ history.back(); }catch(e){} } }
+window.addEventListener('popstate', function(){
+  if(!_ovOpen) return;
+  const k = _ovOpen; _ovOpen = null;
+  if(k === 'pick'){ $('convoPick').classList.add('hidden'); }
+  else if(k === 'settings'){ $('settings').classList.add('hidden'); $('backdrop').classList.add('hidden'); }
+});
+
+$('office').addEventListener('load', function(){
+  chatBind();
+  // re-assert the active tab after ANY (re)load (auto-refresh, manual) so the
+  // office never reverts to a stale filter baked into the iframe URL
+  try{ $('office').contentWindow.postMessage({type:'deckTab', tab:S.tabs[S.active].session}, '*'); }catch(e){}
+  // push the authoritative owner immediately (server truth) instead of up to 2s
+  // later — the resume reload wipes the office's owner maps, so re-asserting now
+  // avoids a STANDBY flash / wrong re-pin before the 2s heartbeat catches up
+  _syncTabOwner();
+});
+
+// ---------- tabs (each = a named tmux session; closing only detaches) ----------
+let _tabDragMoved = false;   // a completed drag must not read as a tap
+function renderTabs(){
+  const nav = $('tabs');
+  nav.innerHTML = '';
+  S.tabs.forEach(function(tab, i){
+    const b = document.createElement('div');
+    const isClosing = _pendingClose && _pendingClose.tab === tab.session;
+    b.className = 'tab' + (i === S.active ? ' active' : '') + (isClosing ? ' closing' : '');
+    const label = document.createElement('span');
+    // while shutting down, the tab shows a live status instead of the ✕
+    label.textContent = isClosing ? 'closing…' : tab.label;
+    b.appendChild(label);
+    // Long-press a tab (held STILL) to RENAME it; drag it SIDEWAYS to
+    // REORDER. The two share pointer state: 14px of movement cancels the
+    // rename timer and arms the drag, so a slow hold can't do both.
+    if(!isClosing){
+      let pressT = null, renaming = false, dragging = false, dragX0 = 0, dragPid = null;
+      const startRename = function(){
+        if(dragging) return;
+        renaming = true;
+        label.contentEditable = 'true'; label.classList.add('editing'); label.focus();
+        const r = document.createRange(); r.selectNodeContents(label);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      };
+      const finish = function(){
+        if(!renaming) return; renaming = false;
+        label.contentEditable = 'false'; label.classList.remove('editing');
+        const v = label.textContent.replace(/\s+/g,' ').trim().slice(0,18);
+        S.tabs[i].label = v || tab.label; save(); label.textContent = S.tabs[i].label;
+      };
+      label.addEventListener('pointerdown', function(){ if(i!==S.active) return; pressT = setTimeout(startRename, 500); });
+      label.addEventListener('pointerup', function(){ clearTimeout(pressT); });
+      label.addEventListener('pointerleave', function(){ clearTimeout(pressT); });
+      label.addEventListener('pointercancel', function(){ clearTimeout(pressT); });
+      label.addEventListener('blur', finish);
+      label.addEventListener('keydown', function(k){ if(k.key==='Enter'){ k.preventDefault(); label.blur(); } });
+      let dragDx = 0;
+      b.addEventListener('pointerdown', function(e){
+        if(label.isContentEditable) return;
+        dragX0 = e.clientX; dragDx = 0; dragging = false; dragPid = e.pointerId;
+      });
+      b.addEventListener('pointermove', function(e){
+        if(dragPid === null || e.pointerId !== dragPid) return;
+        dragDx = e.clientX - dragX0;
+        if(!dragging){
+          if(Math.abs(dragDx) < 14) return;
+          dragging = true; _tabDragMoved = true;
+          if(pressT){ clearTimeout(pressT); pressT = null; }
+          try{ b.setPointerCapture(dragPid); }catch(err){}
+          b.classList.add('drag');
+        }
+        b.style.transform = 'translateX(' + dragDx + 'px)';
+      });
+      const endDrag = function(commit){
+        if(dragPid === null) return;
+        dragPid = null;
+        if(!dragging) return;
+        dragging = false;
+        b.classList.remove('drag');
+        b.style.transform = '';
+        if(!commit) return;
+        // insertion slot = how many OTHER tabs sit left of where the pointer
+        // let go (their rects never moved during the drag — only the dragged
+        // tab translates, so they're stable to measure)
+        const drop = dragX0 + dragDx;
+        let target = 0;
+        Array.prototype.forEach.call(nav.children, function(el){
+          if(el === b) return;
+          const r = el.getBoundingClientRect();
+          if(drop > r.left + r.width / 2) target++;
+        });
+        if(target !== i){
+          const activeSess = S.tabs[S.active].session;
+          const movedTab = S.tabs.splice(i, 1)[0];
+          S.tabs.splice(target, 0, movedTab);
+          S.active = S.tabs.findIndex(function(t){ return t.session === activeSess; });
+          save();
+          // defer the re-render so the trailing click lands on THIS node and
+          // gets swallowed by the _tabDragMoved guard, not on a fresh one
+          setTimeout(renderTabs, 0);
+        }
+      };
+      b.addEventListener('pointerup', function(){ endDrag(true); });
+      b.addEventListener('pointercancel', function(){ endDrag(false); });
+    }
+    if(!isClosing && i === S.active && S.tabs.length > 1){
+      const x = document.createElement('span');
+      x.className = 'x'; x.textContent = '×';
+      // two-tap arm: first tap asks, second within 2.6s really ends the session
+      x.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(x.dataset.arm){ closeTab(i); return; }
+        x.dataset.arm = '1'; x.textContent = 'end?'; x.classList.add('arm');
+        setTimeout(function(){ delete x.dataset.arm; x.textContent = '×'; x.classList.remove('arm'); }, 2600);
+      });
+      b.appendChild(x);
+    }
+    b.addEventListener('click', function(){
+      if(_tabDragMoved){ _tabDragMoved = false; return; }   // a drag is not a tap
+      if(isClosing || label.isContentEditable) return;
+      switchTab(i);
+    });
+    nav.appendChild(b);
+  });
+}
+// Each tab has its OWN office view, filtered to that tab's session (the deck
+// tag = the tmux session name). Switching tabs points the office at the active
+// tab, so you always see just this tab's Claude — not a soup of every session.
+function syncOffice(){
+  const f = $('office'), tab = S.tabs[S.active].session;
+  const cur = f.getAttribute('src') || '';
+  if(!cur || cur === '/'){
+    // first time: one real load with the filter baked into the URL
+    f.setAttribute('src', '/?tab=' + encodeURIComponent(tab));
+  } else {
+    // already loaded: switch the filter IN PLACE — no reload, so the office
+    // doesn't replay the session and re-run the entrance ceremony each switch
+    try{ f.contentWindow.postMessage({type:'deckTab', tab:tab}, '*'); }
+    catch(e){ f.setAttribute('src', '/?tab=' + encodeURIComponent(tab)); }
+  }
+  _syncTabOwner();   // tell the office which session actually owns this tab (server truth)
+}
+// The office view is a single iframe filtered to the active tab. It must show
+// EXACTLY the session the server says owns this tab — the same one the CLAUDE
+// pane shows — never a client-side guess (guessing tied offices to the wrong
+// tab). /api/chat?lite=1 returns that session id for a tab; push it to the
+// office. Cheap (status only, no transcript read); runs on every tab change
+// and on a 2s heartbeat so it stays fresh even while viewing the TERMINAL.
+function _syncTabOwner(){
+  const f = $('office'); if(!f || !f.contentWindow) return;
+  const tab = tabSession();
+  fetch('/api/chat?tab=' + encodeURIComponent(tab) + '&lite=1')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d || !d.ok) return;
+      // Only push if THIS server actually reports the owner field. An older
+      // server (not yet restarted with the mapping) omits it — pushing a
+      // bogus null would force the office to STANDBY over a live session, so
+      // we stay quiet and let the office's own fallback show it.
+      if(!('session' in d)) return;
+      try{ f.contentWindow.postMessage({type:'tabOwns', tab:tab, sid:(d.session || null)}, '*'); }catch(e){}
+    })
+    .catch(function(){});
+}
+setInterval(_syncTabOwner, 2000);
+function switchTab(i){
+  if(i === S.active || i < 0 || i >= S.tabs.length) return;
+  S.active = i; save(); renderTabs(); syncOffice();
+  convoSwitchTab(tabSession());   // R2: restore this tab's cached convo instead of a blind wipe (offsets still reset)
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+function addTab(){
+  const n = S.nextTab++;
+  S.tabs.push({label:'TERM ' + n, session:'deck-' + n});
+  S.active = S.tabs.length - 1;
+  save(); renderTabs(); syncOffice();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+// Closing a tab plays the office SHUTDOWN ceremony first, then removes the
+// tab — so you actually get to watch that session's crew clock out.
+let _pendingClose = null;
+// End a tmux session NOW. keepalive:true so the request survives the page being
+// closed/backgrounded mid-farewell (a plain fetch dies with the page, which was
+// how sessions got orphaned). X-Deck = CSRF guard. Server tolerates duplicates.
+function _deckKill(tab){
+  fetch('/deck/kill?session=' + encodeURIComponent(tab), {method:'POST', keepalive:true, headers:{'X-Deck':'1'}}).catch(function(){});
+}
+function closeTab(i){
+  if(S.tabs.length <= 1) return;
+  const tab = S.tabs[i].session;
+  if(_pendingClose) return;               // one at a time
+  _deckKill(tab);                          // kill the session immediately, BEFORE the ~60s farewell — the ceremony is cosmetic and the kill must not depend on it (or on the page staying open)
+  S.showing = 'office'; applyLayout();     // flip to the office to watch the farewell
+  const f = $('office');
+  try{
+    f.contentWindow.postMessage({type:'deckTab', tab:tab}, '*');   // make sure it's showing this tab
+    f.contentWindow.postMessage({type:'closeTab', tab:tab}, '*');  // run the shutdown ceremony
+  }catch(e){ finishTabClose(tab); return; }
+  _pendingClose = { tab:tab, done:false, killSent:true };   // killSent: the pagehide flush must not re-fire it
+  renderTabs();   // show the "closing…" state on the tab
+  // safety net if the office never reports back — longer than the office's own
+  // cap so its natural "ceremony finished" signal always wins
+  setTimeout(function(){ if(_pendingClose && !_pendingClose.done && _pendingClose.tab === tab){ finishTabClose(tab); } }, 65000);
+}
+function finishTabClose(tab){
+  if(_pendingClose){ _pendingClose.done = true; _pendingClose = null; }
+  // the tmux kill already fired in closeTab (pre-ceremony, keepalive) — don't repeat it here
+  cvClearCache(tab);                       // R2: the closed tab is dead — drop its cached conversation for good
+  const idx = S.tabs.findIndex(function(t){ return t.session === tab; });
+  if(idx === -1) return;
+  S.tabs.splice(idx, 1);
+  if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
+  S.showing = 'term';                      // back to the terminal on the surviving tab
+  convoSwitchTab(tabSession());            // R2: restore the now-active surviving tab's convo
+  save(); renderTabs(); applyLayout(); syncOffice();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+}
+window.addEventListener('message', function(e){
+  const d = e.data;
+  if(d && d.type === 'tabClosed' && _pendingClose && !_pendingClose.done && d.tab === _pendingClose.tab){
+    finishTabClose(d.tab);
+  }
+});
+// Belt-and-braces: if the app is closed or backgrounded while a tab-close is
+// still mid-farewell, guarantee the tmux kill went out. closeTab already fires
+// it with keepalive (so it normally survives on its own); this only re-fires if
+// the sent-flag somehow says it didn't. Duplicate kills are harmless server-side.
+function _deckFlushPendingKill(){
+  if(_pendingClose && _pendingClose.tab && !_pendingClose.killSent){
+    _deckKill(_pendingClose.tab);
+    _pendingClose.killSent = true;
+  }
+}
+window.addEventListener('pagehide', _deckFlushPendingKill);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden') _deckFlushPendingKill();
+});
+$('addTab').addEventListener('click', addTab);
+
+// ---------- layout ----------
+function applyLayout(){
+  const app = $('app');
+  app.className = 'layout-' + S.layout
+    + (S.showing === 'office' ? ' show-office' : ' show-term')
+    + (S.collapsed ? ' collapsed' : '')
+    + (S.bottomPanel === 'chat' ? ' bp-chat' : '')
+    + (S.bottomPanel === 'convo' ? ' bp-convo' : '')
+    + (S.keybar ? '' : ' keybar-off')
+    + (S.inputBar ? ' inputbar-on' : '')
+    + (S.engine === 'ttyd' ? ' engine-ttyd' : '')
+    + (S.chatMax ? ' chatmax' : '')
+    + (S.tintLabels ? ' lbltint' : '');
+  app.style.setProperty('--office-size', S.splitPct + '%');
+  $('officeArrow').textContent = S.collapsed ? '▸' : '▾';
+  $('pbTerm').className = S.bottomPanel === 'chat' || S.bottomPanel === 'convo' ? '' : 'pb-on';
+  $('pbChat').className = S.bottomPanel === 'chat' ? 'pb-on' : '';
+  $('pbConvo').className = S.bottomPanel === 'convo' ? 'pb-on' : '';
+  $('pbMax').classList.toggle('cv-on', S.chatMax);
+  $('pbMax').innerHTML = S.chatMax ? PX.compress : PX.expand;
+  // pane-bar arrangement rides on flex order — the DOM (and every handler
+  // bound to these buttons) never moves
+  const po = S.paneOrder || ['term', 'chat', 'convo'];
+  $('pbTerm').style.order = po.indexOf('term');
+  $('pbChat').style.order = po.indexOf('chat');
+  $('pbConvo').style.order = po.indexOf('convo');
+  fitSoon();
+}
+// Snap a log to its bottom. A hidden pane has scrollHeight 0, so pins that ran
+// while it was hidden no-op; call this on the frame AFTER the reveal lays it out.
+function pinLogBottom(id){
+  const el = $(id);
+  if(el) el.scrollTop = el.scrollHeight;
+}
+let _pbDragMoved = false;   // a completed pane-bar drag must not read as a tap
+$('pbTerm').addEventListener('click', function(){
+  if(_pbDragMoved){ _pbDragMoved = false; return; }
+  if(S.bottomPanel !== 'term'){ S.bottomPanel = 'term'; save(); applyLayout(); term.focus(); }
+});
+$('pbChat').addEventListener('click', function(){
+  if(_pbDragMoved){ _pbDragMoved = false; return; }
+  if(S.bottomPanel !== 'chat'){
+    S.bottomPanel = 'chat'; save(); applyLayout();
+    // the pane was hidden (scrollHeight 0) when chatMirror last pinned it — re-pin
+    // now that reveal has laid it out, so a revealed feed lands at the newest line
+    requestAnimationFrame(function(){ pinLogBottom('chatPaneLog'); });
+  }
+});
+$('pbConvo').addEventListener('click', function(){
+  if(_pbDragMoved){ _pbDragMoved = false; return; }
+  if(S.bottomPanel !== 'convo'){
+    S.bottomPanel = 'convo'; save(); applyLayout(); convoTick();
+    requestAnimationFrame(function(){ pinLogBottom('convoLog'); });
+  }
+});
+// Drag TERMINAL / CHAT / CLAUDE sideways to rearrange them — same feel as
+// the deck tabs up top. Order persists in S.paneOrder (applied as flex
+// order in applyLayout, so no DOM moves and no handler rebinding).
+(function(){
+  const map = { pbTerm: 'term', pbChat: 'chat', pbConvo: 'convo' };
+  Object.keys(map).forEach(function(id){
+    const b = $(id), key = map[id];
+    let x0 = 0, dx = 0, pid = null, dragging = false;
+    b.addEventListener('pointerdown', function(e){ x0 = e.clientX; dx = 0; pid = e.pointerId; dragging = false; });
+    b.addEventListener('pointermove', function(e){
+      if(pid === null || e.pointerId !== pid) return;
+      dx = e.clientX - x0;
+      if(!dragging){
+        if(Math.abs(dx) < 14) return;
+        dragging = true; _pbDragMoved = true;
+        try{ b.setPointerCapture(pid); }catch(err){}
+        b.classList.add('drag');
+      }
+      b.style.transform = 'translateX(' + dx + 'px)';
+    });
+    function end(commit){
+      if(pid === null) return;
+      pid = null;
+      if(!dragging) return;
+      dragging = false;
+      b.classList.remove('drag'); b.style.transform = '';
+      if(!commit) return;
+      // slot = how many OTHER buttons sit left of the drop point (their
+      // rects are stable — only the dragged button translates)
+      const drop = x0 + dx;
+      let target = 0;
+      Object.keys(map).forEach(function(oid){
+        if(oid === id) return;
+        const r = $(oid).getBoundingClientRect();
+        if(drop > r.left + r.width / 2) target++;
+      });
+      const po = (S.paneOrder || ['term', 'chat', 'convo']).slice();
+      const cur = po.indexOf(key);
+      if(target !== cur){
+        po.splice(cur, 1);
+        po.splice(target, 0, key);
+        S.paneOrder = po;
+        save(); applyLayout();
+      }
+    }
+    b.addEventListener('pointerup', function(){ end(true); });
+    b.addEventListener('pointercancel', function(){ end(false); });
+  });
+})();
+$('flipBtn').addEventListener('click', function(){
+  if(S.layout === 'flip'){
+    S.showing = (S.showing === 'term') ? 'office' : 'term';
+  } else if(S.layout === 'collapse'){
+    S.collapsed = !S.collapsed;
+  }
+  save(); applyLayout();
+  if(S.showing === 'term' && S.engine === 'pocket') term.focus();
+});
+$('officeHandle').addEventListener('click', function(){
+  S.collapsed = !S.collapsed; save(); applyLayout();
+});
+
+// ---------- engine (pocket xterm vs ttyd's own page as fallback) ----------
+function applyEngine(){
+  if(S.engine === 'ttyd'){
+    closeWs(); hideConn();
+    let f = $('ttydFrame');
+    if(!f){
+      f = document.createElement('iframe');
+      f.id = 'ttydFrame'; f.title = 'ttyd terminal';
+      $('termPane').insertBefore(f, $('xtermHost'));
+    }
+    f.src = httpBase() + '/?arg=' + encodeURIComponent(tabSession());
+  } else {
+    const f = $('ttydFrame');
+    if(f) f.remove();
+    retryDelay = 250; connect();
+  }
+  applyLayout();
+}
+
+// ---------- keep screen awake ----------
+let wakeLock = null;
+function updateWake(){
+  if(!('wakeLock' in navigator)) return;
+  if(S.keepAwake && document.visibilityState === 'visible'){
+    if(!wakeLock){
+      navigator.wakeLock.request('screen').then(function(l){
+        wakeLock = l;
+        l.addEventListener('release', function(){ wakeLock = null; });
+      }).catch(function(){});
+    }
+  } else if(wakeLock){
+    try{ wakeLock.release(); }catch(e){}
+    wakeLock = null;
+  }
+}
+let _hiddenAt = 0;
+document.addEventListener('visibilitychange', function(){
+  updateWake();
+  if(document.visibilityState === 'hidden'){ _hiddenAt = Date.now(); return; }
+  // ---- coming back to the app ----
+  // reattach the terminal immediately instead of waiting out the backoff
+  if(S.engine === 'pocket'){
+    if(retryT){ retryAt = 0; }
+    else if(!ws || ws.readyState > 1){ retryDelay = 250; connect(); }
+  }
+  if(_hiddenAt && Date.now() - _hiddenAt > 12000){
+    // Drop focus after a real background gap. Android re-opens the soft
+    // keyboard on resume for whichever editable is focused — and CLOSING the
+    // keyboard doesn't unfocus it, so it popped right back up on every later
+    // resume until something else was tapped. No focused editable = nothing
+    // to restore. (Short hops keep their focus — mid-typing app switches
+    // shouldn't cost the keyboard.)
+    const ae = document.activeElement;
+    if(ae && ae !== document.body && ae.blur){ try{ ae.blur(); }catch(e){} }
+    // Auto-refresh the OFFICE. Chrome freezes the iframe's live feed while
+    // the app is backgrounded and doesn't always resume it cleanly, so it can
+    // sit on a stale snapshot. The office is a pure view (no unsaved state),
+    // so after any real background gap just reload the iframe — no manual
+    // refresh, and the terminal (which holds the session) is untouched.
+    const f = $('office');
+    if(f){ try{ f.contentWindow.location.reload(); }catch(e){ f.src = f.src; } }
+  }
+  _hiddenAt = 0;
+});
+
+// ---------- CONVO: chat with Claude (liquid-glass conversation pane) ----------
+// Source of truth is the transcript, served by GET /api/chat as byte-offset
+// incremental reads; sending rides the SAME ttyd wire as the terminal — the
+// two panes are two windows onto one session, so they can never disagree.
+const CV = { from:0, tpath:'', lastMsgId:null, lastCardSig:null, inflight:false, empty:true, pend:{}, pendT:null };
+// R2 CLAUDE-pane persistence: the pane must show BOTH terminal-typed prompts
+// AND Claude's replies, and survive tab switches + app resume "until the
+// session ends".
+CV.sid = null;          // owning session id of the transcript currently rendered — the reset-wipe guard
+CV.seen = new Set();    // rendered message ids, for dedupe when a same-sid reset replays the 512KB tail
+var CV_CONVO_CAP = 400; // per-tab cache size — matches the 400-bubble DOM cap in convoAddMsg
+function cvSlotKey(tab){ return 'pocketDeck.convo.' + (tab || ''); }
+function cvLoadCache(tab){
+  var raw = null;
+  try { raw = JSON.parse(sessionStorage.getItem(cvSlotKey(tab)) || 'null'); } catch(e){ raw = null; }
+  if(raw && Array.isArray(raw.msgs)) return { sid: raw.sid || null, msgs: raw.msgs };
+  if(Array.isArray(raw)) return { sid: null, msgs: raw };   // legacy bare-array slot
+  return { sid: null, msgs: [] };
+}
+var _cvSaveT = null;
+function cvSaveCacheSoon(){
+  if(_cvSaveT) return;   // burst of bubbles -> one write after things settle
+  _cvSaveT = setTimeout(function(){
+    _cvSaveT = null;
+    var tab = tabSession(), log = $('convoLog'), out = [];
+    for(var i = 0; i < log.children.length; i++){
+      var el = log.children[i];
+      if(!el.classList || !el.classList.contains('cvmsg')) continue;   // skip notes/placeholders
+      if(el.classList.contains('cv-pending')) continue;                // optimistic, not yet in the transcript
+      out.push({ id: el._cvId || null, role: el.classList.contains('cv-user') ? 'user' : 'assistant', text: el._cvRaw || '', ts: el._cvTs || 0 });
+    }
+    if(out.length > CV_CONVO_CAP) out = out.slice(-CV_CONVO_CAP);
+    try { sessionStorage.setItem(cvSlotKey(tab), JSON.stringify({ sid: CV.sid || null, msgs: out })); } catch(e){}
+  }, 400);
+}
+function cvClearCache(tab){ try { sessionStorage.removeItem(cvSlotKey(tab)); } catch(e){} }
+// rebuild the visible log (and CV.seen/CV.sid) from a tab's cached conversation
+function convoRestoreCache(tab){
+  var log = $('convoLog');
+  log.innerHTML = '';
+  CV.seen = new Set(); CV.lastMsgId = null;
+  var cache = cvLoadCache(tab);
+  CV.sid = cache.sid || null;   // so the first tail read on this tab merges (same sid) instead of wiping
+  cache.msgs.forEach(function(m){
+    if(!m || !m.text) return;
+    log.appendChild(convoBubbleEl({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text, ts: m.ts || 0, id: m.id || null }));
+    if(m.id) CV.seen.add(m.id);   // so the next tail replay dedupes against restored bubbles
+  });
+  CV.empty = log.children.length === 0;
+  log.scrollTop = log.scrollHeight;
+}
+// reset per-session POLLING + control state, WITHOUT touching the log DOM or
+// the persisted cache — shared by the full reset and the tab-switch restore
+function convoResetState(){
+  CV.from = 0; CV.tpath = ''; CV.lastMsgId = null; CV.lastCardSig = null;
+  CV.srv = { model: null, effort: null, mode: null }; CV.mode = null;
+  CV.pend = {}; if(CV.pendT){ clearTimeout(CV.pendT); CV.pendT = null; } cvBusySync();
+  CV.st = null; CV.workStart = 0; CV.dialogAt = 0; CV.inputOpt = 0;
+  cvSendBusySync();
+  $('convoTicker').classList.add('hidden');
+  $('convoCard').classList.add('hidden');
+  pickHide();   // consumes the sheet's history entry too, if it was open
+}
+// full reset: ALSO wipe the log DOM + dedupe set (true-reset callers only)
+function convoReset(){
+  convoResetState();
+  CV.sid = null; CV.seen = new Set(); CV.empty = true;
+  $('convoLog').innerHTML = '';
+}
+// tab switch: reset polling/control state but RESTORE this tab's cached
+// conversation instead of blindly wiping — the pane must survive tab switches
+function convoSwitchTab(tab){
+  convoResetState();
+  convoRestoreCache(tab);
+}
+function convoVisible(){
+  return S.bottomPanel === 'convo'
+    && (S.layout !== 'flip' || S.showing === 'term')
+    && document.visibilityState === 'visible';
+}
+function cvEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// markdown-lite, no libs: ``` fences -> <pre>, `code`, **bold**, *italic*,
+// # headings, "- " bullets. Newlines survive via the bubble's pre-wrap.
+function mdLite(text){
+  const parts = String(text).split(/```[^\n]*\n?/);
+  let html = '';
+  for(let i = 0; i < parts.length; i++){
+    if(i % 2 === 1){ html += '<pre>' + cvEsc(parts[i].replace(/\n$/,'')) + '</pre>'; continue; }
+    let seg = cvEsc(parts[i]);
+    seg = seg.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    seg = seg.replace(/\*\*(\S(?:[^*]*?\S)?)\*\*/g, '<b>$1</b>');
+    seg = seg.replace(/(^|[\s(])\*(\S(?:[^*\n]*?\S)?)\*(?=[\s).,!?:;]|$)/gm, '$1<i>$2</i>');
+    seg = seg.replace(/^#{1,3}\s+(.+)$/gm, '<span class="cvh">$1</span>');
+    seg = seg.replace(/^(\s*)[-*]\s+/gm, '$1• ');
+    html += seg;
+  }
+  return html;
+}
+function cvTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+// copy raw message text to the clipboard, with a ✓ flash on the button
+function cvCopy(text, btn){
+  function ok(){
+    if(!btn) return;
+    btn.textContent = '✓';
+    setTimeout(function(){ btn.textContent = '⧉'; }, 1200);
+  }
+  function fallback(){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove(); ok();
+    }catch(e){}
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(ok).catch(fallback);
+  } else fallback();
+}
+function convoBubbleEl(m){
+  const div = document.createElement('div');
+  div.className = 'cvmsg ' + (m.role === 'user' ? 'cv-user' : 'cv-asst') + ' cv-in';
+  div._cvRaw = m.text;   // raw text for the copy button (body is rendered markdown)
+  div._cvId = m.id || null;   // R2: id + ts kept on the node for the per-tab cache + dedupe
+  div._cvTs = m.ts || 0;
+  // Full text always — the old length clamp ("▾ show all") was removed; long
+  // messages render in full, both user and assistant bubbles.
+  div.innerHTML = '<div class="cvbody">' + mdLite(m.text) + '</div>'
+    + '<span class="cvfoot"><button class="cv-copy" title="Copy message">⧉</button>'
+    + '<span class="cvts">' + cvTime(m.ts) + '</span></span>';
+  div.addEventListener('animationend', function(){ div.classList.remove('cv-in'); });
+  div.querySelector('.cv-copy').addEventListener('click', function(e){
+    e.stopPropagation();
+    cvCopy(div._cvRaw, this);
+  });
+  return div;
+}
+function cvAtBottom(log){ return (log.scrollHeight - log.clientHeight - log.scrollTop) < 60; }
+// Placeholder lines. cv-keep (the "history trimmed" marker) survives messages
+// arriving; plain notes are cleared the moment a real bubble lands.
+function convoNote(text, keep){
+  const log = $('convoLog');
+  let n = log.querySelector('.cv-note:not(.cv-keep)');
+  if(!text){ if(n) n.remove(); return; }
+  if(keep){
+    const k = document.createElement('div');
+    k.className = 'cv-note cv-keep'; k.textContent = text;
+    log.appendChild(k); return;
+  }
+  if(!n){ n = document.createElement('div'); n.className = 'cv-note'; log.appendChild(n); }
+  n.textContent = text;
+}
+function convoAddMsg(m){
+  const log = $('convoLog');
+  const stick = cvAtBottom(log);
+  // R2 dedupe: a same-sid reset replays the 512KB tail, so ids we already
+  // rendered come back — skip them. NOT the current grow-target, which is one
+  // logical message still arriving split across polls.
+  if(m.id && CV.seen.has(m.id) && m.id !== CV.lastMsgId) return;
+  convoNote(null);
+  CV.empty = false;
+  if(m.role === 'user'){
+    // the transcript echoing back a message we already showed optimistically
+    const pend = log.querySelector('.cv-pending');
+    if(pend && pend._cvText === m.text.trim()){
+      pend.classList.remove('cv-pending'); pend._cvText = null;
+      pend._cvId = m.id || null; pend._cvTs = m.ts || pend._cvTs || 0;   // R2: adopt the real id for cache + dedupe
+      if(m.id) CV.seen.add(m.id);
+      cvSendBusySync();
+      CV.lastMsgId = null;
+      if(stick) log.scrollTop = log.scrollHeight;
+      cvSaveCacheSoon();
+      return;
+    }
+    CV.lastMsgId = null;
+  } else if(m.id && m.id === CV.lastMsgId){
+    // one logical assistant message split across polls — grow the last bubble
+    const el = log.lastElementChild;
+    if(el && el.classList.contains('cv-asst')){
+      el.querySelector('.cvbody').innerHTML += mdLite('\n\n' + m.text);
+      el._cvRaw = (el._cvRaw || '') + '\n\n' + m.text;   // keep the copy button whole
+      if(stick) log.scrollTop = log.scrollHeight;
+      cvSaveCacheSoon();
+      return;
+    }
+  }
+  log.appendChild(convoBubbleEl(m));
+  if(m.id) CV.seen.add(m.id);
+  CV.lastMsgId = m.role === 'assistant' ? (m.id || null) : null;
+  // trim oldest bubbles past the cap, keeping CV.seen in lockstep so it can't
+  // grow unbounded (its size tracks the on-screen bubbles)
+  while(log.children.length > 400){
+    var first = log.firstChild;
+    if(first && first._cvId) CV.seen.delete(first._cvId);
+    log.removeChild(first);
+  }
+  if(stick) log.scrollTop = log.scrollHeight;
+  cvSaveCacheSoon();   // R2: persist per-tab so the pane survives tab switch / resume
+}
+// Quirky play-words while Claude works — the CLI's own spinner personality,
+// rotated every few seconds, with elapsed time and a live token counter.
+const CV_WORDS = ['Baking', 'Pondering', 'Brewing', 'Noodling', 'Scheming',
+  'Percolating', 'Marinating', 'Conjuring', 'Crunching', 'Tinkering',
+  'Cooking', 'Riffing', 'Mulling', 'Whirring', 'Plotting', 'Weaving'];
+CV.st = null; CV.workStart = 0; CV.word = ''; CV.wordAt = 0; CV.tok0 = 0;
+function cvFmtTok(n){
+  n = n || 0;
+  if(n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M';
+  if(n >= 1e3) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'k';
+  return String(n);
+}
+function cvPickWord(){
+  let w = CV.word;
+  while(w === CV.word) w = CV_WORDS[Math.floor(Math.random() * CV_WORDS.length)];
+  CV.word = w; CV.wordAt = Date.now();
+}
+// The ticker used to rebuild its innerHTML every second (for the timer),
+// which RESTARTED the star spin and word pop each tick — that was the
+// stutter. Now the skeleton persists: the star spins continuously, only the
+// word (with a crossfade) and the meta text ever update.
+function cvSetWord(w){
+  const el = $('convoTicker').querySelector('.cv-word');
+  if(!el || el._word === w) return;
+  el._word = w;
+  if(!el.textContent){ el.textContent = w + '…'; return; }   // first word — no fade needed
+  el.style.opacity = '0'; el.style.transform = 'translateY(-4px)';
+  setTimeout(function(){
+    el.textContent = w + '…';
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(5px)';
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      el.style.transition = '';
+      el.style.opacity = '1'; el.style.transform = 'none';
+    }); });
+  }, 200);
+}
+function convoTickerPaint(){
+  const t = $('convoTicker');
+  const st = CV.st;
+  if(!st || st.state === 'idle' || st.state === 'none' || st.state === 'ended'){
+    CV.workStart = 0; t.classList.add('hidden'); return;
+  }
+  if(st.state === 'waiting'){
+    CV.workStart = 0; t._built = false;
+    t.innerHTML = '⏳ ' + cvEsc(st.activity || 'Claude is waiting for you');
+    t.classList.remove('hidden'); return;
+  }
+  // working
+  const now = Date.now();
+  if(!t._built){
+    t.innerHTML = '<span class="cv-star">✳</span> <b class="cv-word"></b><span class="cv-meta"></span>';
+    t._built = true;
+  }
+  if(!CV.workStart){ CV.workStart = now; CV.tok0 = st.tokens || 0; cvPickWord(); }
+  if(now - CV.wordAt > 4000) cvPickWord();
+  cvSetWord(CV.word);
+  const secs = Math.floor((now - CV.workStart) / 1000);
+  const dTok = Math.max(0, (st.tokens || 0) - CV.tok0);
+  let meta = '';
+  if(st.activity && st.activity !== 'thinking…') meta += ' · ' + st.activity;
+  meta += ' · ' + secs + 's';
+  if(dTok > 0) meta += ' · ⚡ ' + cvFmtTok(dTok) + ' tokens';
+  t.querySelector('.cv-meta').textContent = meta;
+  t.classList.remove('hidden');
+}
+// keep the floating card/sheet docked just above the composer+ticker —
+// both change height (autogrow textarea, ticker appearing/disappearing)
+function cvDockOverlays(){
+  // sheets are position:fixed (allowed to cover the office — readability
+  // beats the scenery while a question is up), so dock them from the
+  // viewport bottom to just above the ticker/composer
+  const tk = $('convoTicker');
+  const anchor = (!tk.classList.contains('hidden') && tk.offsetHeight) ? tk : $('convoBar');
+  const r = anchor.getBoundingClientRect();
+  const d = (r.height ? Math.max(80, window.innerHeight - r.top + 8) : 150);
+  $('convoPane').style.setProperty('--cv-dock', d + 'px');
+}
+window.addEventListener('resize', cvDockOverlays);
+function convoStatusRender(st){
+  CV.st = st || null;
+  convoTickerPaint();
+  cvDockOverlays();
+}
+// seconds/word/tokens tick between polls too — the counter breathes even
+// when no new poll data has landed yet
+setInterval(function(){
+  if(CV.st && CV.st.state === 'working' && convoVisible()) convoTickerPaint();
+}, 1000);
+// debug: double-tap the ticker to dump exactly what the dialog scanner sees
+// on the terminal screen — ground truth for tuning menu detection
+$('convoTicker').addEventListener('dblclick', function(){
+  let lines = [];
+  try{
+    const buf = term.buffer.active;
+    const start = Math.max(0, buf.length - term.rows);
+    for(let i = start; i < buf.length; i++){
+      const ln = buf.getLine(i);
+      lines.push(ln ? ln.translateToString(true) : '');
+    }
+  }catch(e){}
+  convoDlgEcho('🔍 screen:\n' + lines.filter(function(l){ return l.trim(); }).join('\n'));
+});
+// Walk the dialog pointer onto numbered row n — from its REAL current
+// position, read fresh off the screen (❯ may sit on an option or on the
+// unnumbered Submit/Next row; both are pointer stops).
+function cvWalkToRow(n){
+  if(!(ws && ws.readyState === 1 && inited && S.engine === 'pocket')) return;
+  try{
+    const buf = term.buffer.active, start = Math.max(0, buf.length - term.rows);
+    let stops = 0, cur = -1, tgt = -1;
+    for(let i = start; i < buf.length; i++){
+      const ln = buf.getLine(i);
+      const l = (ln ? ln.translateToString(true) : '').replace(/[│┃║╭╮╰╯├┤─━┌┐└┘]/g, ' ');
+      const m = l.match(/^\s*(❯\s*)?(\d{1,2})[.)]/);
+      const sub = /^\s*(❯\s*)?(Submit|Next)\s*$/i.exec(l);
+      if(m){ stops++; if(m[1]) cur = stops; if(parseInt(m[2], 10) === n) tgt = stops; }
+      else if(sub){ stops++; if(sub[1]) cur = stops; }
+    }
+    if(cur < 0 || tgt < 0 || cur === tgt) return;
+    const d = tgt - cur, key = d > 0 ? '\x1b[B' : '\x1b[A';
+    for(let i = 0; i < Math.abs(d); i++) setTimeout(function(){ sendInput(key); }, i * 90);
+  }catch(e){}
+}
+// After a typed multiselect answer commits, make sure its checkbox is ON.
+// CRITICAL ORDER: while the pointer sits on the input row, its text field
+// swallows keystrokes as TEXT (that's where the old "3444" came from, and
+// why a bare toggle digit never landed) — so step the pointer OFF the row
+// first (↑ — no field focused), THEN read the live [ ]/[✔] marker and send
+// the digit only if it's still unticked.
+function cvEnsureTicked(n){
+  if(!(ws && ws.readyState === 1 && inited && S.engine === 'pocket')) return;
+  sendInput('\x1b[A');
+  setTimeout(function(){
+    try{
+      const buf = term.buffer.active;
+      const start = Math.max(0, buf.length - term.rows);
+      for(let i = start; i < buf.length; i++){
+        const ln = buf.getLine(i);
+        const l = (ln ? ln.translateToString(true) : '').replace(/[│┃║╭╮╰╯├┤─━┌┐└┘]/g, ' ');
+        const m = l.match(/^\s*(?:❯\s*)?(\d{1,2})[.)]\s*\[(.?)\]/);
+        if(m && parseInt(m[1], 10) === n){
+          if(!m[2].trim()) sendInput(String(n));   // unticked → tick it
+          return;
+        }
+      }
+    }catch(e){}
+  }, 260);
+}
+// ---- interactive TUI dialogs, answerable from the chat (no pane switching):
+// scan the LIVE terminal screen for a numbered-option menu (permission
+// prompts, AskUserQuestion, plan approval) and render it as tappable buttons.
+// Purely client-side — works even before the Notification hook is wired.
+function convoScanDialog(){
+  const card = $('convoCard');
+  if(S.engine !== 'pocket' || !ws || ws.readyState !== 1 || !inited){
+    card.classList.add('hidden'); CV.lastCardSig = null; return;
+  }
+  let clean = [];
+  try{
+    const buf = term.buffer.active;
+    const start = Math.max(0, buf.length - term.rows);
+    for(let i = start; i < buf.length; i++){
+      const ln = buf.getLine(i);
+      // strip box-drawing frames so bordered dialogs still match
+      clean.push((ln ? ln.translateToString(true) : '').replace(/[│┃║╭╮╰╯├┤─━┌┐└┘]/g, ' ').replace(/\s+$/, ''));
+    }
+  }catch(e){ return; }
+  // content may be EMPTY — "Type something" in edit mode with nothing typed
+  // renders as "❯ 3." and used to break the run (no card at all)
+  // The question-set REVIEW screen ("Review your answers … Ready to submit
+  // your answers?") has an UNNUMBERED confirm row — invisible to the numbered
+  // scan below, which is exactly where the flow used to vanish into a loop
+  // (card disappeared, stray keys hit Cancel, Claude re-asked). Verified in
+  // Claude Code's own source: confirmLabel "Submit answers" / cancelLabel
+  // "Cancel"; Enter confirms the highlighted default, Esc cancels.
+  for(let i = 0; i < clean.length; i++){
+    if(/Ready to submit your answers\?/i.test(clean[i])){
+      let pre = [];
+      for(let j = Math.max(0, i - 12); j < i; j++){
+        const s = clean[j].trim();
+        if(s && !/Review your answers/i.test(s)) pre.push(s.slice(0, 200));
+      }
+      const sig = 'review|' + pre.length;
+      // ← goes back one header tab (to the last question); Esc here would
+      // cancel the ENTIRE question set (confirmed on the phone) — it stays
+      // available on the key row below for deliberate dismissal only
+      if(sig !== CV.lastCardSig) convoRenderCard('Ready to submit your answers?', [
+        { key: '\r',     label: '✅ Submit answers' },
+        { key: '\x1b[D', label: '⬅ Back to the questions', nav: true },
+      ], sig, pre.join('\n'));
+      return;
+    }
+  }
+  const OPT = /^\s*(?:[❯>]\s*)?(\d{1,2})[.)]\s*(.{0,120})$/;
+  const HINT = /enter to (select|confirm)|tab\/arrow|esc to cancel/i;
+  // Collect numbered runs starting at 1. A run may flow THROUGH indented
+  // description lines (the AskUserQuestion UI puts one under each option —
+  // that's what used to break the run and hide the card) and single blank
+  // gaps. The LAST qualifying run wins.
+  let runs = [], cur = null, blanks = 0, fill = 0;
+  for(let i = 0; i < clean.length; i++){
+    const m = clean[i].match(OPT);
+    if(m){
+      const n = parseInt(m[1], 10);
+      const caret = /^\s*❯/.test(clean[i]);
+      if(cur && n === cur.opts[cur.opts.length - 1].n + 1){
+        cur.opts.push({ n: n, label: m[2].trim(), desc: '' });
+        if(caret){ cur.caret = true; cur.caretIdx = cur.opts.length - 1; }
+      } else if(n === 1){
+        cur = { start: i, caret: caret, caretIdx: caret ? 0 : -1, submitAfterIdx: -1, opts: [{ n: 1, label: m[2].trim(), desc: '' }] };
+        runs.push(cur);
+      } else cur = null;
+      blanks = 0; fill = 0;
+    } else if(cur){
+      const s = clean[i].trim();
+      if(!s){ if(++blanks >= 2) cur = null; continue; }
+      blanks = 0;
+      if(++fill >= 5){ cur = null; continue; }
+      // the multiselect's own unnumbered Submit/Next row is a POINTER STOP
+      // between options — remember where it sits for arrow-step arithmetic
+      if(/^(Submit|Next)$/i.test(s)){ cur.submitAfterIdx = cur.opts.length - 1; continue; }
+      // first continuation line = that option's description, shown on the card
+      const last = cur.opts[cur.opts.length - 1];
+      if(!last.desc && !HINT.test(s)) last.desc = s.slice(0, 140);
+    }
+  }
+  // Only trust a run as a LIVE menu if the ❯ selector caret is on one of its
+  // lines — Claude's ordinary numbered lists in replies never carry it, so
+  // the looser run rules above can't turn prose into phantom dialogs.
+  let run = null;
+  for(let i = runs.length - 1; i >= 0; i--){ if(runs[i].opts.length >= 2 && runs[i].caret){ run = runs[i]; break; } }
+  if(run){
+    // Pull the WHOLE dialog context above the options — the command preview /
+    // diff / question body — not just the nearest line. "Do you want to
+    // proceed?" alone told the user nothing about what they were approving.
+    const NOISE = /esc to (cancel|interrupt)|shift\+tab|ctrl\+[a-z]|^[✳✻✽·◐◓◑◒]/i;
+    let ctx = [], blanks = 0, crumb = '';
+    for(let i = run.start - 1; i >= 0 && ctx.length < 14; i--){
+      const s = clean[i].trim();
+      if(!s){ if(++blanks >= 2) break; continue; }
+      blanks = 0;
+      if(/^❯/.test(s)) break;          // a collapsed previous question — conversation, not this dialog
+      const sT = s.replace(/^[←→]\s*/, '').replace(/\s*[←→]$/, '');
+      if(/^[☐☑✔✓]/.test(sT)){
+        // the question-set header ("☐ Purpose ☐ Test area ✔Submit") becomes a
+        // breadcrumb so advancing through a multi-question set reads as
+        // PROGRESS, not "the same popup again"
+        if(!crumb && /submit/i.test(sT)) crumb = sT;
+        continue;
+      }
+      if(NOISE.test(s)) continue;
+      ctx.unshift(s.slice(0, 300));
+    }
+    const q = ctx.length ? ctx[ctx.length - 1] : 'Claude is asking:';
+    let pre = ctx.slice(0, -1).join('\n');
+    if(crumb) pre = '📋 ' + crumb + (pre ? '\n' + pre : '');
+    // free text inside a multiselect is fiddly (the inline field only takes
+    // input when the TUI pointer sits on it) — steer to the reliable path
+    if(run.opts.some(function(o){ return /\[.?\]/.test(o.label); })
+       && run.opts.some(function(o){ return /type something/i.test(o.label); })){
+      pre = (pre ? pre + '\n' : '') + '✏️ Want to answer in your own words? Tap "Chat about this", then just message normally.';
+    }
+    // "Type something" puts the TUI into an INLINE EDIT FIELD — from then on
+    // number keys are literal text, so option taps would type digits into the
+    // field (confirmed on the phone: "3. 3444"). The TUI shows its
+    // "ctrl+g to edit in nano" hint in that state — detect it and switch the
+    // card to typing mode: no option buttons to leak digits, answer comes
+    // from the composer (dialog-input mode), ⏎ commits, Esc backs out.
+    const editing = clean.some(function(l){ return /ctrl\+g to edit in nano/i.test(l); });
+    if(editing){
+      const sigE = q + '|edit';
+      // ↑ leaves the inline field back to the option list (the TUI's own hint
+      // says arrows navigate even while editing) — without this button there
+      // was no safe way back; Esc risks cancelling the whole question
+      if(sigE !== CV.lastCardSig) convoRenderCard(q, [
+        { key: '\x1b[A', label: '⬅ Back to the options', desc: 'leave typing mode without answering', nav: true }
+      ], sigE,
+        (pre ? pre + '\n\n' : '') + '✏️ Type your answer in the box below — ⏎ submits it.');
+      return;
+    }
+    // multi-select: options carry checkbox markers and number keys TOGGLE
+    // instead of committing — the card stays open and gets a Submit button
+    const CHK = /^\[\s*([xX✔✓*]?)\s*\]\s*/;
+    const multi = run.opts.some(function(o){ return CHK.test(o.label); });
+    const sig = q + '|' + run.opts.map(function(o){ return o.n + o.label; }).join('|');
+    if(sig !== CV.lastCardSig) convoRenderCard(q, run.opts.map(function(o, oi){
+      const m = o.label.match(CHK);
+      const bare = o.label.replace(CHK, '');
+      return { key: String(o.n),
+               label: o.n + '. ' + bare,
+               desc: o.desc || '',
+               idx: oi,
+               isInput: /type something/i.test(bare),
+               box: !!m, checked: !!(m && m[1]) };
+    }), sig, pre, multi, { caretIdx: run.caretIdx, submitAfterIdx: run.submitAfterIdx });
+    return;
+  }
+  // y/n prompt fallback (no numbered menu)
+  for(let i = clean.length - 1; i >= 0; i--){
+    const s = clean[i].trim();
+    if(!s) continue;
+    if(/\(y\/n\)|\by\/n\b/i.test(s)){
+      const sig = 'yn|' + s;
+      if(sig !== CV.lastCardSig) convoRenderCard(s.slice(0, 200),
+        [{ key: 'y', label: 'Yes' }, { key: 'n', label: 'No' }], sig, '');
+      return;
+    }
+    break; // only the last non-empty line counts as a live y/n prompt
+  }
+  card.classList.add('hidden'); CV.lastCardSig = null; // menu gone — self-heal
+}
+// Dialog answers never echo into the transcript, so give them a LOCAL
+// bubble — otherwise the log shows Claude acknowledging thin air.
+// (Session-local by nature; a reload rebuilds the log from the transcript
+// and these actions simply aren't part of it.)
+function convoDlgEcho(text){
+  convoNote(null); CV.empty = false;
+  const log = $('convoLog');
+  const el = document.createElement('div');
+  el.className = 'cvmsg cv-user cv-dlg cv-in';
+  el.innerHTML = '<div class="cvbody"></div><span class="cvts">' + cvTime(Date.now()) + '</span>';
+  el.querySelector('.cvbody').textContent = text;
+  el.addEventListener('animationend', function(){ el.classList.remove('cv-in'); });
+  log.appendChild(el);
+  while(log.children.length > 400) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;   // you just acted — snap to it
+}
+// ---- away-notifications: when the app is hidden, a prompt becomes an
+// Android notification whose action buttons answer via /deck/key (the
+// server types into tmux — works even if the deck never reopens).
+function cvNotifGranted(){ return ('Notification' in window) && Notification.permission === 'granted'; }
+function cvNotify(title, body, actions, tab){
+  if(!S.notifyAsk || !cvNotifGranted() || !navigator.serviceWorker) return;
+  navigator.serviceWorker.ready.then(function(reg){
+    reg.showNotification(title, {
+      body: body.slice(0, 300),
+      tag: 'convo-ask-' + tab,      // replaces itself, never stacks
+      icon: '/deck-icon-192.png',
+      data: { tab: tab },
+      actions: actions.slice(0, 2).map(function(o){ return { action: o.key, title: o.label.slice(0, 22) }; }),
+    });
+  }).catch(function(){});
+}
+function convoRenderCard(question, opts, sig, pre, multi, nav){
+  const card = $('convoCard');
+  CV.lastCardSig = sig;
+  CV.dialogAt = Date.now();
+  card._nav = nav || null;   // live ❯ position + Submit-row stop, for arrow walks
+  card.classList.remove('min');   // a NEW question always arrives expanded
+  card.innerHTML = '<div class="cvhead"><div class="cvq">⚠ ' + cvEsc(question) + '</div>'
+    + '<button class="cvmin" title="Minimise">—</button></div>'
+    + (pre ? '<div class="cvpre">' + cvEsc(pre) + '</div>' : '');
+  card.querySelector('.cvmin').addEventListener('click', function(e){
+    e.stopPropagation();
+    card.classList.add('min');
+  });
+  card.onclick = function(){ if(card.classList.contains('min')) card.classList.remove('min'); };
+  if(document.visibilityState === 'hidden'){
+    cvNotify('Claude is asking', question + (pre ? '\n' + pre : ''), opts, tabSession());
+  }
+  // only options that really carry a checkbox get ☐/☑ — "Chat about this"
+  // sits in the same list but is an exit action, not a tickable
+  function optText(o){ return (multi && o.box ? (o.checked ? '☑ ' : '☐ ') : '') + o.label; }
+  opts.forEach(function(o){
+    const b = document.createElement('button');
+    b.className = 'cvopt';
+    b.textContent = optText(o);
+    if(o.desc){
+      const d = document.createElement('span');
+      d.className = 'cvod'; d.textContent = o.desc;
+      b.appendChild(d);
+    }
+    b.addEventListener('click', function(){
+      CV.dialogAt = Date.now();   // a typed follow-up within 12s answers the dialog
+      if(multi && o.isInput){
+        // "Type something" in a MULTI-select — order matters enormously:
+        // TICK FIRST (digit toggles work at tap time, proven by "empty
+        // Other" picks arriving in submissions), because after typing, the
+        // row's focused text field swallows toggle digits as text. THEN
+        // walk the pointer onto the row — measured FRESH from the screen
+        // (cvWalkToRow), not assumed — so typing lands in a focused field.
+        const rowN = parseInt(o.key, 10);
+        CV.inputOpt = rowN;   // post-commit safety net re-checks the tick
+        const nv = card._nav || {};
+        const onInputNow = typeof nv.caretIdx === 'number' && nv.caretIdx === o.idx;
+        if(!o.checked && !onInputNow) sendInput(o.key);
+        setTimeout(function(){ cvWalkToRow(rowN); }, 500);
+        convoRenderCard(question, [
+          { key: '\x1b[A', label: '⬅ Back to the options', desc: 'leave typing mode without answering', nav: true }
+        ], sig + '|edit', '✏️ Type your answer in the box below — ⏎ submits it.', false, card._nav);
+        return;
+      }
+      // Claude's dialogs commit on the bare key — deliberately NO trailing \r
+      sendInput(o.key);
+      if(multi && o.box){
+        // number keys TOGGLE here — flip optimistically, keep the card open;
+        // the next scan re-renders from the real screen state
+        o.checked = !o.checked;
+        b.firstChild.nodeValue = optText(o);
+        return;
+      }
+      if(!o.nav) convoDlgEcho('☑ ' + o.label);   // navigation isn't an answer — no echo
+      card.classList.add('hidden'); CV.lastCardSig = null; // optimistic; rescan re-shows if still up
+      setTimeout(convoScanDialog, 700);
+      convoSyncSend();
+    });
+    card.appendChild(b);
+  });
+  if(multi){
+    const sub = document.createElement('button');
+    sub.className = 'cvopt cvsubmit';
+    // per Claude Code's own source: Enter confirms THIS question and advances
+    // (button label there is "Next"/"Submit"); a final "Ready to submit your
+    // answers?" review menu follows the last question — the scanner renders
+    // that one as a normal card, and tapping "Submit answers" finishes.
+    sub.textContent = '✔ Confirm ticks — next step';
+    sub.addEventListener('click', function(){
+      const picked = opts.filter(function(o){ return o.checked; }).map(function(o){ return o.label; });
+      convoDlgEcho('☑ ' + (picked.length ? picked.join(' · ') : 'nothing ticked'));
+      // Enter does NOT submit a multiselect (it acts on the focused row —
+      // "confirm did nothing" on the phone). The dialog's header tabs
+      // (← ☒ Question … ✔Submit →) are switched with the ARROW keys, and
+      // the ✔Submit tab IS the review screen — which renders as its own
+      // card with "✅ Submit answers". So: → advances to the next
+      // question/review, reliably, from anywhere in the list.
+      sendInput('\x1b[C');
+      CV.dialogAt = Date.now();
+      card.classList.add('hidden'); CV.lastCardSig = null;
+      setTimeout(convoScanDialog, 1000);
+    });
+    card.appendChild(sub);
+  }
+  // fallback keys: ⏎ confirms highlight-then-confirm dialogs (e.g. the trust
+  // prompt), Esc cancels. Arrows were dropped — tapping an option IS the
+  // selection, so they only added clutter.
+  const keys = document.createElement('div');
+  keys.className = 'cvkeys';
+  [['⏎', '\r'], ['Esc', '\x1b']].forEach(function(k){
+    const b = document.createElement('button');
+    b.textContent = k[0];
+    b.addEventListener('click', function(){
+      sendInput(k[1]);
+      if(k[0] === 'Esc') convoDlgEcho('⎋ backed out');
+      setTimeout(convoScanDialog, 700);
+    });
+    keys.appendChild(b);
+  });
+  card.appendChild(keys);
+  cvDockOverlays();
+  card.classList.remove('hidden');
+}
+function convoSyncSend(){
+  const live = !!(ws && ws.readyState === 1 && inited && S.engine === 'pocket');
+  const pocket = S.engine === 'pocket';
+  // Send stays enabled on the Pocket engine even while the socket is down: the
+  // message QUEUES and flushes on reconnect (or shows "not delivered" if it
+  // never comes back) — a disabled button would just silently strand it. Only
+  // the read-only ttyd engine truly disables sending. Attachments still need a
+  // live socket (their path is only useful once it can actually be sent).
+  $('convoSend').disabled = !pocket;
+  $('convoAttach').disabled = !live;
+  const dlg = CV.lastCardSig || Date.now() - (CV.dialogAt || 0) < 12000;
+  $('convoText').placeholder = !pocket ? 'read-only in ttyd engine — switch to Pocket to send'
+    : !live ? 'terminal disconnected — reconnecting…'
+    : (dlg ? 'Answer Claude’s question…' : 'Message Claude…');
+}
+// Multiline-safe send: the composer is multiline now (Enter = newline), but
+// raw \n bytes on the pty read as Enter and would SUBMIT the prompt early.
+// Bracketed paste (what a terminal paste actually does) makes the TUI take
+// the newlines literally; if the app didn't enable it, flatten instead.
+// Returns the delivery result of the CONTENT send (true = handed to an open
+// socket, false = queued); the optional `ticket` tracks that same content send
+// so the caller can watch for a later flush-time delivery. The trailing Enter
+// is deliberately untracked — it's a submit keystroke, not the message bytes.
+function cvSendText(msg, enterDelay, ticket){
+  let bp = false;
+  try { bp = term.modes.bracketedPasteMode; } catch(e) {}
+  if(/[\r\n]/.test(msg)){
+    if(bp){
+      // Paste first, then Enter as its OWN keystroke a beat later. A \r glued
+      // to the paste-end marker races the TUI's paste handling — confirmed on
+      // the phone: the prompt sat fully typed but unsubmitted in the input box.
+      // Image paths take longer still (the TUI ingests the file before the
+      // input settles), so attachment sends pass a bigger delay.
+      const ok = sendInput('\x1b[200~' + msg + '\x1b[201~', ticket);
+      setTimeout(function(){ sendInput('\r'); }, enterDelay || 300);
+      return ok;
+    }
+    msg = msg.replace(/\s*\r?\n\s*/g, ' ');
+  }
+  return sendInput(msg + '\r', ticket);
+}
+// Delivery watch for an optimistic .cv-pending bubble. `ticket.delivered` flips
+// true the instant its bytes reach an OPEN socket (immediate send OR reconnect
+// flush — see sendBytes/flushSendQueue). Promotes to the honest "sent" look
+// only once that's true; if it's still queued after ~8s the socket never came
+// back, so the send is marked "not delivered" (tap the bubble to retry). The
+// transcript echo (convoAddMsg) independently clears the .cv-pending state as
+// the real confirmation, which ends this watch early.
+function _cvWatchDelivery(el, ticket){
+  const t0 = Date.now();
+  (function poll(){
+    if(!el.parentNode || !el.classList.contains('cv-pending')) return;   // echo absorbed it → confirmed sent
+    const waited = Date.now() - t0;
+    if(ticket.delivered){
+      // truly went out — keep the "confirming…" wave briefly (the echo may
+      // still fully clear it), then settle to full opacity
+      if(waited >= 6000){ el.classList.add('cv-sent'); cvSendBusySync(); return; }
+    } else if(waited > 8000){
+      _cvMarkFailed(el); return;   // never handed to a socket — say so, don't fake it
+    }
+    setTimeout(poll, 300);
+  })();
+}
+function _cvMarkFailed(el){
+  el.classList.remove('cv-pending'); el.classList.remove('cv-sent');
+  el.classList.add('cv-failed');
+  cvSendBusySync();
+}
+bindComposer($('convoText'), $('convoSend'), function(v){
+  const live = !!(ws && ws.readyState === 1 && inited && S.engine === 'pocket');
+  if(!live){
+    // Don't silently drop the send. On the read-only ttyd engine sending is
+    // genuinely impossible — keep the text and say why (return false). On the
+    // Pocket engine the terminal socket is merely down: kick a reconnect,
+    // surface the "reconnecting…" state NOW (not at the next 2s poll), and fall
+    // through to make an optimistic bubble whose bytes are QUEUED and flushed on
+    // reconnect — or marked "not delivered" (tap to retry) if it never returns.
+    convoSyncSend();
+    if(S.engine !== 'pocket') return false;
+    kickReconnect();
+  }
+  // ask for notification permission on the first send (a user gesture) so
+  // the default-on away-notifications can actually fire
+  if(S.notifyAsk && 'Notification' in window && Notification.permission === 'default'){
+    try{ Notification.requestPermission(); }catch(e){}
+  }
+  // Dialog-input mode (only with a LIVE socket + an on-screen menu): while a
+  // dialog is up (or just after tapping one of its options, e.g. "Type
+  // something." / "tell Claude what to do differently"), this text ANSWERS the
+  // dialog — it is not a new prompt. It needs the live screen (the cursor walk
+  // and checkbox verification read the terminal buffer), so it is gated on
+  // `live`; a disconnected send always falls through to the normal queued path.
+  // Dialog answers never echo into the transcript, so the normal path would
+  // strand a pending bubble and fire the retry Enters INTO the dialog.
+  // CRITICAL: text and Enter must be SEPARATE keystrokes. In one burst
+  // ("text\r"), the dialog's text field sees the return in the chunk and
+  // submits BEFORE the characters register — Claude received "Other with
+  // no text" every time (confirmed on the phone).
+  if(live && (CV.lastCardSig || Date.now() - (CV.dialogAt || 0) < 12000)){
+    const ans = v.replace(/\s*\r?\n\s*/g, ' ');   // inline fields are single-line
+    sendInput(ans);
+    setTimeout(function(){ sendInput('\r'); }, 300);
+    convoDlgEcho('✏️ ' + ans);
+    // multiselect: committing text into the field does NOT tick its checkbox,
+    // so the typed answer silently dropped at submit — verify the row's
+    // [ ]/[✔] marker on screen after the commit and tick it if needed
+    if(CV.inputOpt){
+      const n = CV.inputOpt; CV.inputOpt = 0;
+      setTimeout(function(){ cvEnsureTicked(n); }, 1400);
+      setTimeout(function(){ cvEnsureTicked(n); }, 2800);
+    }
+    CV.dialogAt = 0;
+    setTimeout(convoTick, 700);
+    setTimeout(convoScanDialog, 1100);
+    return;
+  }
+  // attachments ride as file paths ahead of the text — Claude reads them
+  const paths = CV.att.map(function(a){ return a.path; });
+  const sendMsg = paths.length ? paths.join('\n') + '\n' + v : v;
+  const sendDelay = paths.length ? 900 : 300;
+  // optimistic bubble the instant you hit send — the buttery part
+  convoNote(null);
+  CV.empty = false;
+  const shown = (CV.att.map(function(a){ return '📎 ' + a.name; }).join('\n') + '\n' + v).replace(/^\n/, '');
+  const log = $('convoLog');
+  const el = convoBubbleEl({ role: 'user', text: shown, ts: Date.now(), id: null });
+  el.classList.add('cv-pending');
+  // dedup key = EXACTLY what the transcript will echo back (paths + text),
+  // so this pretty 📎 bubble absorbs the echo instead of duplicating it
+  el._cvText = sendMsg.trim();
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  cvSendBusySync();
+  // Honest send lifecycle (replaces the old blind 6s .cv-sent promotion): fire
+  // the send with a delivery TICKET and only promote to "sent" once its bytes
+  // truly reach an OPEN socket (now, or via the reconnect queue flush). Still
+  // queued after ~8s ⇒ the socket never came back ⇒ mark it "not delivered".
+  // Tapping a failed bubble re-runs the identical send.
+  el._cvFire = function(){
+    const ticket = { delivered: false };
+    el._cvTicket = ticket;   // kept so a retry can re-watch the SAME queued bytes, not re-enqueue them
+    cvSendText(sendMsg, sendDelay, ticket);
+    _cvWatchDelivery(el, ticket);
+    // Verify-and-retry Enter: the transcript echo is PROOF of submission. If it
+    // hasn't arrived, the Enter almost certainly lost a race (image ingestion /
+    // fresh-session startup swallow it). A stray Enter on an already-submitted
+    // empty box is a no-op. Skipped while a dialog menu is up, while the send
+    // has failed, and while the socket is down. (We deliberately do NOT try to
+    // break tmux copy-mode here — blindly sending q/Esc to escape it is riskier
+    // than the occasional swallowed input it would fix.)
+    [2000, 4500].forEach(function(ms){
+      setTimeout(function(){
+        if(el.parentNode && el.classList.contains('cv-pending') && !el.classList.contains('cv-failed')
+           && !CV.lastCardSig && ws && ws.readyState === 1 && inited && S.engine === 'pocket') sendInput('\r');
+      }, ms);
+    });
+  };
+  // tap a FAILED bubble to re-attempt: back to pending, nudge a reconnect, and
+  // re-watch. If the original bytes are STILL queued (the socket never came
+  // back) we do NOT re-enqueue them — a reconnect flushes the existing copy —
+  // so a retry can never double-send. Only if they were evicted past the queue
+  // cap do we re-fire from scratch.
+  el.addEventListener('click', function(e){
+    if(!el.classList.contains('cv-failed')) return;
+    e.stopPropagation();
+    el.classList.remove('cv-failed');
+    el.classList.add('cv-pending');
+    cvSendBusySync();
+    const t = el._cvTicket;
+    if(t && !t.delivered && sendQueue.some(function(q){ return q.ticket === t; })){
+      kickReconnect();
+      _cvWatchDelivery(el, t);
+    } else {
+      el._cvFire();
+    }
+  });
+  el._cvFire();
+  CV.att.forEach(function(a){ try{ URL.revokeObjectURL(a.url); }catch(e){} });
+  CV.att = []; cvRenderChips();
+  // burst of quick polls so the echo + first reply land near-instantly
+  CV.fastUntil = Date.now() + 20000;
+  setTimeout(convoTick, 350);
+  setTimeout(convoTick, 1200);
+}, { noEnter: true });
+// Hidden-mode probe: status only (?lite=1 — the server skips the transcript
+// read), fired from the same heartbeat while the app is backgrounded. If the
+// session is WAITING (Notification hook), raise the approval notification.
+// Android throttles background timers, so this can lag — worst case ~a
+// minute — but the buttons work without ever reopening the app.
+let _cvLiteAt = 0;
+function convoLiteProbe(){
+  if(!S.notifyAsk || !cvNotifGranted() || S.engine !== 'pocket') return;
+  const tab = tabSession();
+  fetch('/api/chat?tab=' + encodeURIComponent(tab) + '&lite=1')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d || !d.ok || !d.status) return;
+      const st = d.status;
+      if(st.state === 'waiting' && st.at && st.at !== _cvLiteAt){
+        _cvLiteAt = st.at;
+        cvNotify('Claude is asking', st.activity || 'Claude needs your input',
+          [{ key: '1', label: '✔ Approve' }, { key: '2', label: '✘ Deny' }], tab);
+      }
+    })
+    .catch(function(){});
+}
+function convoTick(){
+  if(CV.inflight) return;
+  if(!convoVisible()){
+    if(document.visibilityState === 'hidden') convoLiteProbe();
+    return;
+  }
+  const tab = tabSession();
+  CV.inflight = true;
+  fetch('/api/chat?tab=' + encodeURIComponent(tab) + '&from=' + CV.from + '&tpath=' + encodeURIComponent(CV.tpath))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      CV.inflight = false;
+      if(!d || !d.ok || d.tab !== tabSession()) return; // raced a tab switch
+      if(d.reset){
+        // R2: only WIPE on a genuine owner change (d.session !== CV.sid).
+        // Same-sid resets — transcript being born, byte-shrink (/clear,
+        // compaction), tpath re-resolution — must NOT wipe: they replay the
+        // 512KB tail, which CV.seen dedupes on merge. The old blind wipe on
+        // every reset is exactly why Claude's bubbles vanished (user bubbles
+        // survived only because they were kept as optimistic pending ones).
+        if(d.session !== CV.sid){
+          // genuine owner change — wipe, but keep optimistic pending bubbles
+          // (a fresh session's first polls all report reset while its
+          // transcript is being born, and the wipe was eating the user's
+          // just-sent message right in front of them)
+          const logEl = $('convoLog');
+          const keep = Array.prototype.slice.call(logEl.querySelectorAll('.cv-pending'));
+          logEl.innerHTML = '';
+          keep.forEach(function(el){ logEl.appendChild(el); });
+          CV.seen = new Set();
+          CV.sid = d.session || null;
+          CV.empty = keep.length === 0;
+        }
+        CV.lastMsgId = null;
+        if(d.truncated && d.messages && d.messages.length) convoNote('· earlier history trimmed ·', true);
+      }
+      CV.from = d.from || 0; CV.tpath = d.tpath || '';
+      (d.messages || []).forEach(convoAddMsg);
+      if(CV.empty){
+        convoNote(d.session ? 'No conversation yet — say something below.'
+                            : 'No Claude session on this tab yet — run claude in the terminal.');
+      }
+      convoStatusRender(d.status);
+      convoApplyCtl(d.status);
+      convoScanDialog();
+      convoSyncSend();
+      // ~0.8s cadence while Claude is actually working (or right after a
+      // send) so replies land near-instantly; the incremental reads make a
+      // fast poll almost free. Falls back to the 2s heartbeat when idle.
+      const fast = (d.status && d.status.state === 'working') || Date.now() < CV.fastUntil;
+      if(fast){
+        if(_cvFastT) clearTimeout(_cvFastT);
+        _cvFastT = setTimeout(convoTick, 800);
+      }
+    })
+    .catch(function(){ CV.inflight = false; });
+}
+let _cvFastT = null;
+CV.fastUntil = 0;
+setInterval(convoTick, 2000);
+document.addEventListener('visibilitychange', function(){ if(convoVisible()) convoTick(); });
+
+// ---- CONVO control pills: model / effort / mode, like the app's own chat ----
+// Current state comes from the transcript via /api/chat's status (model from
+// the hooks, effort off every assistant entry, permission mode from the
+// instant 'permission-mode' transcript entries). Actions ride the terminal
+// wire: /model & /effort as slash commands, mode as shift+tab cycles — the
+// exact keystrokes you'd type, so the TUI and the pills can never diverge
+// for long. Labels update optimistically on tap; the server view only
+// overwrites a label when ITS value actually changes (CV.srv tracking), so
+// a stale poll can't flip an optimistic label back.
+const CV_MODELS = [
+  { arg: 'fable',  label: 'Fable 5' },
+  { arg: 'opus',   label: 'Opus' },
+  { arg: 'sonnet', label: 'Sonnet' },
+  { arg: 'haiku',  label: 'Haiku' },
+];
+const CV_EFFORTS = ['low', 'medium', 'high', 'xhigh'];
+// shift+tab cycle order in Claude Code; aliases map version-specific names
+const CV_MODE_ORDER = ['default', 'acceptEdits', 'plan'];
+const CV_MODE_ALIAS = { manual: 'default', normal: 'default', auto: 'acceptEdits', accept: 'acceptEdits' };
+const CV_MODE_LABEL = { 'default': 'Manual', acceptEdits: 'Auto', plan: 'Plan', bypassPermissions: 'Bypass', delegate: 'Delegate' };
+function cvModelName(m){
+  const s = String(m || '').toLowerCase();
+  if(s.indexOf('fable') !== -1) return 'Fable 5';
+  if(s.indexOf('opus') !== -1) return 'Opus';
+  if(s.indexOf('sonnet') !== -1) return 'Sonnet';
+  if(s.indexOf('haiku') !== -1) return 'Haiku';
+  return m ? String(m).replace(/^claude-/, '') : null;
+}
+function cvModeKey(m){
+  const s = String(m || '');
+  return CV_MODE_ORDER.indexOf(s) !== -1 ? s : (CV_MODE_ALIAS[s.toLowerCase()] || s || null);
+}
+CV.srv = { model: null, effort: null, mode: null };
+CV.disp = { model: null, effort: null, mode: null };  // what the pill shows (incl. optimistic)
+CV.mode = null;   // best current-mode knowledge (server or optimistic)
+CV.att = [];      // pending attachments: {path (device path), name, url (thumb)}
+// Pixel-art bolt, drawn as 2×2 cells on a 6×9 grid (crispEdges keeps the
+// squares sharp at any scale). Each rect carries --i so CSS can stagger a
+// flash (press) or a flowing wave (loading) through it, pixel by pixel.
+const CV_BOLT_SVG = (function(){
+  const cells = [[3,0],[4,0],[5,0], [2,1],[3,1],[4,1], [1,2],[2,2],[3,2],
+                 [1,3],[2,3],[3,3],[4,3],[5,3], [3,4],[4,4], [2,5],[3,5],
+                 [1,6],[2,6], [1,7], [0,8]];
+  let r = '';
+  cells.forEach(function(c, i){
+    r += '<rect x="' + (c[0] * 2) + '" y="' + (c[1] * 2) + '" width="2" height="2" style="--i:' + i + '"/>';
+  });
+  return '<svg class="cvbolt" viewBox="0 0 12 18" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">' + r + '</svg>';
+})();
+let _cvOptsLast = null;
+function cvOptsLabel(){
+  const bits = [];
+  if(CV.disp.model) bits.push(CV.disp.model);
+  if(CV.disp.effort) bits.push(CV.disp.effort);
+  if(CV.disp.mode) bits.push(CV_MODE_LABEL[CV.disp.mode] || CV.disp.mode);
+  const txt = bits.length ? bits.join(' · ') : '—';
+  // convoApplyCtl calls this on every status tick — rewriting identical
+  // innerHTML would restart the bolt's animations mid-cycle, so skip
+  if(txt === _cvOptsLast) return;
+  _cvOptsLast = txt;
+  const b = $('cvOpts');
+  b.innerHTML = CV_BOLT_SVG + '<span class="cvopt-txt"></span>';
+  b.querySelector('.cvopt-txt').textContent = txt;
+}
+// A tapped chip applies optimistically; the bolt waves (busy) until the
+// terminal's own state catches up — or 15s pass (a pick can be swallowed,
+// e.g. a dialog was open; don't wave forever on a guess).
+function cvSetPend(key, val){
+  CV.pend[key] = val;
+  if(CV.pendT) clearTimeout(CV.pendT);
+  CV.pendT = setTimeout(function(){ CV.pend = {}; cvBusySync(); }, 15000);
+  cvBusySync();
+}
+function cvBusySync(){
+  $('cvOpts').classList.toggle('busy', !!(CV.pend && Object.keys(CV.pend).length));
+}
+// Same pixel treatment for the send arrows (both composers): 25 cells on a
+// 7×7 grid — a chunky right-pointing arrow. fill=currentColor inherits each
+// button's own icon color (dark on the cyan CONVO send, cyan on the bar's).
+const CV_ARROW_SVG = (function(){
+  const cells = [[3,0], [3,1],[4,1], [0,2],[1,2],[2,2],[3,2],[4,2],[5,2],
+                 [0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],
+                 [0,4],[1,4],[2,4],[3,4],[4,4],[5,4], [3,5],[4,5], [3,6]];
+  let r = '';
+  cells.forEach(function(c, i){
+    r += '<rect x="' + (c[0] * 2) + '" y="' + (c[1] * 2) + '" width="2" height="2" style="--i:' + i + '"/>';
+  });
+  return '<svg class="cvarrow" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">' + r + '</svg>';
+})();
+$('convoSend').innerHTML = CV_ARROW_SVG;
+$('inputSend').innerHTML = CV_ARROW_SVG;
+// The CONVO send button waves while a sent message is still waiting for its
+// transcript echo — .cv-pending without the 6s .cv-sent promotion (once the
+// bubble reads as sent, the button must agree with it).
+function cvSendBusySync(){
+  $('convoSend').classList.toggle('busy', !!document.querySelector('#convoLog .cv-pending:not(.cv-sent)'));
+}
+function convoApplyCtl(st){
+  const can = !!(ws && ws.readyState === 1 && inited && S.engine === 'pocket')
+    && st && st.state !== 'none' && st.state !== 'ended';
+  $('cvOpts').disabled = !can;
+  if(!st) return;
+  const m = cvModelName(st.model);
+  if(m && m !== CV.srv.model){ CV.srv.model = m; CV.disp.model = m; }
+  if(st.effort && st.effort !== CV.srv.effort){ CV.srv.effort = st.effort; CV.disp.effort = st.effort; }
+  const mk = cvModeKey(st.permMode);
+  if(mk && mk !== CV.srv.mode){ CV.srv.mode = mk; CV.mode = mk; CV.disp.mode = mk; }
+  // a pending pick is confirmed once the server-fed state matches it
+  ['model', 'effort', 'mode'].forEach(function(k){
+    if(CV.pend && CV.pend[k] != null && CV.srv[k] === CV.pend[k]) delete CV.pend[k];
+  });
+  cvBusySync();
+  cvOptsLabel();
+}
+// One sheet for all three controls, like the app's composer pill: rows of
+// chips for MODEL / EFFORT / MODE; tapping a chip applies it immediately.
+function pickHide(){
+  const p = $('convoPick');
+  if(p.classList.contains('hidden')) return;
+  p.classList.add('hidden');
+  ovConsume('pick');
+}
+function convoOptsSheet(){
+  const pick = $('convoPick');
+  if(!pick.classList.contains('hidden')){ pickHide(); return; } // toggle
+  pick.innerHTML = '';
+  function row(label, items, onPick){
+    const l = document.createElement('div'); l.className = 'cv-optlbl'; l.textContent = label;
+    const r = document.createElement('div'); r.className = 'cv-optrow';
+    items.forEach(function(it){
+      const b = document.createElement('button');
+      b.className = it.sel ? 'sel' : '';
+      b.textContent = it.label;
+      b.addEventListener('click', function(){ pickHide(); onPick(it); });
+      r.appendChild(b);
+    });
+    pick.appendChild(l); pick.appendChild(r);
+  }
+  row('Model', CV_MODELS.map(function(m){
+    return { label: m.label, arg: m.arg, sel: CV.disp.model === m.label };
+  }), function(it){
+    sendInput('/model ' + it.arg + '\r');
+    CV.disp.model = it.label; cvSetPend('model', it.label); cvOptsLabel();   // optimistic
+    // Tell the office to play the persona shift-change NOW — /model fires no
+    // hook and isn't reliably in the transcript until the next prompt, so the
+    // server can't detect it on its own. We know the new model, so push it.
+    try{ $('office').contentWindow.postMessage({type:'setModel', tab:tabSession(), model:it.arg}, '*'); }catch(e){}
+  });
+  row('Reasoning effort', CV_EFFORTS.map(function(e){
+    return { label: e, arg: e, sel: CV.disp.effort === e };
+  }), function(it){
+    sendInput('/effort ' + it.arg + '\r');
+    CV.disp.effort = it.arg; cvSetPend('effort', it.arg); cvOptsLabel();    // optimistic
+  });
+  row('Mode', CV_MODE_ORDER.map(function(k){
+    return { label: CV_MODE_LABEL[k], arg: k, sel: CV.mode === k };
+  }), function(it){
+    // no slash command for permission mode — walk the shift+tab cycle from
+    // where we KNOW the session is (transcript-fed) to the target, one
+    // \x1b[Z per step, spaced out so the TUI keeps up
+    const cur = CV_MODE_ORDER.indexOf(CV.mode);
+    const tgt = CV_MODE_ORDER.indexOf(it.arg);
+    if(tgt === -1) return;
+    const steps = cur === -1 ? 1 : (tgt - cur + CV_MODE_ORDER.length) % CV_MODE_ORDER.length;
+    if(steps === 0) return;
+    for(let i = 0; i < steps; i++) setTimeout(function(){ sendInput('\x1b[Z'); }, i * 160);
+    CV.mode = it.arg; CV.disp.mode = it.arg; cvSetPend('mode', it.arg); cvOptsLabel();   // optimistic
+  });
+  cvDockOverlays();
+  pick.classList.remove('hidden');
+  ovPush('pick');
+}
+$('cvOpts').addEventListener('click', function(){
+  const b = $('cvOpts');
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  convoOptsSheet();
+});
+// rect animations (cvPixFlash) bubble their animationend up too — only the
+// button's own pop must clear the class, or the ripple cuts itself short
+$('cvOpts').addEventListener('animationend', function(e){
+  if(e.animationName === 'cvBtnPop') $('cvOpts').classList.remove('pop');
+});
+cvOptsLabel();   // swap the static placeholder for the SVG bolt at boot
+// ---- attachments: pick an image, upload to the device (~/.deck/attach),
+// send its path with the prompt — Claude reads the file as an image, the
+// same way dragging a screenshot onto the terminal works.
+function cvRenderChips(){
+  const host = $('cvChips');
+  host.innerHTML = '';
+  CV.att.forEach(function(a, i){
+    const c = document.createElement('div'); c.className = 'cv-chip';
+    const img = document.createElement('img'); img.src = a.url; img.alt = a.name; c.appendChild(img);
+    const x = document.createElement('button'); x.textContent = '✕'; x.title = 'Remove';
+    x.addEventListener('click', function(){
+      try{ URL.revokeObjectURL(a.url); }catch(e){}
+      CV.att.splice(i, 1); cvRenderChips();
+    });
+    c.appendChild(x);
+    host.appendChild(c);
+  });
+}
+$('convoAttach').addEventListener('click', function(){ $('cvFile').click(); });
+$('cvFile').addEventListener('change', function(){
+  Array.prototype.forEach.call(this.files, function(f){
+    fetch('/deck/attach', {
+      method: 'POST',
+      headers: { 'X-Filename': f.name, 'X-Deck': '1', 'Content-Type': f.type || 'application/octet-stream' },
+      body: f,
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(!d || !d.ok) return;
+      CV.att.push({ path: d.path, name: d.name, url: URL.createObjectURL(f) });
+      cvRenderChips();
+    }).catch(function(){});
+  });
+  this.value = '';   // same file can be picked again
+});
+
+// ---- CONVO appearance: font + per-role bubble tints (settings drawer) ----
+// Tints are full glass recipes (two gradient stops, border, text colour), not
+// just a hue — so every choice keeps the liquid-glass look readable. 'sw' is
+// the solid swatch colour shown in the picker.
+const CV_TINTS = {
+  // Claude's own terracotta (the starburst orange) — listed first so it's
+  // the visible headliner in every swatch row
+  claude: { a:'rgba(217,119,87,.20)', b:'rgba(150,75,50,.10)',   bd:'rgba(217,119,87,.30)',  fg:'#f5dfd3', sw:'#d97757' },
+  amber:  { a:'rgba(245,158,11,.20)', b:'rgba(180,110,20,.10)',  bd:'rgba(245,158,11,.28)',  fg:'#f2e3bd', sw:'#f59e0b' },
+  cyan:   { a:'rgba(55,180,245,.14)', b:'rgba(60,80,160,.10)',   bd:'rgba(120,160,255,.22)', fg:'#dbe7f5', sw:'#38bdf8' },
+  violet: { a:'rgba(168,85,247,.18)', b:'rgba(90,50,160,.10)',   bd:'rgba(180,130,255,.28)', fg:'#e9ddff', sw:'#a855f7' },
+  green:  { a:'rgba(16,185,129,.16)', b:'rgba(20,120,90,.10)',   bd:'rgba(80,220,170,.26)',  fg:'#d7f5e9', sw:'#10b981' },
+  pink:   { a:'rgba(255,46,151,.16)', b:'rgba(160,40,110,.10)',  bd:'rgba(255,120,190,.26)', fg:'#ffdcee', sw:'#ff2e97' },
+  slate:  { a:'rgba(148,163,184,.14)', b:'rgba(80,95,130,.10)',  bd:'rgba(170,185,215,.22)', fg:'#e2e8f0', sw:'#94a3b8' },
+};
+// Big font menu. No new files (the deck is offline) — the exotic entries use
+// Android/Samsung's built-in family names, which desktop browsers gracefully
+// fall back from. The three bundled monos ship with the deck already.
+const CV_FONTS = {
+  system:    'system-ui,-apple-system,sans-serif',
+  rounded:   "ui-rounded,'SF Pro Rounded','Comfortaa',system-ui,sans-serif",
+  serif:     "Georgia,'Noto Serif','Times New Roman',serif",
+  bookish:   "'Palatino Linotype','Book Antiqua',Palatino,'Noto Serif',serif",
+  condensed: "'Roboto Condensed','Arial Narrow',sans-serif-condensed,sans-serif",
+  light:     'sans-serif-light,system-ui,sans-serif',
+  medium:    'sans-serif-medium,system-ui,sans-serif',
+  black:     'sans-serif-black,system-ui,sans-serif',
+  cursive:   "cursive,'Comic Sans MS',sans-serif",
+  fantasy:   'fantasy,system-ui,sans-serif',
+  sysmono:   'ui-monospace,Menlo,Consolas,monospace',
+  typewriter:"'Courier New',Courier,monospace",
+  jetbrains: "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace",
+  fira:      "'Fira Code',ui-monospace,Menlo,Consolas,monospace",
+  plex:      "'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace",
+  // bundled with the deck (woff2 in /vendor/fonts) — always render, any device
+  lora:      "'Lora',Georgia,'Noto Serif',serif",
+  hand:      "'Caveat','Comic Sans MS',cursive",
+  pixel:     "'Press Start 2P',monospace",
+  retro:     "'VT323',monospace",
+};
+// picker order + labels; each button previews its own stack (see
+// renderCvFontGrid). 'cursive' was labelled Handwriting before Caveat
+// arrived — the stored key keeps working, only the label moved.
+const CV_FONT_LIST = [
+  ['system','System'], ['rounded','Rounded'], ['condensed','Condensed'],
+  ['light','Thin / light'], ['medium','Medium'], ['black','Heavy'],
+  ['serif','Serif'], ['bookish','Book serif'], ['lora','Lora'],
+  ['hand','Handwriting'], ['cursive','Casual'], ['fantasy','Fantasy'],
+  ['pixel','Arcade'], ['retro','Retro term'],
+  ['sysmono','Monospace'], ['typewriter','Typewriter'],
+  ['jetbrains','JetBrains'], ['fira','Fira Code'], ['plex','IBM Plex'],
+];
+function renderCvFontGrid(){
+  const g = $('cvFontGrid');
+  g.innerHTML = '';
+  CV_FONT_LIST.forEach(function(f){
+    const b = document.createElement('button');
+    b.textContent = f[1];
+    b.style.fontFamily = CV_FONTS[f[0]];
+    if(f[0] === 'pixel') b.style.fontSize = '9px';        // PS2P is huge
+    if(f[0] === 'retro' || f[0] === 'hand') b.style.fontSize = '17px'; // both run small
+    b.className = S.cvFont === f[0] ? 'on' : '';
+    b.addEventListener('click', function(){
+      S.cvFont = f[0]; save(); applyConvoStyle(); renderCvFontGrid();
+    });
+    g.appendChild(b);
+  });
+}
+function applyConvoStyle(){
+  const p = $('convoPane');
+  const me = CV_TINTS[S.cvMe] || CV_TINTS.amber;
+  const ai = CV_TINTS[S.cvAi] || CV_TINTS.cyan;
+  p.style.setProperty('--cvu-a', me.a);  p.style.setProperty('--cvu-b', me.b);
+  p.style.setProperty('--cvu-bd', me.bd); p.style.setProperty('--cvu-fg', me.fg);
+  p.style.setProperty('--cva-a', ai.a);  p.style.setProperty('--cva-b', ai.b);
+  p.style.setProperty('--cva-bd', ai.bd); p.style.setProperty('--cva-fg', ai.fg);
+  p.style.setProperty('--cv-ff', CV_FONTS[S.cvFont] || CV_FONTS.system);
+  // composer card tint — 'none' keeps the neutral glass defaults. The send
+  // button rides the same tint (--cv-accent) so it always matches the box.
+  const bx = CV_TINTS[S.cvBox];
+  if(bx){
+    p.style.setProperty('--cvbar-bg', 'linear-gradient(150deg,' + bx.a + ',' + bx.b + ')');
+    p.style.setProperty('--cvbar-bd', bx.bd);
+    p.style.setProperty('--cv-accent', bx.sw);
+    p.style.setProperty('--cv-accent-glow', bx.sw + '59');
+  } else {
+    p.style.removeProperty('--cvbar-bg');
+    p.style.removeProperty('--cvbar-bd');
+    p.style.removeProperty('--cv-accent');
+    p.style.removeProperty('--cv-accent-glow');
+  }
+}
+applyConvoStyle();
+// swatch pickers — one row per role, built from CV_TINTS
+function buildSwatches(hostId, key, withNone){
+  const host = $(hostId);
+  function add(name, bg, title){
+    const b = document.createElement('button');
+    b.style.background = bg;
+    b.title = title || name;
+    b.dataset.v = name;
+    b.addEventListener('click', function(){
+      S[key] = name; save(); applyConvoStyle(); syncSwatches();
+    });
+    host.appendChild(b);
+  }
+  if(withNone) add('none', '#1a2038', 'default');
+  Object.keys(CV_TINTS).forEach(function(name){ add(name, CV_TINTS[name].sw); });
+}
+function syncSwatches(){
+  Array.prototype.forEach.call($('swMe').children, function(b){ b.className = b.dataset.v === S.cvMe ? 'on' : ''; });
+  Array.prototype.forEach.call($('swAi').children, function(b){ b.className = b.dataset.v === S.cvAi ? 'on' : ''; });
+  Array.prototype.forEach.call($('swBox').children, function(b){ b.className = b.dataset.v === S.cvBox ? 'on' : ''; });
+  renderCvFontGrid();
+}
+buildSwatches('swMe', 'cvMe');
+buildSwatches('swAi', 'cvAi');
+buildSwatches('swBox', 'cvBox', true);
+
+// ---------- settings drawer ----------
+function syncSettingsUI(){
+  Array.prototype.forEach.call($('segLayout').children, function(b){
+    b.className = (b.dataset.v === S.layout) ? 'on' : '';
+  });
+  Array.prototype.forEach.call($('segEngine').children, function(b){
+    b.className = (b.dataset.v === S.engine) ? 'on' : '';
+  });
+  Array.prototype.forEach.call($('segFont').children, function(b){
+    b.className = (b.dataset.v === S.font) ? 'on' : '';
+  });
+  $('fontPreview').style.fontFamily = fontDef().css;
+  $('rngSplit').value = S.splitPct;
+  $('fontVal').textContent = S.fontSize;
+  $('chatVal').textContent = S.chatFs;
+  $('chkInputBar').checked = S.inputBar;
+  $('chkKeybar').checked = S.keybar;
+  $('chkTintLabels').checked = !!S.tintLabels;
+  $('chkAwake').checked = S.keepAwake;
+  $('chkNotify').checked = S.notifyAsk;
+  $('chkRotate').checked = S.allowRotate;
+  $('numPort').value = S.wsPort;
+  syncSwatches();
+}
+$('chkNotify').addEventListener('change', function(){
+  S.notifyAsk = this.checked; save();
+  // permission needs a user gesture — this checkbox tap is one
+  if(this.checked && 'Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission();
+  }
+});
+// Portrait lock via the Screen Orientation API. Browsers only honor lock()
+// in an INSTALLED (home-screen) PWA or fullscreen — a plain tab rejects it
+// silently, which read as "the toggle does nothing". So: report the real
+// lock state in the settings note, and keep retrying on taps/resume (a
+// freshly-installed PWA starts succeeding without a reload).
+let _rotLocked = false;   // portrait lock confirmed (toggle OFF)
+let _rotFree = false;     // rotation successfully handed to the sensor (toggle ON)
+function _rotNote(msg){ const n = $('rotateNote'); if(n) n.textContent = msg; }
+function applyRotate(){
+  if(!screen.orientation || !screen.orientation.lock){
+    _rotNote(S.allowRotate ? 'Auto-rotate on — the phone decides.' : 'This browser can’t lock rotation.');
+    return;
+  }
+  if(S.allowRotate){
+    _rotLocked = false;
+    // The manifest pins the installed app to portrait at the OS level, so
+    // unlock() only falls BACK to portrait — lock('any') is what hands
+    // rotation to the sensor. Chrome honors it in the installed app
+    // directly; Samsung Internet refuses lock() outside FULLSCREEN
+    // (confirmed on-device: the toggle did nothing), so on refusal we
+    // escalate — enter fullscreen (we're inside a tap: the toggle or the
+    // retry) and lock there. The status bar hides while auto-rotate is on;
+    // toggling it off exits fullscreen and brings it back.
+    screen.orientation.lock('any').then(function(){
+      _rotFree = true;
+      _rotNote('Auto-rotate on — the phone decides.');
+    }).catch(function(){
+      const de = document.documentElement;
+      if(de.requestFullscreen){
+        de.requestFullscreen().then(function(){
+          return screen.orientation.lock('any');
+        }).then(function(){
+          _rotFree = true;
+          _rotNote('Auto-rotate on — fullscreen (this browser only allows rotation there).');
+        }).catch(function(){
+          _rotFree = false;
+          _rotNote('Rotation unlock refused — tap anywhere to retry.');
+        });
+      } else {
+        _rotFree = false;
+        _rotNote('This browser refuses to unlock rotation.');
+      }
+    });
+    return;
+  }
+  _rotFree = false;
+  // back out of the fullscreen the ON path may have entered
+  if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function(){});
+  screen.orientation.lock('portrait').then(function(){
+    _rotLocked = true;
+    _rotNote('Portrait lock active ✓');
+  }).catch(function(){
+    _rotLocked = false;
+    const standalone = matchMedia('(display-mode: standalone)').matches;
+    _rotNote(standalone
+      ? 'Portrait lock refused — retrying on your next tap.'
+      : 'A browser TAB can’t lock rotation. Install the deck: Samsung Internet menu ☰ → “Add page to” → “Home screen”, then open it from that icon — the lock works there.');
+  });
+}
+$('chkRotate').addEventListener('change', function(){
+  S.allowRotate = this.checked; save(); applyRotate();
+});
+// retry when it matters: lock()/fullscreen can start succeeding after
+// install/resume, and fullscreen needs a user gesture — a tap is one.
+document.addEventListener('pointerdown', function(){
+  if(S.allowRotate ? !_rotFree : !_rotLocked) applyRotate();
+}, { passive: true });
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && !S.allowRotate && !_rotLocked) applyRotate();
+});
+// leaving fullscreen (back gesture, app switch) silently re-pins portrait on
+// browsers that need fullscreen for rotation — flag it so the next tap re-enters
+document.addEventListener('fullscreenchange', function(){
+  if(S.allowRotate && !document.fullscreenElement) _rotFree = false;
+});
+applyRotate();
+$('gearBtn').addEventListener('click', function(){
+  syncSettingsUI();
+  calRefreshStatus();
+  sessRefresh();
+  $('settings').classList.remove('hidden');
+  $('backdrop').classList.remove('hidden');
+  ovPush('settings');
+});
+
+// ---- usage calibration: anchor the monitor panels to the user's real
+//      /usage percentages (a fresh install can't compute a weekly % for weeks) ----
+function calRefreshStatus(){
+  const el = $('calStatus'); if(!el) return;
+  fetch('/api/usage').then(function(r){ return r.json(); }).then(function(u){
+    const w = (u && u.weekly) || {};
+    if(w.source === 'anchored' && w.usedPct != null){
+      el.textContent = 'Anchored ✓ — weekly now reads ' + w.usedPct + '%. Enter fresh numbers anytime to re-anchor.';
+      el.style.color = '#6ee7b7';
+    } else {
+      el.textContent = 'Not calibrated — the weekly panel shows raw token totals until you save real %s here.';
+      el.style.color = '#5f6c92';
+    }
+  }).catch(function(){});
+}
+$('btnCalSave').addEventListener('click', function(){
+  const el = $('calStatus');
+  el.textContent = 'Saving…'; el.style.color = '#9fb0d5';
+  fetch('/api/calibrate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    weeklyPct: $('calWeek').value,
+    fablePct: $('calFable').value,
+    weeklyResetDays: $('calWeekDays').value,
+    fiveHourPct: $('calFive').value,
+    fiveHourResetMins: $('calFiveMins').value
+  }) }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+    .then(function(res){
+      if(res.ok && res.j && res.j.ok){
+        el.textContent = 'Saved ✓ — the panels will update within a few seconds.';
+        el.style.color = '#6ee7b7';
+        ['calWeek','calFable','calWeekDays','calFive','calFiveMins'].forEach(function(id){ $(id).value = ''; });
+        setTimeout(calRefreshStatus, 2500);
+      } else {
+        el.textContent = (res.j && res.j.error) ? res.j.error : 'Save failed.';
+        el.style.color = '#f87171';
+      }
+    }).catch(function(){ el.textContent = 'Save failed — is the server running?'; el.style.color = '#f87171'; });
+});
+$('btnCalClear').addEventListener('click', function(){
+  const el = $('calStatus');
+  fetch('/api/calibrate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ clear: true }) })
+    .then(function(r){ return r.json(); })
+    .then(function(){
+      ['calWeek','calFable','calWeekDays','calFive','calFiveMins'].forEach(function(id){ $(id).value = ''; });
+      el.textContent = 'Cleared — back to the automatic display.'; el.style.color = '#9fb0d5';
+      setTimeout(calRefreshStatus, 1500);
+    }).catch(function(){ el.textContent = 'Clear failed.'; el.style.color = '#f87171'; });
+});
+// ---- pull the REAL /usage numbers on demand: poke the poller (which runs
+//      `claude usage` and POSTs the screen to /api/realusage), then watch for a
+//      fresher realAt. Graceful no-op on a device with no poller (bare desktop). ----
+$('btnUsageRefresh').addEventListener('click', function(){
+  const el = $('usagePokeStatus');
+  el.textContent = 'Refreshing…'; el.style.color = '#9fb0d5';
+  // snapshot the current realAt so we can tell when fresh numbers land
+  fetch('/api/usage').then(function(r){ return r.json(); }).then(function(u){
+    const before = (u && u.realAt != null) ? u.realAt : 0;
+    fetch('/api/usage-poke', { method:'POST', headers:{'X-Deck':'1'} }).catch(function(){});
+    const t0 = Date.now();
+    const poll = function(){
+      fetch('/api/usage').then(function(r){ return r.json(); }).then(function(u2){
+        const now = (u2 && u2.realAt != null) ? u2.realAt : 0;
+        if(now > before){
+          el.textContent = 'Updated ✓ — real usage refreshed.'; el.style.color = '#6ee7b7';
+          try{ $('office').contentWindow.postMessage({type:'refreshUsage'}, '*'); }catch(e){}   // pulse the wall panels now
+          calRefreshStatus();
+          return;
+        }
+        if(Date.now() - t0 > 30000){
+          el.textContent = 'No response — is a device with the usage poller running?'; el.style.color = '#f87171';
+          return;
+        }
+        setTimeout(poll, 2000);
+      }).catch(function(){ if(Date.now() - t0 <= 30000) setTimeout(poll, 2000); });
+    };
+    setTimeout(poll, 2000);
+  }).catch(function(){ el.textContent = 'Refresh failed — is the server running?'; el.style.color = '#f87171'; });
+});
+// ---- sessions cleanup: list live deck-N tmux sessions, close stale/orphaned
+//      ones. Graceful everywhere — an old server (no /deck/sessions endpoint) or
+//      a device with no tmux returns/looks like an empty list, never an error. ----
+const SESS_STALE_MS = 12 * 3600 * 1000;   // detached AND idle 12h+ = stale
+function _sessStale(s, activeSession){
+  return s.attached === 0
+    && s.name !== activeSession
+    && (Date.now() - s.activity * 1000) >= SESS_STALE_MS;
+}
+function _sessIdleTxt(activityEpoch){
+  const ms = Date.now() - activityEpoch * 1000;
+  if(!(ms > 0)) return 'active now';
+  const mins = Math.floor(ms / 60000);
+  if(mins < 1) return 'idle <1m';
+  if(mins < 60) return 'idle ' + mins + 'm';
+  const hrs = Math.floor(mins / 60);
+  if(hrs < 24) return 'idle ' + hrs + 'h';
+  return 'idle ' + Math.floor(hrs / 24) + 'd';
+}
+// GET /deck/sessions → array (always resolves; [] on 404/error/no-tmux/network)
+function _sessFetch(){
+  return fetch('/deck/sessions', { headers:{'X-Deck':'1'} })
+    .then(function(r){ if(!r.ok) return null; return r.json(); })
+    .then(function(j){ return (j && j.ok && Array.isArray(j.sessions)) ? j.sessions : []; })
+    .catch(function(){ return []; });
+}
+function sessRender(sessions){
+  const host = $('sessList'); if(!host) return;
+  host.innerHTML = '';
+  if(!sessions.length){
+    const e = document.createElement('div'); e.className = 'note'; e.textContent = 'no sessions found';
+    host.appendChild(e); return;
+  }
+  const activeSession = tabSession();
+  const labelBySession = {};
+  S.tabs.forEach(function(t){ labelBySession[t.session] = t.label; });
+  sessions.forEach(function(s){
+    const row = document.createElement('div'); row.className = 'sess-row';
+    const info = document.createElement('div'); info.className = 'sess-info';
+    const nm = document.createElement('div'); nm.className = 'sess-name';
+    nm.textContent = s.name;
+    const tag = document.createElement('span');
+    if(s.name === activeSession){ tag.className = 'sess-tag'; tag.textContent = ' · this tab'; }
+    else if(Object.prototype.hasOwnProperty.call(labelBySession, s.name)){ tag.className = 'sess-tag'; tag.textContent = ' · ' + labelBySession[s.name]; }
+    else { tag.className = 'sess-orphan'; tag.textContent = ' · orphan'; }
+    nm.appendChild(tag); info.appendChild(nm);
+    const meta = document.createElement('div'); meta.className = 'sess-meta';
+    meta.textContent = (s.attached > 0 ? 'attached' : 'detached') + ' · ' + _sessIdleTxt(s.activity);
+    info.appendChild(meta); row.appendChild(info);
+    const btn = document.createElement('button'); btn.className = 'sess-close'; btn.textContent = 'Close';
+    btn.addEventListener('click', function(){ sessCloseOne(s.name); });
+    row.appendChild(btn);
+    host.appendChild(row);
+  });
+}
+function sessRefresh(){ _sessFetch().then(sessRender); }
+// remove a tab from S.tabs by session name, keeping S.active pointed at the SAME
+// tab it was on (unless that very tab is the one removed). No office ceremony.
+function _sessRemoveTab(name){
+  const idx = S.tabs.findIndex(function(t){ return t.session === name; });
+  if(idx === -1) return false;
+  const wasActive = tabSession();
+  cvClearCache(name);
+  S.tabs.splice(idx, 1);
+  let ni = S.tabs.findIndex(function(t){ return t.session === wasActive; });
+  if(ni === -1) ni = Math.min(idx, S.tabs.length - 1);
+  S.active = Math.max(0, ni);
+  save(); renderTabs();
+  return true;
+}
+function sessCloseOne(name){
+  const activeSession = tabSession();
+  if(name === activeSession){
+    // closing the CURRENT tab's session — normal active-close path, minus the ceremony
+    if(S.tabs.length <= 1){ alert('That’s the only tab — it can’t be closed.'); return; }
+    if(_pendingClose){ alert('A tab is already closing — try again in a moment.'); return; }
+    if(!confirm('Close the current tab (' + name + ')? Its Claude session ends.')) return;
+    _deckKill(name);
+    finishTabClose(name);   // splices the tab, switches to a survivor, cvClearCache, convoSwitchTab, syncOffice, reconnect
+    setTimeout(sessRefresh, 500);
+    return;
+  }
+  _deckKill(name);
+  _sessRemoveTab(name);   // no-op for orphans (not in S.tabs)
+  setTimeout(sessRefresh, 500);
+}
+function sessCloseStale(){
+  _sessFetch().then(function(sessions){
+    const activeSession = tabSession();
+    const stale = sessions.filter(function(s){ return _sessStale(s, activeSession); });
+    if(!stale.length){ alert('No stale sessions.'); return; }
+    if(!confirm('Close ' + stale.length + ' stale session' + (stale.length === 1 ? '' : 's') + '?')) return;
+    stale.forEach(function(s){ _deckKill(s.name); _sessRemoveTab(s.name); });   // prune matching tabs (no-op for orphans)
+    setTimeout(sessRefresh, 600);
+  });
+}
+$('sessRefresh').innerHTML = PX.reload;
+$('sessRefresh').addEventListener('click', sessRefresh);
+$('btnCloseStale').addEventListener('click', sessCloseStale);
+// on-open stale banner: ~3s after boot, if any stale sessions exist, offer a
+// one-tap cleanup. In-memory dismiss (resets next page load). Empty/error/PC → hidden.
+let _staleBannerDismissed = false;
+function _staleBannerHide(){ const b = $('staleBanner'); if(b) b.classList.add('hidden'); }
+function staleBannerCheck(){
+  if(_staleBannerDismissed) return;
+  _sessFetch().then(function(sessions){
+    const stale = sessions.filter(function(s){ return _sessStale(s, tabSession()); });
+    if(!stale.length) return;
+    const b = $('staleBanner'); if(!b) return;
+    $('staleMsg').textContent = stale.length + ' stale session' + (stale.length === 1 ? '' : 's') + ' still running';
+    b.classList.remove('hidden');
+  });
+}
+$('staleCleanup').addEventListener('click', function(){ _staleBannerHide(); sessCloseStale(); });
+$('staleDismiss').addEventListener('click', function(){ _staleBannerDismissed = true; _staleBannerHide(); });
+function closeSettings(){
+  $('settings').classList.add('hidden');
+  $('backdrop').classList.add('hidden');
+  ovConsume('settings');
+}
+$('backdrop').addEventListener('click', closeSettings);
+$('btnCloseSettings').addEventListener('click', closeSettings);
+$('segLayout').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v) return;
+  S.layout = v; save(); syncSettingsUI(); applyLayout();
+});
+$('segEngine').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v || v === S.engine) return;
+  S.engine = v; save(); syncSettingsUI(); applyEngine();
+});
+$('segFont').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v || v === S.font) return;
+  S.font = v; save(); syncSettingsUI(); applyFont();
+});
+$('rngSplit').addEventListener('input', function(){
+  S.splitPct = Number(this.value); save(); applyLayout();
+});
+$('fontMinus').addEventListener('click', function(){ bumpFont(-1); });
+$('fontPlus').addEventListener('click', function(){ bumpFont(1); });
+function bumpFont(d){
+  S.fontSize = Math.max(8, Math.min(24, S.fontSize + d));
+  save(); $('fontVal').textContent = S.fontSize;
+  term.options.fontSize = S.fontSize; fitSoon();
+}
+function applyChatFs(){ document.documentElement.style.setProperty('--chat-fs', S.chatFs + 'px'); }
+$('chatMinus').addEventListener('click', function(){ bumpChat(-1); });
+$('chatPlus').addEventListener('click', function(){ bumpChat(1); });
+function bumpChat(d){
+  S.chatFs = Math.max(8, Math.min(18, S.chatFs + d));
+  save(); $('chatVal').textContent = S.chatFs; applyChatFs();
+}
+$('chkInputBar').addEventListener('change', function(){
+  S.inputBar = this.checked; save(); applyLayout(); applyInputMode();
+});
+$('chkKeybar').addEventListener('change', function(){
+  S.keybar = this.checked; save(); applyLayout();
+});
+$('chkTintLabels').addEventListener('change', function(){
+  S.tintLabels = this.checked; save(); applyLayout();
+});
+$('chkAwake').addEventListener('change', function(){
+  S.keepAwake = this.checked; save(); updateWake();
+});
+$('numPort').addEventListener('change', function(){
+  const p = Number(this.value);
+  if(p >= 1 && p <= 65535){ S.wsPort = p; save(); applyEngine(); }
+});
+$('btnReconnect').addEventListener('click', function(){
+  closeSettings();
+  if(S.engine === 'pocket'){ retryDelay = 250; connect(); } else applyEngine();
+});
+$('btnReload').addEventListener('click', function(){ location.reload(); });
+
+// ---------- boot ----------
+applyLayout();
+applyInputMode();
+applyFont();     // load + apply the chosen terminal font
+applyChatFs();   // chat text size
+renderTabs();
+syncOffice();    // point the office at the active tab's session
+convoRestoreCache(tabSession());   // R2: rehydrate the CLAUDE pane from this tab's cache before the first poll
+updateWake();
+chatBind();      // iframe 'load' rebinds once the office finishes loading
+// If the bottom panel restored as chat/convo, its log was hidden (scrollHeight 0)
+// when chatBind/convoRestoreCache first pinned it — pin again once reveal lays it out.
+requestAnimationFrame(function(){
+  if(S.bottomPanel === 'chat') pinLogBottom('chatPaneLog');
+  else if(S.bottomPanel === 'convo') pinLogBottom('convoLog');
+});
+if(S.engine === 'pocket') connect(); else applyEngine();
+if('serviceWorker' in navigator && window.isSecureContext){
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
+setTimeout(staleBannerCheck, 3000);   // after connect/office sync settle, surface any orphaned sessions
+</script>
+</body>
+</html>

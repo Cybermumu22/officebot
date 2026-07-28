@@ -1,0 +1,27 @@
+# dependencies (officebot itself is zero-dep; this is only for optional extras)
+node_modules/
+
+# personal / per-machine runtime data — never commit
+usage-calibration.json
+usage-history.json
+usage-realusage.json
+last-permission-mode.json
+deck-tabs.json
+sessions-meta.json
+server.log
+public/snapshot.png
+public/snapshot.tmp.png
+public/.snapshot-keepalive
+*.officebot-backup-*
+
+# the phone app is signed with a personal key — never share it
+public/*.apk
+android/keystore/
+android/*.keystore
+android/build/
+android/.gradle/
+
+# scratch / editor
+*.bak
+.DS_Store
+Thumbs.db

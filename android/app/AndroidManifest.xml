@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.agentviz.viewer">
+
+    <!-- The ONLY permission: needed to load the dashboard over the LAN/tailnet. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:allowBackup="false">
+
+        <activity android:name=".SettingsActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Screensaver: live dashboard while the phone charges/docks. -->
+        <service android:name=".DashboardDreamService"
+            android:exported="true"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService"/>
+            </intent-filter>
+            <meta-data android:name="android.service.dream" android:resource="@xml/dream_info"/>
+        </service>
+
+        <!-- Live wallpaper. Own process: WebView.pauseTimers() is process-global,
+             so pausing the wallpaper must never freeze the screensaver's WebView. -->
+        <service android:name=".DashboardWallpaperService"
+            android:exported="true"
+            android:process=":wallpaper"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService"/>
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_info"/>
+        </service>
+
+    </application>
+</manifest>
