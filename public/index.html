@@ -753,6 +753,12 @@ const ZONES = {
     exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
     // the lounge is deliberately NOT grid-sized: it is the whole crew's room,
     // as wide as the grid above it
+    // The boss's own office: the left column, under Tally's corner and
+    // alongside Research. Deliberately NOT grid-sized — it is one person's
+    // room, not a shared workroom, and reads as separate for being narrower.
+    // zoneForTool() never returns it, so no agent is ever sent here; the
+    // boss walks out to whichever room the work is in and comes back after.
+    office:   { x:12, y:57, label:'OFFICE',   icon:ZONE_ICONS.planning },
     lounge:   { x:50, y:85, label:'LOUNGE',   icon:ZONE_ICONS.lounge },
 };
 
@@ -774,6 +780,7 @@ const ROOM_MATS = {
   archives: { w:28, h:24, bg:'repeating-linear-gradient(90deg, var(--mat-arch-a) 0 9px, var(--mat-arch-b) 9px 18px)' },
   // The exception: the lounge holds the whole standing crew plus the boss, so
   // it spans the full width of the grid above it.
+  office:   { w:22, h:24, bg:'repeating-linear-gradient(45deg, var(--mat-arch-a) 0 10px, var(--mat-arch-b) 10px 20px)' },
   lounge:   { w:76, h:24, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(var(--mat-lounge-a), var(--mat-lounge-b))' },
 };
 
@@ -828,6 +835,14 @@ const PROPS = [
   { x:5,    y:23,   w:13, art:'plant' },
   { x:19,   y:23,   w:13, art:'plant' },
   { x:12,   y:33,   w:12, art:'bookpile' },   // his ledgers
+  // --- the boss's office (left column): desk facing the floor, a chair, a
+  //     bookshelf, a banker's lamp for the late shifts, and a plant ---
+  { x:12,   y:50,   w:30, art:'desk' },
+  { x:12,   y:55.5, w:11, art:'chair' },
+  { x:3.5,  y:49,   w:20, art:'shelf' },
+  { x:20,   y:60,   w:13, art:'bankLamp' },
+  { x:4,    y:64,   w:15, art:'plant' },
+  { x:16,   y:66,   w:20, art:'boxes' },
   // --- planning room (top-left of the grid) ---
   { x:32.5, y:26.5, w:11, art:'chair' },
   { x:47.5, y:26.5, w:11, art:'chair' },
@@ -1810,7 +1825,7 @@ function handleEvent(evt){
       if((!_welcomed[sid] || !evt._replay) && (!officeEls.get(sid) || s.closing || s.bossGone || (s.crewGone && s.crewGone.length))){
         playOpening(sid);
       } else {
-        s.status = 'idle'; s.zone = 'terminal';
+        s.status = 'idle'; s.zone = 'office';
         s.bubble = 'Back at it (' + (evt.source || 'startup') + ').';
         chatLog(displayName(s), s.bubble, 'status');
       }
@@ -2010,7 +2025,7 @@ function handleEvent(evt){
       // replays only this Stop into a fresh session object, so without an
       // explicit desk here the boss sat in the default zone until the next
       // prompt — which used to be the lounge.
-      if(target.zone === 'lounge' || target.zone === 'exit') target.zone = 'terminal';
+      if(target.zone === 'lounge' || target.zone === 'exit') target.zone = 'office';
       if(s._didWork){ _fxFor(sid, null, 'confetti'); s._didWork = false; } // turn wrapped cleanly 🎉
       if(evt._speech){
         target.bubble = cleanSpeech(evt._speech, 220);
@@ -3525,7 +3540,7 @@ function reopenOffice(sid){
   clearDepartTimers(s);
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
   // a boss caught mid-exit returns to his desk, not the lounge
-  if(wasClosing || s.status === 'offline'){ s.status = 'idle'; if(s.zone === 'exit' || s.zone === 'lounge') s.zone = 'terminal'; }
+  if(wasClosing || s.status === 'offline'){ s.status = 'idle'; if(s.zone === 'exit' || s.zone === 'lounge') s.zone = 'office'; }
   const o = officeEls.get(sid);
   if(o){
     o.root.classList.remove('closing');
@@ -3743,7 +3758,7 @@ function playOpening(sid){
   const T = s.departTimers;                 // one cleanup rail for both ceremonies
   // …unless real work already claimed him (first-sight opening on a prompt
   // event) — never yank a thinking boss back to the lounge
-  T.push(setTimeout(function(){ if(sessions.has(sid) && s.status === 'idle'){ s.zone = 'lounge'; render(); } }, _paced(900)));
+  T.push(setTimeout(function(){ if(sessions.has(sid) && s.status === 'idle'){ s.zone = 'office'; render(); } }, _paced(900)));
   // Tally second — slides in from the door to his desk
   T.push(setTimeout(function(){
     if(!sessions.has(sid)) return;
