@@ -144,8 +144,11 @@ Tap anybody to read their bio.
 
 ## The meters on the wall
 
+![The wall meters — clock, weekly and 5-hour windows, with Tally commenting on the spend](docs/office-meters.png)
+
 Tally's wall carries a live clock, your 5-hour window, and your weekly burn —
-counted honestly from your own local transcripts.
+counted honestly from your own local transcripts. He calls out what you spend
+as you spend it, and he is not impressed by any of it.
 
 Read the small print though: these are **your own numbers, not an official
 quota**. Real plan limits aren't exposed to local tools, so the gauges measure
@@ -157,22 +160,35 @@ them exact.
 
 ## 📱 Pocket Deck — the whole thing on an Android phone
 
-<img src="docs/office-mobile.png" alt="A second session — Sonny running mobile-app, with Tally reporting from the meters" width="320" align="right">
-
-*A second session on the same screen — **Sonny** (Sonnet) on `mobile-app`,
-quiet floor, Tally passing comment from under the meters.*
-
 No PC involved. Pocket Deck runs the **real** Claude Code CLI on your phone and
 puts the office right next to it, as one installable app.
+
+<p align="center">
+  <img src="docs/deck-terminal.png" alt="Pocket Deck — the office above a real terminal running Claude Code" width="46%">
+  <img src="docs/deck-claude.png" alt="Pocket Deck — the Claude chat pane with the message composer" width="46%">
+</p>
+
+> *Left: a real Claude Code session on a phone. Oppy has sent an Explore agent
+> off to map the repo and backgrounded it, Scout is mid-grep, and Tally has
+> already totted up the bill — "9.6k spent. Rounding error. Cute." The key bar
+> along the bottom is Esc, Tab, Ctrl and arrows, because a phone keyboard
+> hasn't got any.*
+>
+> *Right: the same session flipped to the chat pane — type to Claude like a
+> messaging app, with the model, effort and permission mode on one chip.*
 
 It's a proper terminal, shaped for a phone: tabs, a key bar with Esc, Tab, Ctrl,
 arrows and paste, and `tmux` sessions that **keep running when you close the
 app** — come back and it's still going, mid-output.
 
-Tap ⇄ to flip between the terminal and the office, or split them on screen.
-Background a session and it keeps working; Android pings you when Claude wants
-approval, with Approve and Deny buttons that answer the terminal without opening
-anything.
+Three ways to arrange it, because everyone's phone is a different shape: **Flip**
+swaps between office and terminal, **Split** stacks both at a size you drag, and
+**Collapsible** hides whichever you're not using. Text size, colours, alerts and
+the usage calibration are all in there too.
+
+Background a session and it keeps working. Android pings you when Claude wants
+approval, with Approve and Deny buttons that answer the terminal without you
+opening anything.
 
 Both servers bind to localhost. Nothing is exposed to your Wi-Fi.
 
