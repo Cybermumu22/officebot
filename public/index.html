@@ -741,14 +741,19 @@ const ZONE_ICONS = {
 // The lounge is the big room at the bottom (see the .zone[data-zone=lounge]
 // CSS) — its x/y is still the anchor point occupants gather around.
 const ZONES = {
-  warroom:  { x:50, y:28, label:'PLANNING', icon:ZONE_ICONS.planning },
-  // exit is just THE DOOR on the wall — no mat, no sign plate (skipped in
-  // officeSkeletonHtml); departing avatars walk right up to the doorway.
-  exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
-  research: { x:17, y:55, label:'RESEARCH', icon:ZONE_ICONS.research },
-  terminal: { x:50, y:56, label:'TERMINAL', icon:ZONE_ICONS.terminal },
-  archives: { x:83, y:55, label:'ARCHIVES', icon:ZONE_ICONS.archives },
-  lounge:   { x:50, y:84, label:'LOUNGE',   icon:ZONE_ICONS.lounge },
+    // 2x2 grid of equal rooms. Columns at x40/x76, rows at y30/y58, each mat
+    // 28x24 — see ROOM_MATS. The 8-wide gap between columns and the 4-high gap
+    // between rows form a cross-shaped corridor people walk along.
+    warroom:  { x:40, y:30, label:'PLANNING', icon:ZONE_ICONS.planning },
+    archives: { x:76, y:30, label:'ARCHIVES', icon:ZONE_ICONS.archives },
+    research: { x:40, y:58, label:'RESEARCH', icon:ZONE_ICONS.research },
+    terminal: { x:76, y:58, label:'TERMINAL', icon:ZONE_ICONS.terminal },
+    // exit is just THE DOOR on the wall — no mat, no sign plate (skipped in
+    // officeSkeletonHtml); departing avatars walk right up to the doorway.
+    exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
+    // the lounge is deliberately NOT grid-sized: it is the whole crew's room,
+    // as wide as the grid above it
+    lounge:   { x:50, y:85, label:'LOUNGE',   icon:ZONE_ICONS.lounge },
 };
 
 // Each room stands on its own flooring — a "mat" (percent-sized rounded
@@ -761,17 +766,15 @@ const ROOM_MATS = {
   // Colours come from CSS variables (see :root) so a theme swap repaints the
   // floor without touching this table — var() resolves at computed-value time,
   // so it works even though these land as inline styles.
-  warroom:  { w:24, h:26, bg:'repeating-linear-gradient(45deg, var(--mat-plan-a) 0 6px, var(--mat-plan-b) 6px 12px)' },
-  // Research widened (2026-07): it's a proper two-resident room now
-  // (Scout + Bookworm home there) plus wander visitors.
-  research: { w:27, h:27, bg:'repeating-linear-gradient(-45deg, var(--mat-res-a) 0 6px, var(--mat-res-b) 6px 12px)' },
-  terminal: { w:26, h:26, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(var(--mat-term-a), var(--mat-term-b))' },
-  archives: { w:24, h:26, bg:'repeating-linear-gradient(90deg, var(--mat-arch-a) 0 9px, var(--mat-arch-b) 9px 18px)' },
-  // Widened 58% → 76% (2026-07): the permanent 4-man crew + the boss + a
-  // settling subagent is a real crowd, and people were spilling into the
-  // hallway. Furniture hugs the left/right edges (see PROPS) so the middle
-  // band is clear standing room.
-  lounge:   { w:76, h:26, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(var(--mat-lounge-a), var(--mat-lounge-b))' },
+  // The four working rooms are deliberately identical in size: the grid reads
+  // as a floor plan rather than a pile of differently-shaped boxes.
+  warroom:  { w:28, h:24, bg:'repeating-linear-gradient(45deg, var(--mat-plan-a) 0 6px, var(--mat-plan-b) 6px 12px)' },
+  research: { w:28, h:24, bg:'repeating-linear-gradient(-45deg, var(--mat-res-a) 0 6px, var(--mat-res-b) 6px 12px)' },
+  terminal: { w:28, h:24, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(var(--mat-term-a), var(--mat-term-b))' },
+  archives: { w:28, h:24, bg:'repeating-linear-gradient(90deg, var(--mat-arch-a) 0 9px, var(--mat-arch-b) 9px 18px)' },
+  // The exception: the lounge holds the whole standing crew plus the boss, so
+  // it spans the full width of the grid above it.
+  lounge:   { w:76, h:24, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(var(--mat-lounge-a), var(--mat-lounge-b))' },
 };
 
 // Decorative office furniture — colourful pixel art in the same visual
@@ -819,61 +822,55 @@ const PROPS = [
   //     far edges only, and the poster hides on phones where space is tight) ---
   { x:6,  y:7.6, w:14, art:'poster', cls:'m-hide' }, // synthwave poster
   { x:85, y:7.6, w:22, art:'doorExit' },             // the EXIT itself — just the door
-  // --- Tally's accounts corner. He brings his OWN desk (TALLY_DESK_SVG, drawn
-  //     with the .staff div in officeSkeletonHtml), so there is no desk prop
-  //     here — there used to be one, stacked directly underneath him. Plants
-  //     flank the nook instead, so he reads as having a place of his own
-  //     rather than a figure standing in open floor. ---
-  { x:64,   y:21,   w:13, art:'plant' },
-  { x:81,   y:21,   w:13, art:'plant' },
-  { x:88,   y:31,   w:21, art:'boxes' },   // deliveries stacked by the door
-  // --- the top-left, vacated when Planning moved to the middle: a small
-  //     break spot under the wall clock, so the corner isn't bare floor ---
-  { x:11,   y:24,   w:17, art:'cooler' },
-  { x:24,   y:22,   w:15, art:'plant' },
-  { x:16,   y:34,   w:12, art:'bookpile' },
-  // --- planning room ---
-  { x:42.5, y:24.5, w:11, art:'chair' },
-  { x:57.5, y:24.5, w:11, art:'chair' },
-  { x:50,   y:29,   w:36, art:'meetTable' }, // meeting table w/ laptop + papers
-  { x:59.5, y:36,   w:24, art:'board' },     // whiteboard easel
-  // --- research room (the two-resident study: shelves, desk, globe,
-  //     evidence board with red string, a pile of borrowed books) ---
-  { x:5.5,  y:48.5, w:22, art:'shelf' },
-  { x:10,   y:48.5, w:22, art:'shelf' },   // a proper pair of bookcases
-  { x:25,   y:47,   w:20, art:'caseboard' }, // the red-string investigation board
-  { x:18.5, y:59,   w:28, art:'desk' },    // reading desk
-  { x:18.5, y:64,   w:11, art:'chair' },
-  { x:27,   y:59,   w:12, art:'globe' },
-  { x:6,    y:64,   w:11, art:'bookpile' },
-  // --- corridor greenery between Research and Terminal ---
-  { x:33,   y:60,   w:14, art:'plant' },
-  // --- terminal room ---
-  { x:50,   y:52, w:38, art:'cmdDesk' },   // triple-monitor command desk
-  { x:50,   y:57, w:11, art:'chair' },
-  { x:40,   y:62, w:20, art:'servers' },
-  { x:60.5, y:62, w:20, art:'servers' },
-  { x:50,   y:66.5, w:20, art:'cables', flat:true }, // cable spaghetti between the racks
-  // --- archives room (plus the library ladder and a banker's lamp) ---
-  { x:76.5, y:48.5, w:16, art:'cabinet' },
-  { x:80.5, y:48.5, w:16, art:'cabinet' },
-  { x:91.5, y:49,   w:22, art:'shelf' },
-  { x:74.5, y:61,   w:12, art:'ladder' },
-  { x:85,   y:63.5, w:14, art:'bankLamp' },
-  { x:92.5, y:62,   w:24, art:'boxes' },
+  // --- Tally's accounts corner, top-left beside the grid. He brings his own
+  //     desk (TALLY_DESK_SVG, drawn with the .staff div in officeSkeletonHtml),
+  //     so there is no desk prop here. Plants bracket the nook. ---
+  { x:5,    y:23,   w:13, art:'plant' },
+  { x:19,   y:23,   w:13, art:'plant' },
+  { x:12,   y:33,   w:12, art:'bookpile' },   // his ledgers
+  // --- planning room (top-left of the grid) ---
+  { x:32.5, y:26.5, w:11, art:'chair' },
+  { x:47.5, y:26.5, w:11, art:'chair' },
+  { x:40,   y:31,   w:36, art:'meetTable' },  // meeting table w/ laptop + papers
+  { x:49.5, y:38,   w:24, art:'board' },      // whiteboard easel
+  // --- archives room (top-right of the grid: cabinets, ladder, banker's lamp) ---
+  { x:69.5, y:23.5, w:16, art:'cabinet' },
+  { x:73.5, y:23.5, w:16, art:'cabinet' },
+  { x:84.5, y:24,   w:22, art:'shelf' },
+  { x:67.5, y:36,   w:12, art:'ladder' },
+  { x:78,   y:38.5, w:14, art:'bankLamp' },
+  { x:85.5, y:37,   w:24, art:'boxes' },
+  // --- research room (bottom-left of the grid: the two-resident study —
+  //     shelves, reading desk, globe, evidence board, borrowed books) ---
+  { x:28.5, y:51.5, w:22, art:'shelf' },
+  { x:33,   y:51.5, w:22, art:'shelf' },      // a proper pair of bookcases
+  { x:48,   y:50,   w:20, art:'caseboard' },  // the red-string investigation board
+  { x:41.5, y:62,   w:28, art:'desk' },       // reading desk
+  { x:41.5, y:67,   w:11, art:'chair' },
+  { x:50,   y:62,   w:12, art:'globe' },
+  { x:29,   y:67,   w:11, art:'bookpile' },
+  // --- terminal room (bottom-right of the grid) ---
+  { x:76,   y:54,   w:38, art:'cmdDesk' },    // triple-monitor command desk
+  { x:76,   y:59,   w:11, art:'chair' },
+  { x:66,   y:64,   w:20, art:'servers' },
+  { x:86.5, y:64,   w:20, art:'servers' },
+  { x:76,   y:68.5, w:20, art:'cables', flat:true }, // cable spaghetti between the racks
+  // --- greenery in the cross-corridor between the four rooms ---
+  { x:58,   y:30,   w:14, art:'plant' },
+  { x:58,   y:58,   w:14, art:'plant' },
   // --- lounge (rug first so everything else sits on it) ---
   // Furniture hugs the EDGES: couch corner on the left, coffee corner on
-  // the right, keeping x≈32-72 clear standing room for the whole crew.
+  // the right, keeping the middle clear standing room for the whole crew.
   // wpct (percent of floor width, not px) — the rug is the one prop big
   // enough that fixed px overflowed the lounge mat on narrow screens
-  { x:25, y:85,   wpct:22, art:'rug', flat:true },
-  { x:23, y:80.5, w:48,  art:'couch' },
-  { x:24, y:89.5, w:26,  art:'table' },
-  { x:14, y:78,   w:18,  art:'plant' },
-  { x:33, y:78,   w:16,  art:'lamp' },
-  { x:44, y:77.5, w:18,  art:'arcade' },    // the lounge arcade cabinet
-  { x:79, y:82,   w:34,  art:'coffeeBar' }, // coffee corner: machine + mugs
-  { x:85.5, y:91, w:18,  art:'plant' },
+  { x:25, y:86,   wpct:22, art:'rug', flat:true },
+  { x:23, y:81.5, w:48,  art:'couch' },
+  { x:24, y:90.5, w:26,  art:'table' },
+  { x:14, y:79,   w:18,  art:'plant' },
+  { x:33, y:79,   w:16,  art:'lamp' },
+  { x:44, y:78.5, w:18,  art:'arcade' },    // the lounge arcade cabinet
+  { x:79, y:83,   w:34,  art:'coffeeBar' }, // coffee corner: machine + mugs
+  { x:85.5, y:92, w:18,  art:'plant' },
   // --- hallway ---
   { x:7,  y:86.5, w:17, art:'cooler' },
   { x:93, y:86,   w:20, art:'vending' },
@@ -2296,7 +2293,7 @@ function officeSkeletonHtml(){
     + '</div>';
   }).join('');
   // Tally at his desk + the usage monitor mounted on the wall above him
-  const staffHtml = '<div class="staff" style="left:73%;top:17.5%">'
+  const staffHtml = '<div class="staff" style="left:12%;top:20%">'
     + '<div class="staff-desk">' + TALLY_DESK_SVG + '</div>'
     + '<div class="staff-face">' + TALLY_AVATAR.svg + '</div>'
     + '<div class="staff-name">Tally</div>'
