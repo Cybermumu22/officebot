@@ -2091,6 +2091,52 @@ function cvPickWord(){
   while(w === CV.word) w = CV_WORDS[Math.floor(Math.random() * CV_WORDS.length)];
   CV.word = w; CV.wordAt = Date.now();
 }
+/* Read the CLI's OWN spinner off the terminal instead of inventing our own.
+   Claude Code prints one line while it works:
+
+       ✽ Tempering… (2m 35s · ↓ 4.4k tokens)
+
+   which carries the real word, the real elapsed time and the real token count.
+   Both of the pane's numbers were previously derived rather than read:
+
+   - the word came from CV_WORDS, so the pane said "Crunching" while the
+     terminal said "Tempering";
+   - the token figure was input+output+cache_creation summed server-side from
+     the transcript, minus a baseline snapshotted at the start of the turn.
+     Cache-creation dwarfs the visible tokens, so it was out by a large factor
+     — wrong in magnitude, not merely stale, which is why it never looked like
+     a refresh problem.
+
+   Only possible on the 'pocket' engine: ttyd is a remote pty with no local
+   buffer to read. Returns null there, and the caller keeps the old estimate. */
+function cvScrapeSpinner(){
+  if(S.engine !== 'pocket' || typeof term === 'undefined' || !term) return null;
+  try{
+    const buf = term.buffer.active;
+    const start = Math.max(0, buf.length - term.rows);
+    for(let i = buf.length - 1; i >= start; i--){    // newest first: it's near the prompt
+      const ln = buf.getLine(i);
+      if(!ln) continue;
+      const l = ln.translateToString(true);
+      // Glyph varies as it animates (✻ ✽ ✳ · …) so key off the SHAPE of the
+      // line rather than the character: Word… ( … ). Two steps deliberately —
+      // one regex with an optional token group let the surrounding wildcards
+      // satisfy the match without ever entering it, so the count silently
+      // came back null every time.
+      const m = l.match(/([A-Z][a-z]+)…\s*\(([^)]*)\)/);
+      if(!m) continue;
+      // …then dig the count out of the bracket's contents, if it's there yet.
+      const tm = m[2].match(/([\d.]+)\s*([kKmM]?)\s*tokens/);
+      let tok = null;
+      if(tm){
+        const mult = /k/i.test(tm[2]) ? 1e3 : /m/i.test(tm[2]) ? 1e6 : 1;
+        tok = Math.round(parseFloat(tm[1]) * mult);
+      }
+      return { word: m[1], tokens: tok };
+    }
+  }catch(e){}
+  return null;
+}
 // The ticker used to rebuild its innerHTML every second (for the timer),
 // which RESTARTED the star spin and word pop each tick — that was the
 // stutter. Now the skeleton persists: the star spins continuously, only the
@@ -2129,10 +2175,16 @@ function convoTickerPaint(){
     t._built = true;
   }
   if(!CV.workStart){ CV.workStart = now; CV.tok0 = st.tokens || 0; cvPickWord(); }
-  if(now - CV.wordAt > 4000) cvPickWord();
+  // Mirror the terminal when we can see it; fall back to our own word and the
+  // transcript estimate when we can't (ttyd engine, or between spinner frames).
+  const spin = cvScrapeSpinner();
+  if(spin){ CV.word = spin.word; CV.wordAt = now; }
+  else if(now - CV.wordAt > 4000) cvPickWord();
   cvSetWord(CV.word);
   const secs = Math.floor((now - CV.workStart) / 1000);
-  const dTok = Math.max(0, (st.tokens || 0) - CV.tok0);
+  const dTok = (spin && spin.tokens != null)
+    ? spin.tokens                                        // the CLI's own count
+    : Math.max(0, (st.tokens || 0) - CV.tok0);           // fallback estimate
   let meta = '';
   if(st.activity && st.activity !== 'thinking…') meta += ' · ' + st.activity;
   meta += ' · ' + secs + 's';
