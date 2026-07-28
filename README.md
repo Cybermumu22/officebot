@@ -132,6 +132,34 @@ number, and the occasional argument with itself.
 The gadget guy. Configs, status lines, tiny tooling fixes, and milliseconds
 nobody asked him to shave. The perfect setup is out there somewhere.
 
+### Send four at once and you get a squad, not four clones
+
+Claude fans agents out in parallel constantly — four Explores at a time is an
+ordinary Tuesday. Calling them Scout II, Scout III and Scout IV would look like
+a cloning accident, so instead **the office phones in Scout's teammates**:
+
+| Send several… | and they arrive as |
+|---|---|
+| `Explore` | Scout, **Recon**, **Probe**, **Ranger**, **Tracker** |
+| `general-purpose` | Jack, **Mac**, **Rigg**, **Bolt**, **Wrench** |
+| `Plan` | Blueprint, **Draft**, **Schema**, **Sketch**, **Grid** |
+| `claude` | Ace, **Deuce**, **King**, **Joker**, **Trey** |
+| `claude-code-guide` | Bookworm, **Index**, **Scroll**, **Margin**, **Footnote** |
+| `code-reviewer` | Nitpick, **Quibble**, **Sniff**, **Redline**, **Comma** |
+| `fork` | Twin, **Clone**, **Echo**, **Mirror**, **Fork** |
+| `statusline-setup` | Tinker, **Sprocket**, **Cog**, **Fuse**, **Bit** |
+
+They share a face, because they do the same job — but each walks in and
+announces itself (*"Recon reporting in."*), and from then on you can follow any
+one of them individually across the floor.
+
+The first one is the actual crew member. The rest are temps, and they clear off
+the moment their job ends. Scout's usual spot stays empty until **every last
+one** of them has finished, so the floor never shows him in two places at once.
+
+Past five it gives up and falls back to numerals — Scout VI, Scout VII. If
+you're running six parallel Explores, you have larger problems than nomenclature.
+
 ### The regulars
 
 They never take a session. They just run the place.
