@@ -36,7 +36,12 @@ on the machine and watch someone walk in and get to work.
 Want to see it move before wiring anything up? `npx @cybermu22/officebot demo`
 plays a fake session — full staff, no setup, nothing touched.
 
-*Latest release: **v1.0.17**.*
+[![npm](https://img.shields.io/npm/v/@cybermu22/officebot?color=cb3837&label=npm&logo=npm)](https://www.npmjs.com/package/@cybermu22/officebot)
+[![node](https://img.shields.io/node/v/@cybermu22/officebot?color=5fa04e&logo=node.js&logoColor=white)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/@cybermu22/officebot?color=8b5cf6)](LICENSE)
+
+*(The version badge reads live from npm — it can't go stale the way a
+hand-typed number does.)*
 
 ---
 
