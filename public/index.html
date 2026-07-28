@@ -2279,6 +2279,11 @@ function _feedSaveSoon(){
 
 // Tally's workstation: a desk with a green-screen PC (ledger lines), a
 // ledger sheet, and a pen holder — drawn behind him so he reads as sitting at it.
+// Tally's post, in ONE place. It was previously written out five times —
+// the staff div plus every ceremony that walks him home — so moving him left
+// the ceremonies still marching him to his old spot in the middle of the
+// floor, where he then stayed. Whenever this changes, everything follows.
+const TALLY_HOME = { left:'12%', top:'20%' };
 const TALLY_DESK_SVG = '<svg viewBox="0 0 40 22" shape-rendering="crispEdges">'
   + '<rect x="4" y="2" width="14" height="10" fill="#1e293b"/><rect x="5" y="3" width="12" height="7" fill="#06121f"/>'
   + '<rect x="6" y="4" width="10" height="1" fill="#10b981"/><rect x="6" y="6" width="7" height="1" fill="#34d399"/><rect x="6" y="8" width="9" height="1" fill="#10b981"/>'
@@ -2311,7 +2316,7 @@ function officeSkeletonHtml(){
     + '</div>';
   }).join('');
   // Tally at his desk + the usage monitor mounted on the wall above him
-  const staffHtml = '<div class="staff" style="left:12%;top:20%">'
+  const staffHtml = '<div class="staff" style="left:' + TALLY_HOME.left + ';top:' + TALLY_HOME.top + '">'
     + '<div class="staff-desk">' + TALLY_DESK_SVG + '</div>'
     + '<div class="staff-face">' + TALLY_AVATAR.svg + '</div>'
     + '<div class="staff-name">Tally</div>'
@@ -3550,7 +3555,7 @@ function reopenOffice(sid){
   if(o){
     o.root.classList.remove('closing');
     const staff = o.root.querySelector('.staff');
-    if(staff){ staff.style.display = ''; staff.style.opacity = ''; staff.style.transition = ''; staff.style.left = '53%'; staff.style.top = '17.5%'; }
+    if(staff){ staff.style.display = ''; staff.style.opacity = ''; staff.style.transition = ''; staff.style.left = TALLY_HOME.left; staff.style.top = TALLY_HOME.top; }
   }
   render();
 }
@@ -3773,7 +3778,7 @@ function playOpening(sid){
       staff.style.left = '84%'; staff.style.top = '9%'; staff.style.opacity = '1';
       void staff.offsetWidth;
       staff.style.transition = 'left ' + _pacedDur(3) + ' ease, top ' + _pacedDur(3) + ' ease';
-      staff.style.left = '53%'; staff.style.top = '17.5%';
+      staff.style.left = TALLY_HOME.left; staff.style.top = TALLY_HOME.top;
     }
     sayStaffLine(o, pick(TALLY_HI));
   }, _paced(6000)));
@@ -3833,7 +3838,7 @@ function _rushOpening(sid){
       staff.style.left = '84%'; staff.style.top = '9%'; staff.style.opacity = '1';
       void staff.offsetWidth;
       staff.style.transition = 'left ' + _pacedDur(1) + ' ease, top ' + _pacedDur(1) + ' ease';
-      staff.style.left = '53%'; staff.style.top = '17.5%';
+      staff.style.left = TALLY_HOME.left; staff.style.top = TALLY_HOME.top;
     }
   }
   // People don't file in one-by-one on a metronome — they arrive in natural
