@@ -779,6 +779,15 @@ const DEFAULTS = {
   active:0, nextTab:3
 };
 let S = loadSettings();
+/* The OFFICE is the source of truth for its own look — it persists
+   'officebot.prefs' itself and applies it with or without a deck around it.
+   Adopt whatever it currently holds, so a deck opened later can't push a
+   stale mirror over a newer setting and silently revert it. */
+try{
+  const _op = JSON.parse(localStorage.getItem('officebot.prefs') || '{}');
+  if(_op.theme) S.officeTheme = _op.theme;
+  if(_op.walk)  S.walkDur = Math.round(Number(_op.walk) * 10);
+}catch(e){}
 function loadSettings(){
   try{
     const raw = localStorage.getItem('pocketDeck.v1');

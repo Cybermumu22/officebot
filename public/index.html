@@ -38,6 +38,24 @@
     --mat-arch-a:#15102a;  --mat-arch-b:#120d24;
     --mat-lounge-a:#2a1a0e; --mat-lounge-b:#20130a;
 
+    /* Chrome drawn ON the room — signs, labels, buttons, wall fixtures. This
+       was the half missed first time round: theming the floor but leaving cool
+       blue-grey type and navy sign plates sitting on it looked half-painted. */
+    --chrome-text:#7c8ab0;                    /* cwd line, zone icons        */
+    --chrome-label:#8a92b8;                   /* zone sign labels            */
+    --chrome-mute:#8890b8;                    /* standby plaque              */
+    --chrome-btn:#9096b5;                     /* floor-reset glyph           */
+    --plate-bg:rgba(7,9,20,.82);              /* zone sign plate             */
+    --plate-edge:rgba(255,255,255,.13);
+    --btn-bg:rgba(10,12,24,.75);              /* floor-reset pill            */
+    --btn-edge:rgba(255,255,255,.15);
+    --floor-edge:rgba(255,255,255,.05);       /* office-floor outer border   */
+    --zone-accent:#7c3aed;                    /* active-room fallback glow   */
+    --wallbox-bg:#04060f;                     /* the wall monitors           */
+    --wallbox-edge:#2a3158;
+    --door-a:#4d578f; --door-b:#414a7c; --door-c:#333b68; --door-d:#2d3560;
+    --poster-frame:#252c52; --poster-field:#160b38;
+
     --walk-dur:1.7s;                          /* how long a token takes to cross a room */
   }
 
@@ -67,6 +85,24 @@
     --mat-term-a:#241a14;  --mat-term-b:#1f1611;
     --mat-arch-a:#31221a;  --mat-arch-b:#2b1e17;
     --mat-lounge-a:#4a2f1c; --mat-lounge-b:#3a2415;
+    /* Warm the chrome to match, or cool blue-grey type sits on terracotta and
+       the whole room reads as two half-finished palettes fighting. */
+    --chrome-text:#b09a86;
+    --chrome-label:#c2ab95;
+    --chrome-mute:#9c8874;
+    --chrome-btn:#bfa891;
+    --plate-bg:rgba(26,17,11,.84);
+    --plate-edge:rgba(255,236,220,.16);
+    --btn-bg:rgba(32,22,15,.78);
+    --btn-edge:rgba(255,236,220,.18);
+    --floor-edge:rgba(255,236,220,.06);
+    --zone-accent:#d97757;
+    --wallbox-bg:#1a1109;
+    --wallbox-edge:#5c4433;
+    /* The EXIT door was blue-grey — one step off the warm wall in luminance
+       and clashing in hue, so it nearly vanished. Warm timber instead. */
+    --door-a:#8a6242; --door-b:#755236; --door-c:#5e412a; --door-d:#4a3322;
+    --poster-frame:#5c4433; --poster-field:#2a1608;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
@@ -120,7 +156,7 @@
   /* Shown instead of a blank box when no session is connected yet — the
      office/rooms are always visible, just dimmed and empty of people. */
   .office-placeholder{opacity:.6;}
-  .office-placeholder .office-plaque{color:#8890b8;}
+  .office-placeholder .office-plaque{color:var(--chrome-mute);}
 
   /* ============ OFFICE FLOOR ============ */
   #floor{
@@ -137,11 +173,11 @@
 
   .office-head{display:flex; align-items:baseline; gap:10px; margin-bottom:10px; padding:0 2px;}
   .office-plaque{font-family:'Orbitron',sans-serif; font-size:.72rem; font-weight:700; color:#fff; letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .office-cwd{font-family:'VT323',monospace; font-size:1rem; color:#7c8ab0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;}
+  .office-cwd{font-family:'VT323',monospace; font-size:1rem; color:var(--chrome-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;}
 
   .office-floor{
     position:relative; height:640px; border-radius:8px;
-    border:1px solid rgba(255,255,255,.05);
+    border:1px solid var(--floor-edge);
     overflow:hidden; touch-action:none; /* this element owns pan/zoom gestures, see initFloorCamera() */
     cursor:grab;
   }
@@ -177,13 +213,13 @@
     transition:border-color .35s, box-shadow .35s;
   }
   .room-mat.mat-active{
-    border-color:var(--zc,#7c3aed);
-    box-shadow:inset 0 0 38px -10px var(--zc,#7c3aed), 0 2px 8px rgba(0,0,0,.35);
+    border-color:var(--zc,var(--zone-accent));
+    box-shadow:inset 0 0 38px -10px var(--zc,var(--zone-accent)), 0 2px 8px rgba(0,0,0,.35);
   }
   .tokens-layer{position:absolute; inset:0;}
   .floor-reset{
     position:absolute; top:8px; right:8px; z-index:5; width:26px; height:26px; border-radius:7px;
-    background:rgba(10,12,24,.75); border:1px solid rgba(255,255,255,.15); color:#9096b5;
+    background:var(--btn-bg); border:1px solid var(--btn-edge); color:var(--chrome-btn);
     font-size:14px; line-height:1; cursor:pointer; backdrop-filter:blur(2px);
   }
   .floor-reset:hover{color:#fff; border-color:rgba(255,255,255,.35);}
@@ -195,13 +231,13 @@
   .zone{
     position:absolute; transform:translate(-50%,-50%);
     display:flex; align-items:center; gap:5px; padding:3px 9px;
-    border-radius:999px; background:rgba(7,9,20,.82);
-    border:1px solid rgba(255,255,255,.13);
+    border-radius:999px; background:var(--plate-bg);
+    border:1px solid var(--plate-edge);
     box-shadow:0 2px 6px rgba(0,0,0,.5);
     white-space:nowrap;
     transition:border-color .35s, box-shadow .35s;
   }
-  .zone.zone-active{border-color:var(--zc,#7c3aed); box-shadow:0 0 16px -3px var(--zc,#7c3aed), 0 2px 6px rgba(0,0,0,.5);}
+  .zone.zone-active{border-color:var(--zc,var(--zone-accent)); box-shadow:0 0 16px -3px var(--zc,var(--zone-accent)), 0 2px 6px rgba(0,0,0,.5);}
   /* Decorative furniture — colourful pixel art in the same style as the
      avatar roster (crispEdges rects, top-lit shading), with a drop shadow
      for a bit of depth. Still purely cosmetic: non-interactive, behind the
@@ -211,10 +247,10 @@
   /* FLAT props (the rug): no drop-shadow — a shadow under a flat rug made it
      read as a floating slab rather than fabric on the floor. */
   .prop-flat{filter:none; opacity:.75;}
-  .zone-icon{width:11px; height:11px; color:#7c8ab0; opacity:.85; transition:color .35s, opacity .35s; flex-shrink:0;}
-  .zone.zone-active .zone-icon{color:var(--zc,#7c3aed); opacity:1;}
+  .zone-icon{width:11px; height:11px; color:var(--chrome-text); opacity:.85; transition:color .35s, opacity .35s; flex-shrink:0;}
+  .zone.zone-active .zone-icon{color:var(--zc,var(--zone-accent)); opacity:1;}
   .zone-icon svg{width:100%; height:100%; display:block;}
-  .zone-label{font-family:'Orbitron',sans-serif; font-size:.52rem; letter-spacing:.7px; color:#8a92b8; text-transform:uppercase;}
+  .zone-label{font-family:'Orbitron',sans-serif; font-size:.52rem; letter-spacing:.7px; color:var(--chrome-label); text-transform:uppercase;}
 
   /* ---- avatar tokens (persistent DOM nodes so left/top can transition) ----
      .agent-token is positioned+centered exactly on the zone point; .token-badge
@@ -424,30 +460,30 @@
   .wall-box{
     position:absolute; transform:translateX(-50%); top:1.4%; height:10.4%;
     box-sizing:border-box; padding:2px 5px; border-radius:3px;
-    background:#04060f; border:1px solid #2a3158;
+    background:var(--wallbox-bg); border:1px solid var(--wallbox-edge);
     box-shadow:0 0 8px rgba(6,182,212,.15), inset 0 0 6px rgba(0,0,0,.8);
     font-family:'VT323',monospace; z-index:1;
     display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden;
   }
   .ws-head{display:flex; align-items:center; justify-content:space-between;}
-  .ws-title{font-family:'Orbitron',sans-serif; font-size:6.5px; letter-spacing:.5px; color:#7c8ab0; white-space:nowrap;}
+  .ws-title{font-family:'Orbitron',sans-serif; font-size:6.5px; letter-spacing:.5px; color:var(--chrome-text); white-space:nowrap;}
   .ws-led{width:3px; height:3px; border-radius:50%; background:#10b981; box-shadow:0 0 4px #10b981; animation:tokenLedBlink 2s ease-in-out infinite; flex-shrink:0;}
   .ws-led.warn{background:#e63946; box-shadow:0 0 5px #e63946; animation-duration:.6s;}
   .ws-bar{height:3px; border-radius:2px; background:#11142a; border:1px solid #232742; overflow:hidden;}
   .ws-fill{display:block; height:100%; width:0%; background:linear-gradient(90deg,#10b981,#06b6d4); transition:width .8s ease;}
   .ws-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
   .ws-fill.hot{background:linear-gradient(90deg,#e63946,#f97316);}
-  .ws-line{font-size:11px; line-height:1.15; color:#9096b5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .ws-line{font-size:11px; line-height:1.15; color:var(--chrome-btn); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .ws-line b{color:#e2e4f0; font-weight:400;}
-  .ws-fline{color:#9096b5;}
+  .ws-fline{color:var(--chrome-btn);}
   .ws-warn{display:none;}
   /* live per-session token counter on the 5-hour monitor: dim at rest,
      glows cyan while the office's session is actively working */
-  .ws-stok{color:#7c8ab0; transition:color .3s, text-shadow .3s;}
+  .ws-stok{color:var(--chrome-text); transition:color .3s, text-shadow .3s;}
   .office.working .ws-stok{color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.7);}
-  .ws-alltime{color:#9096b5;}
+  .ws-alltime{color:var(--chrome-btn);}
   /* live clock box */
-  .wc-date{font-family:'Orbitron',sans-serif; font-size:7px; letter-spacing:1px; color:#7c8ab0; text-align:center; white-space:nowrap;}
+  .wc-date{font-family:'Orbitron',sans-serif; font-size:7px; letter-spacing:1px; color:var(--chrome-text); text-align:center; white-space:nowrap;}
   .wc-time{font-size:18px; line-height:1; color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.5); letter-spacing:1px; text-align:center; white-space:nowrap;}
   .wc-reset{font-size:9px; color:#ffb347; text-align:center; white-space:nowrap; min-height:8px;}
   /* usage-pulse: a brief glow ripple across the three wall monitors the moment
@@ -725,8 +761,8 @@ const PROP_ART = {
   windowSun:'<svg viewBox="0 0 26 20" shape-rendering="crispEdges"><rect x="0" y="0" width="26" height="20" fill="#2a3158"/><rect x="2" y="2" width="22" height="15" fill="#160b38"/><rect x="4" y="4" width="1" height="1" fill="#e2e4f0"/><rect x="8" y="3" width="1" height="1" fill="#9096b5"/><rect x="20" y="5" width="1" height="1" fill="#e2e4f0"/><rect x="10" y="7" width="6" height="1" fill="#fde68a"/><rect x="9" y="8" width="8" height="2" fill="#fbbf24"/><rect x="9" y="11" width="8" height="1" fill="#f97316"/><rect x="10" y="13" width="6" height="1" fill="#ec4899"/><rect x="2" y="14" width="22" height="1" fill="#7c3aed"/><rect x="2" y="15" width="22" height="2" fill="#0d0826"/><rect x="4" y="15" width="1" height="1" fill="#f59e0b"/><rect x="12" y="16" width="1" height="1" fill="#06b6d4"/><rect x="19" y="15" width="1" height="1" fill="#f472b6"/><rect x="0" y="17" width="26" height="3" fill="#333b68"/><rect x="0" y="17" width="26" height="1" fill="#414a7c"/></svg>',
   windowCity:'<svg viewBox="0 0 26 20" shape-rendering="crispEdges"><rect x="0" y="0" width="26" height="20" fill="#2a3158"/><rect x="2" y="2" width="22" height="15" fill="#120a30"/><rect x="5" y="4" width="3" height="3" fill="#e2e8f0"/><rect x="5" y="4" width="1" height="1" fill="#94a3b8"/><rect x="12" y="3" width="1" height="1" fill="#e2e4f0"/><rect x="17" y="5" width="1" height="1" fill="#9096b5"/><rect x="21" y="4" width="1" height="1" fill="#e2e4f0"/><rect x="2" y="10" width="4" height="7" fill="#090617"/><rect x="6" y="12" width="3" height="5" fill="#0d0a20"/><rect x="9" y="9" width="4" height="8" fill="#090617"/><rect x="13" y="11" width="3" height="6" fill="#0d0a20"/><rect x="16" y="8" width="4" height="9" fill="#090617"/><rect x="20" y="12" width="4" height="5" fill="#0d0a20"/><rect x="3" y="12" width="1" height="1" fill="#f59e0b"/><rect x="10" y="11" width="1" height="1" fill="#06b6d4"/><rect x="17" y="10" width="1" height="1" fill="#f472b6"/><rect x="21" y="13" width="1" height="1" fill="#f59e0b"/><rect x="11" y="14" width="1" height="1" fill="#67e8f9"/><rect x="0" y="17" width="26" height="3" fill="#333b68"/><rect x="0" y="17" width="26" height="1" fill="#414a7c"/></svg>',
   clock:    '<svg viewBox="0 0 14 14" shape-rendering="crispEdges"><rect x="3" y="0" width="8" height="1" fill="#475569"/><rect x="1" y="1" width="12" height="11" fill="#475569"/><rect x="2" y="2" width="10" height="9" fill="#e2e8f0"/><rect x="7" y="3" width="1" height="4" fill="#1e293b"/><rect x="7" y="6" width="3" height="1" fill="#e63946"/><rect x="3" y="12" width="8" height="1" fill="#334155"/></svg>',
-  poster:   '<svg viewBox="0 0 16 22" shape-rendering="crispEdges"><rect x="0" y="0" width="16" height="22" fill="#252c52"/><rect x="2" y="2" width="12" height="18" fill="#160b38"/><rect x="5" y="5" width="6" height="1" fill="#fde68a"/><rect x="4" y="6" width="8" height="3" fill="#fbbf24"/><rect x="4" y="10" width="8" height="1" fill="#ec4899"/><rect x="2" y="13" width="12" height="1" fill="#7c3aed"/><rect x="2" y="16" width="12" height="1" fill="#4c1d95"/></svg>',
-  doorExit: '<svg viewBox="0 0 24 34" shape-rendering="crispEdges"><rect x="7" y="0" width="10" height="5" fill="#052e1c"/><rect x="8" y="1" width="8" height="3" fill="#10b981"/><rect x="9" y="2" width="6" height="1" fill="#6ee7b7"/><rect x="3" y="6" width="18" height="28" fill="#333b68"/><rect x="5" y="8" width="14" height="26" fill="#414a7c"/><rect x="7" y="10" width="10" height="9" fill="#4d578f"/><rect x="8" y="11" width="8" height="7" fill="#0c0e1c"/><rect x="16" y="22" width="2" height="4" fill="#cbd5e1"/><rect x="6" y="30" width="12" height="3" fill="#2d3560"/></svg>',
+  poster:   '<svg viewBox="0 0 16 22" shape-rendering="crispEdges"><rect x="0" y="0" width="16" height="22" fill="var(--poster-frame)"/><rect x="2" y="2" width="12" height="18" fill="var(--poster-field)"/><rect x="5" y="5" width="6" height="1" fill="#fde68a"/><rect x="4" y="6" width="8" height="3" fill="#fbbf24"/><rect x="4" y="10" width="8" height="1" fill="#ec4899"/><rect x="2" y="13" width="12" height="1" fill="#7c3aed"/><rect x="2" y="16" width="12" height="1" fill="#4c1d95"/></svg>',
+  doorExit: '<svg viewBox="0 0 24 34" shape-rendering="crispEdges"><rect x="7" y="0" width="10" height="5" fill="#052e1c"/><rect x="8" y="1" width="8" height="3" fill="#10b981"/><rect x="9" y="2" width="6" height="1" fill="#6ee7b7"/><rect x="3" y="6" width="18" height="28" fill="var(--door-c)"/><rect x="5" y="8" width="14" height="26" fill="var(--door-b)"/><rect x="7" y="10" width="10" height="9" fill="var(--door-a)"/><rect x="8" y="11" width="8" height="7" fill="#0c0e1c"/><rect x="16" y="22" width="2" height="4" fill="#cbd5e1"/><rect x="6" y="30" width="12" height="3" fill="var(--door-d)"/></svg>',
   chair:    '<svg viewBox="0 0 14 20" shape-rendering="crispEdges"><rect x="3" y="2" width="8" height="8" fill="#334155"/><rect x="3" y="2" width="8" height="2" fill="#475569"/><rect x="2" y="10" width="10" height="3" fill="#475569"/><rect x="6" y="13" width="2" height="4" fill="#64748b"/><rect x="2" y="17" width="10" height="2" fill="#334155"/><rect x="0" y="18" width="4" height="2" fill="#334155"/><rect x="10" y="18" width="4" height="2" fill="#334155"/></svg>',
   meetTable:'<svg viewBox="0 0 40 24" shape-rendering="crispEdges"><rect x="4" y="6" width="32" height="4" fill="#2a4a8c"/><rect x="4" y="6" width="32" height="1" fill="#3d63b3"/><rect x="2" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="36" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="4" y="10" width="32" height="3" fill="#1d3868"/><rect x="7" y="13" width="3" height="8" fill="#16305e"/><rect x="30" y="13" width="3" height="8" fill="#16305e"/><rect x="12" y="3" width="6" height="3" fill="#334155"/><rect x="13" y="4" width="4" height="2" fill="#06b6d4"/><rect x="24" y="4" width="5" height="2" fill="#e2e8f0"/></svg>',
   cmdDesk:  '<svg viewBox="0 0 40 26" shape-rendering="crispEdges"><rect x="3" y="3" width="10" height="8" fill="#1e293b"/><rect x="4" y="4" width="8" height="6" fill="#06b6d4"/><rect x="4" y="4" width="8" height="2" fill="#67e8f9"/><rect x="15" y="2" width="10" height="9" fill="#1e293b"/><rect x="16" y="3" width="8" height="7" fill="#7c3aed"/><rect x="16" y="3" width="8" height="2" fill="#a78bfa"/><rect x="27" y="3" width="10" height="8" fill="#1e293b"/><rect x="28" y="4" width="8" height="6" fill="#10b981"/><rect x="28" y="4" width="8" height="2" fill="#6ee7b7"/><rect x="1" y="12" width="38" height="2" fill="#64748b"/><rect x="1" y="14" width="38" height="3" fill="#475569"/><rect x="14" y="12" width="12" height="1" fill="#0c0e1c"/><rect x="3" y="17" width="3" height="8" fill="#334155"/><rect x="34" y="17" width="3" height="8" fill="#334155"/></svg>',
@@ -848,6 +884,17 @@ function setOfficePref(k, v){
 // outlive it, so derive the cleanup delay instead of hardcoding a duration
 // that would be wrong the moment the slider moves.
 function _enterWalkMs(){ return _clampWalk(_officePrefs.walk) * 1900 + 250; }
+/* Choreography scaler. Great swathes of this file are setTimeout chains paced
+   off the walk — "wait for them to reach the desk, THEN swap the bubble" — and
+   every one was written against the original 1.7s stroll. Rather than restate
+   each as a formula, _paced() rescales the number that was already tuned:
+   at the default it returns exactly what was hardcoded before, and at other
+   speeds the whole sequence stretches or tightens together, keeping the
+   relative beats the author chose. */
+function _paced(ms){ return Math.round(ms * (_clampWalk(_officePrefs.walk) / WALK_DEFAULT)); }
+/* Same idea for the inline transition strings a few non-token movers use
+   (Tally is a plain .staff div, not an .agent-token, so he has his own). */
+function _pacedDur(sec){ return (sec * (_clampWalk(_officePrefs.walk) / WALK_DEFAULT)).toFixed(2) + 's'; }
 /* How long THIS token's current move actually takes, in ms. Reads the computed
    transition-duration off the element, so it automatically accounts for the
    base --walk-dur AND whichever multiplier class is on it (.ceremony x2,
@@ -863,7 +910,20 @@ function _moveMs(el){
   return _clampWalk(_officePrefs.walk) * 1000 + 120;
 }
 try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }catch(e){}
+_officePrefs.walk = _clampWalk(_officePrefs.walk);   // never trust what was stored
 applyOfficePrefs();
+/* Same-origin tabs share localStorage, so this fires when ANOTHER tab changes
+   the prefs — a second deck, or an office open standalone alongside one.
+   Without it, that other view kept painting the old palette until reloaded. */
+window.addEventListener('storage', function(e){
+  if(e.key !== OFFICE_PREFS_KEY || !e.newValue) return;
+  try{
+    const next = JSON.parse(e.newValue);
+    if(next.theme != null) _officePrefs.theme = next.theme;
+    if(next.walk != null) _officePrefs.walk = _clampWalk(next.walk);
+    applyOfficePrefs();
+  }catch(err){}
+});
 
 const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
 let evtCount = 0;
@@ -1165,17 +1225,17 @@ function dispatchCourier(s, promptText){
     s.courier.zone = 'warroom';
     s.courier.bubble = '📨 From the user: “' + teaser + '”';
     render();
-  }, 150));
+  }, _paced(150)));
   s.courierTimers.push(setTimeout(function(){
     if(!s.courier) return;
     s.courier.bubble = pick(COURIER_EXIT_LINES);
     s.courier.zone = 'exit';
     render();
-  }, 5400));
+  }, _paced(5400)));
   s.courierTimers.push(setTimeout(function(){
     s.courier = null;
     render();
-  }, 7200));
+  }, _paced(7200)));
 }
 
 const ARRIVAL_LINES = ['On it, boss.', 'Got it — starting now.', 'Heading to work.', 'On the case.'];
@@ -1442,8 +1502,8 @@ function playModelHandover(s, oldNick, oldModel, oldAvatar){
   //     goes grayscale (offline) — off shift as of this moment.
   //  3. The crew rib the incoming boss by rank (playShiftBanter).
   //  4. The outgoing persona walks out the door and disappears.
-  // The token left/top transition (1.7s) does the walking; timers just set
-  // zones, so every delay below is paced off that 1.7s stroll.
+  // The token left/top transition does the walking; timers just set zones,
+  // so every delay below is _paced() off it and follows the speed setting.
   const meetZone = (s.zone && s.zone !== 'exit') ? s.zone : 'lounge'; // where the old boss is standing
   const outModel = oldModel; // capture for the crew banter closure
   // The ghost keeps the OUTGOING model's face (s.avatar is already the new
@@ -1469,7 +1529,7 @@ function playModelHandover(s, oldNick, oldModel, oldAvatar){
     if(!s.departing) return;
     if(s.zone === 'exit') s.zone = meetZone; // walk door → desk (unless real work already moved us)
     render();
-  }, 300));
+  }, _paced(300)));
   // meet: exchange lines, old shift goes grayscale (paced after the 1.7s walk)
   s.departTimers.push(setTimeout(function(){
     if(!s.departing) return;
@@ -1481,22 +1541,22 @@ function playModelHandover(s, oldNick, oldModel, oldAvatar){
     chatLog(s.modelNickname, arrive, 'arrive');
     armBubbleFade(s, 12000);
     render();
-  }, 2100));
+  }, _paced(2100)));
   // (3) the crew weigh in on the new boss's rank
   s.departTimers.push(setTimeout(function(){
     playShiftBanter(s.id, s.model, outModel);
-  }, 3200));
+  }, _paced(3200)));
   // (4) old shift walks out the door…
   s.departTimers.push(setTimeout(function(){
     if(!s.departing) return;
     s.departing.zone = 'exit';
     render();
-  }, 5200));
+  }, _paced(5200)));
   // …and is gone (after the 1.7s walk to the door completes)
   s.departTimers.push(setTimeout(function(){
     s.departing = null;
     render();
-  }, 7400));
+  }, _paced(7400)));
 }
 function displayName(entity){
   // Main session: model nickname ("Fabby") when known. Subagents never get a
@@ -1801,7 +1861,7 @@ function handleEvent(evt){
         chatLog(displayName(target), target.bubble, 'handback');
         _fxFor(sid, aid, 'check');
         if(target.settleTimer){ clearTimeout(target.settleTimer); target.settleTimer = null; }
-        target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, 2600);
+        target.removeTimer = setTimeout(function(){ s.subagents.delete(aid); render(); }, _paced(2600));
         break;
       }
       // Head to the lounge (not straight out the door) — settling there
@@ -1852,7 +1912,7 @@ function handleEvent(evt){
               requestAnimationFrame(function(){
                 ct.wrap.style.left = slotLeft; ct.wrap.style.top = slotTop;
               });
-              setTimeout(function(){ ct.wrap.classList.remove('is-walking'); }, 1800);
+              setTimeout(function(){ ct.wrap.classList.remove('is-walking'); }, _paced(1800));
             }
           }
         }, 6000);
@@ -2562,7 +2622,7 @@ function scheduleBubbleLayout(){
   // Token left/top transitions run .9s, and the bubble "pulse" pop runs
   // .25s — a second pass after both have settled measures true positions.
   clearTimeout(_blSettle);
-  _blSettle = setTimeout(function(){ officeEls.forEach(resolveBubbleLayout); }, 1000);
+  _blSettle = setTimeout(function(){ officeEls.forEach(resolveBubbleLayout); }, _paced(1000));
 }
 
 function render(){
@@ -3320,9 +3380,9 @@ function stepDeparture(o, s, mode, cast, fast){
   const gone = s.crewGone || (s.crewGone = []);
   // fast = a user-initiated close (tab close / SessionEnd) where they're
   // waiting; the ambient limit-theatre keeps the leisurely pace.
-  const cX = fast ? 900 : 2200, cG = fast ? 1700 : 4400;   // crew: to-exit, gone
-  const tX = fast ? 800 : 2200, tF = fast ? 1400 : 3600, tG = fast ? 1900 : 4700; // tally
-  const bX = fast ? 800 : 2200, bG = fast ? 1900 : 4600;   // boss
+  const cX = _paced(fast ? 900 : 2200), cG = _paced(fast ? 1900 : 4400);   // crew: to-exit, gone
+  const tX = _paced(fast ? 800 : 2200), tF = _paced(fast ? 1400 : 3600), tG = _paced(fast ? 2200 : 4700); // tally
+  const bX = _paced(fast ? 800 : 2200), bG = _paced(fast ? 2200 : 4600);   // boss
 
   // 1) crew, in order
   const cn = CREW_ORDER.find(function(n){ return gone.indexOf(n) === -1 && cast[n]; });
@@ -3347,7 +3407,7 @@ function stepDeparture(o, s, mode, cast, fast){
     s.leaving = true;
     sayStaffLine(o, pick(TALLY_BYE[mode] || ['Books closed. Bye.']));
     const staff = o.root.querySelector('.staff');
-    s.departTimers.push(setTimeout(function(){ if(staff){ staff.style.transition = 'left 1.2s ease, top 1.2s ease, opacity .6s'; staff.style.left = '84%'; staff.style.top = '9%'; } }, tX));
+    s.departTimers.push(setTimeout(function(){ if(staff){ staff.style.transition = 'left ' + _pacedDur(1.2) + ' ease, top ' + _pacedDur(1.2) + ' ease, opacity .6s'; staff.style.left = '84%'; staff.style.top = '9%'; } }, tX));
     s.departTimers.push(setTimeout(function(){ if(staff) staff.style.opacity = '0'; }, tF));
     s.departTimers.push(setTimeout(function(){ s.tallyGone = true; s.leaving = false; if(staff) staff.style.display = 'none'; render(); }, tG));
     return;
@@ -3610,7 +3670,7 @@ function playOpening(sid){
   const T = s.departTimers;                 // one cleanup rail for both ceremonies
   // …unless real work already claimed him (first-sight opening on a prompt
   // event) — never yank a thinking boss back to the lounge
-  T.push(setTimeout(function(){ if(sessions.has(sid) && s.status === 'idle'){ s.zone = 'lounge'; render(); } }, 900));
+  T.push(setTimeout(function(){ if(sessions.has(sid) && s.status === 'idle'){ s.zone = 'lounge'; render(); } }, _paced(900)));
   // Tally second — slides in from the door to his desk
   T.push(setTimeout(function(){
     if(!sessions.has(sid)) return;
@@ -3619,13 +3679,13 @@ function playOpening(sid){
       staff.style.display = ''; staff.style.transition = 'none';
       staff.style.left = '84%'; staff.style.top = '9%'; staff.style.opacity = '1';
       void staff.offsetWidth;
-      staff.style.transition = 'left 3s ease, top 3s ease';
+      staff.style.transition = 'left ' + _pacedDur(3) + ' ease, top ' + _pacedDur(3) + ' ease';
       staff.style.left = '53%'; staff.style.top = '17.5%';
     }
     sayStaffLine(o, pick(TALLY_HI));
-  }, 6000));
+  }, _paced(6000)));
   // then the crew, one at a time, at a stroll
-  const CREW_STEP_MS = 5200, CREW_FROM_MS = 11000;
+  const CREW_STEP_MS = _paced(5200), CREW_FROM_MS = _paced(11000);
   CREW_ARRIVE_ORDER.forEach(function(cn, i){
     T.push(setTimeout(function(){
       if(!sessions.has(sid) || s.closing) return;
@@ -3640,10 +3700,10 @@ function playOpening(sid){
         s.crewArriver.bubble = CREW_HI[cn] ? pick(CREW_HI[cn]) : null;
         if(s.crewArriver.bubble) chatLog(cn, s.crewArriver.bubble, 'arrive');
         render();
-      }, 500));
+      }, _paced(500)));
       T.push(setTimeout(function(){
         if(s.crewArriver && s.crewArriver.codename === cn){ s.crewArriver = null; render(); }
-      }, 4600));
+      }, _paced(4600)));
     }, CREW_FROM_MS + i * CREW_STEP_MS));
   });
   // everyone's in: back to normal walking pace + one bit of morning banter
@@ -3679,7 +3739,7 @@ function _rushOpening(sid){
       staff.style.display = ''; staff.style.transition = 'none';
       staff.style.left = '84%'; staff.style.top = '9%'; staff.style.opacity = '1';
       void staff.offsetWidth;
-      staff.style.transition = 'left 1s ease, top 1s ease';
+      staff.style.transition = 'left ' + _pacedDur(1) + ' ease, top ' + _pacedDur(1) + ' ease';
       staff.style.left = '53%'; staff.style.top = '17.5%';
     }
   }
@@ -3808,7 +3868,7 @@ function playClosing(sid, mode){
       s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 1200);
       return;
     }
-    s.departTimers.push(setTimeout(step, 700));
+    s.departTimers.push(setTimeout(step, _paced(700)));
   };
   step();
 }
@@ -4334,7 +4394,7 @@ function runWanderTick(){
         let t = null;
         o.tokens.forEach(function(x){ if(x.lastName === cn && x.wrap.getAttribute('data-status') === 'idle') t = x; });
         if(t && t.lastZone === dest && ROOM_ACTING[dest]) sayBanter(t, pick(ROOM_ACTING[dest]));
-      }, 2400);
+      }, _paced(2400));
     }
   });
 }
