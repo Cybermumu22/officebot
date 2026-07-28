@@ -149,13 +149,33 @@ a cloning accident, so instead **the office phones in Scout's teammates**:
 | `fork` | Twin, **Clone**, **Echo**, **Mirror**, **Fork** |
 | `statusline-setup` | Tinker, **Sprocket**, **Cog**, **Fuse**, **Bit** |
 
-They share a face, because they do the same job — but each walks in and
-announces itself (*"Recon reporting in."*), and from then on you can follow any
-one of them individually across the floor.
+They wear the **same sprite** as the crew member they're covering for — same
+job, same look — but each in **its own colourway**, so four parallel Explores
+are four people you can actually tell apart rather than four identical Scouts.
 
-The first one is the actual crew member. The rest are temps, and they clear off
-the moment their job ends. Scout's usual spot stays empty until **every last
-one** of them has finished, so the floor never shows him in two places at once.
+### Life as a temp
+
+The first one is permanent staff. Everyone after that is **agency**, and the
+office treats them accordingly.
+
+They don't materialise at a desk like the regulars do — they come in **through
+the front door**, like someone who had to find the building. They announce
+themselves on the way in (*"Temp crew, checking in."* · *"On loan for this
+one."* · *"Here for the surge."*), and the permanent staff are delighted:
+
+> **Scout:** *"Intern alert — hide the good snacks."*
+> **Recon:** *"I’m just here for the tokens."*
+
+> **Nitpick:** *"The couch is load-bearing. Don’t sit on it."*
+> **Probe:** *"Contractually, I ignore that."*
+
+The ribbing is rate-limited, so a four-temp surge doesn't turn into a wall of
+snark, and only about half of them bother firing back.
+
+When the work's done they don't linger in the Lounge like the regulars —
+they clock out and **walk back out the door** (*"Contract fulfilled. Bye."*).
+Scout's own spot stays empty until **every last one** of them has gone, so the
+floor never shows him in two places at once.
 
 Past five it gives up and falls back to numerals — Scout VI, Scout VII. If
 you're running six parallel Explores, you have larger problems than nomenclature.

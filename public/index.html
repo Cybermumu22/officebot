@@ -263,6 +263,17 @@
     transition:filter .4s;
   }
   .token-badge-face svg{width:100%; height:100%;}
+  /* Temp staff wear the SAME sprite as the crew member they're covering for —
+     they do the same job, so they should read as the same role at a glance —
+     but in a different colourway, so four parallel Explores are four tellable
+     people rather than four identical Scouts. The hue shift lands on the inner
+     <svg> rather than .token-badge-face, so it COMPOSES with the per-status
+     filters above (active/error/done) instead of overwriting them. The status
+     LED and hands sit outside the svg and keep their own colour, because those
+     mean something. */
+  .agent-token.is-temp .token-badge-face svg{
+    filter:hue-rotate(var(--temp-hue, 0deg)) saturate(1.15);
+  }
   /* Idle = the sprite's ORIGINAL colours, no glow — glow is a "working"
      signal only (user request; the old dim+desaturate+glow read as a
      permanent effect rather than a status). */
@@ -1213,6 +1224,7 @@ function ensureSubagent(s, aid, evt){
       codenameBase: base, tookUnknownJob: tookUnknownJob,
       codename: memberName,
       isExtra: dupes > 0,   // a temp reinforcement, not the permanent crew member
+      dupeIndex: dupes,     // 1st temp, 2nd temp… drives their colourway (see .is-temp)
       status: 'thinking', zone: 'warroom', bubble: memberName + ' reporting in.',
       lastEventAt: Date.now(), removeTimer: null, settleTimer: null,
     };
@@ -2488,7 +2500,8 @@ function render(){
     s.subagents.forEach(function(a, aid){
       seen[aid] = true;
       onDuty[a.codenameBase] = true;
-      entities.push({ key:aid, zone:a.zone, status:a.status, bubble:a.bubble, avatar:a.avatar, name:displayName(a), isMain:false });
+      entities.push({ key:aid, zone:a.zone, status:a.status, bubble:a.bubble, avatar:a.avatar, name:displayName(a), isMain:false,
+        isExtra:a.isExtra, dupeIndex:a.dupeIndex });
     });
     // The crew stays put — except whoever is currently on duty: the working
     // subagent IS that crew member (same codename, same sprite), so its
@@ -2520,6 +2533,13 @@ function render(){
       const pos = zoneToPos(e.zone, idx, group.length);
       const t = ensureToken(o, e.key, e.avatar, e.isMain);
       if(e.isCrew) t.wrap.classList.add('token-crew');
+      // Temp staff: same sprite, own colourway. 67° steps walk right round the
+      // wheel without two temps ever landing on a similar hue (67 and 360 share
+      // no factor, so 1-5 spread out evenly). toggle(), not add(), so a token
+      // can never keep a stale tint.
+      t.wrap.classList.toggle('is-temp', !!e.isExtra);
+      if(e.isExtra) t.wrap.style.setProperty('--temp-hue', ((e.dupeIndex || 1) * 67 % 360) + 'deg');
+      else t.wrap.style.removeProperty('--temp-hue');
       updateToken(t, pos, e.zone, e.status, e.bubble, e.name, idx % 2);
     });
 
