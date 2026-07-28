@@ -357,10 +357,26 @@ function replaySnapshot(res) {
 // a false positive only costs a walk-out, since the next prompt's hooks bring
 // the session straight back.
 const STALE_SESSION_MS = 60 * 60 * 1000;
+// Far shorter than a session's: a live subagent fires tool hooks constantly,
+// so a quarter of an hour of silence means it died rather than that it is
+// thinking hard.
+const STALE_AGENT_MS = 15 * 60 * 1000;
 const TRANSCRIPT_CACHE_MAX_AGE = 30 * 60 * 1000;
 setInterval(function () {
   const now = Date.now();
   sessionCache.forEach(function (entry, sid) {
+    // Expire silent subagents independently of their session. An agent killed
+    // by an API error never sends SubagentStop, and its parent session usually
+    // carries on working — so the session check below never reaches it, and
+    // the snapshot keeps replaying it to every new page as a live worker.
+    // Has to happen here as well as in the browser: clearing it client-side
+    // alone means the next reload resurrects it straight out of this cache.
+    entry.subagents.forEach(function (evt, aid) {
+      if (now - (evt._receivedAt || 0) > STALE_AGENT_MS) {
+        entry.subagents.delete(aid);
+        entry.agentTypes.delete(aid);
+      }
+    });
     const lastTs = entry.lastEvent ? entry.lastEvent._receivedAt : 0;
     if (now - lastTs > STALE_SESSION_MS) forgetSession(sid, entry);
   });

@@ -4718,6 +4718,10 @@ setInterval(refreshUsagePanel, 60000);
 // session pruned server-side first vanishes from replaySnapshot and an iframe
 // reload shows STANDBY over live staff. See that constant for the tradeoff.
 const CLIENT_STALE_MS = 60 * 60 * 1000;
+// Much shorter than the session equivalent on purpose: a subagent that is
+// genuinely working fires PreToolUse/PostToolUse constantly, so a quarter of an
+// hour of complete silence is a dead agent rather than a thoughtful one.
+const STALE_AGENT_MS = 15 * 60 * 1000;
 let _sseReopenAt = 0;   // when the SSE last (re)connected — replay is in flight
 setInterval(function(){
   const now = Date.now();
@@ -4728,6 +4732,24 @@ setInterval(function(){
   // wrongly clocked out the instant the screen comes back on.
   if(now - _sseReopenAt < 120000) return;
   let changed = false;
+  /* Subagents die silently far more often than sessions do — an agent killed
+     by an API error never fires SubagentStop — and because its PARENT session
+     is still very much alive, the session sweep below never touches it. It
+     just stands there working forever. Caught in the wild: an Explore stuck
+     mid-Bash for two and a half hours while its session carried on around it.
+     A working agent fires tool hooks constantly, so total silence this long
+     means it is gone, not busy. */
+  sessions.forEach(function(s){
+    if(!s.subagents) return;
+    s.subagents.forEach(function(a, aid){
+      if(now - (a.lastEventAt || 0) < STALE_AGENT_MS) return;
+      changed = true;
+      chatLog(displayName(a), 'Lost contact — signing off.', 'handback');
+      if(a.removeTimer) clearTimeout(a.removeTimer);
+      if(a.settleTimer) clearTimeout(a.settleTimer);
+      s.subagents.delete(aid);
+    });
+  });
   sessions.forEach(function(s, sid){
     if(s.status === 'offline' || s.closing) return;
     if(now - (s.lastEventAt || 0) < CLIENT_STALE_MS) return;
