@@ -14,9 +14,11 @@ coffee break is a real Claude Code event.
 
 ![officebot — a live office of Claude Code agents at work](docs/office-desktop.png)
 
-> *Two sessions running at once. **Fabby** (Fable) directs `aurora-api` while
-> **Sonny** (Sonnet) runs `mobile-app`. Scout is grepping, Jack has the tests
-> going, Blueprint is nose-deep in the architecture doc.*
+> *One session, mid-job. **Fabby** (Fable) is running `aurora-api` with the
+> whole floor busy: Scout and Bookworm digging through Research, Twin and Jack
+> on the terminals, Blueprint and Nitpick in the Archives, Ace killing time in
+> the Lounge. Jack's Bash just failed — that's the red one. Everything said out
+> loud also lands in the Dialogue feed underneath, so nothing scrolls past you.*
 
 ---
 
@@ -68,11 +70,12 @@ grumbling on the way past — and drifts back in when your window resets.
 
 ## The staff
 
-![The officebot cast at work](docs/office-cast.png)
+![The officebot cast at work — Scout, Bookworm, Twin, Jack, Blueprint, Nitpick, Ace, Tally and Fabby across the office floor](docs/office-cast.png)
 
-> *Full crew, one floor: Fabby handing out the hard one from Planning, Scout and
-> Nitpick buried in Research, Jack and Twin and Tinker on the terminals,
-> Blueprint and Bookworm in the Archives, Ace strolling in from the Lounge.*
+> *Everyone has somewhere they belong. Research glows cyan while Scout and
+> Bookworm are in it, the Terminal goes red when Jack's command fails, and the
+> Archives sit purple with Blueprint and Nitpick. Tally never leaves his desk
+> under the meters. Ace is in the Lounge, as usual.*
 
 ### Management is whoever you're paying for
 
@@ -154,7 +157,10 @@ them exact.
 
 ## 📱 Pocket Deck — the whole thing on an Android phone
 
-<img src="docs/office-mobile.png" alt="officebot running on a phone" width="270" align="right">
+<img src="docs/office-mobile.png" alt="A second session — Sonny running mobile-app, with Tally reporting from the meters" width="320" align="right">
+
+*A second session on the same screen — **Sonny** (Sonnet) on `mobile-app`,
+quiet floor, Tally passing comment from under the meters.*
 
 No PC involved. Pocket Deck runs the **real** Claude Code CLI on your phone and
 puts the office right next to it, as one installable app.
