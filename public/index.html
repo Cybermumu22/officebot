@@ -848,6 +848,20 @@ function setOfficePref(k, v){
 // outlive it, so derive the cleanup delay instead of hardcoding a duration
 // that would be wrong the moment the slider moves.
 function _enterWalkMs(){ return _clampWalk(_officePrefs.walk) * 1900 + 250; }
+/* How long THIS token's current move actually takes, in ms. Reads the computed
+   transition-duration off the element, so it automatically accounts for the
+   base --walk-dur AND whichever multiplier class is on it (.ceremony x2,
+   .closing x1.5, .is-entering x1.9) without any of them having to be restated
+   here. +120ms of slack so the timer lands after the transition, never during.
+   Falls back to the base walk if the browser reports nothing useful. */
+function _moveMs(el){
+  try{
+    const d = getComputedStyle(el).transitionDuration || '';
+    const first = parseFloat(d.split(',')[0]);
+    if(isFinite(first) && first > 0) return first * 1000 + 120;
+  }catch(e){}
+  return _clampWalk(_officePrefs.walk) * 1000 + 120;
+}
 try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }catch(e){}
 applyOfficePrefs();
 
@@ -2365,14 +2379,17 @@ function updateToken(t, pos, zoneKey, status, bubbleText, name, tier){
   if(zoneKey !== t.lastZone){
     t.wrap.classList.add('is-walking');
     if(t.walkTimer) clearTimeout(t.walkTimer);
-    // Matches the .agent-token left/top transition (1.7s) so the legs keep
-    // striding until arrival, then the shadow does its little landing pulse.
+    // Must match however long the .agent-token left/top transition actually
+    // takes, so the legs keep striding right up to arrival and the shadow's
+    // landing pulse fires on the beat. Read from the element rather than
+    // assumed: --walk-dur is user-adjustable, and the ceremony/closing/entering
+    // classes multiply it, so a fixed delay froze the legs mid-stroll.
     t.walkTimer = setTimeout(function(){
       t.wrap.classList.remove('is-walking');
       t.shadowEl.classList.remove('arrive');
       void t.shadowEl.offsetWidth;
       t.shadowEl.classList.add('arrive');
-    }, 1750);
+    }, _moveMs(t.wrap));
     t.lastZone = zoneKey;
   }
   // No text = no bubble. Idle entities (crew on the bench, a settled
