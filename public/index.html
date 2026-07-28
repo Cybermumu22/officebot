@@ -1895,10 +1895,22 @@ function handleEvent(evt){
       chatLog(displayName(target), target.bubble, 'arrive');
       break;
     case 'PreToolUse':
-      // Heading out to work — cancel any pending walk back to the desk, or a
-      // timer set after the previous tool drags him home mid-job.
       if(!aid && s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
-      target.status = 'active'; target.zone = zoneForTool(evt.tool_name);
+      target.status = 'active';
+      if(aid){
+        // Agents still physically walk to the room the work is in — that
+        // journey is the thing worth watching on a delegated turn.
+        target.zone = zoneForTool(evt.tool_name);
+      } else {
+        // The boss RUNS the floor from his own office. Walking him to every
+        // tool's room meant that on a long turn — dozens of calls — he simply
+        // lived in the Terminal. He now stays at his desk, and the room he's
+        // working in lights up WITHOUT him standing in it (see workZone in
+        // updateZoneOccupancy). You can still see where the work is; the
+        // manager just isn't camped in the server room all session.
+        s.workZone = zoneForTool(evt.tool_name);
+        target.zone = 'office';
+      }
       // Prefer what Claude actually said over a mechanical tool description —
       // falls back when the transcript had no text alongside this tool call
       // (e.g. a tool-only turn with no preceding commentary).
@@ -1922,6 +1934,7 @@ function handleEvent(evt){
     case 'PostToolUse':
       target.status = 'calm';
       if(!aid) s._didWork = true; // real work happened this turn → confetti-worthy Stop
+      if(!aid) s.workZone = null;   // tool done — the room stops glowing
       // The boss goes back to his OWN office whenever the work pauses, not
       // only when the whole turn ends. Without this a long turn left him
       // camped in whichever room the last tool happened to use — which is
@@ -2042,6 +2055,7 @@ function handleEvent(evt){
       // after a SpeechTick already showed the final line). Either way it's
       // said once and then fades (armIdleFade).
       target.status = 'idle';
+      s.workZone = null;
       // Walk back to his OWN office now the turn is done — unconditionally.
       // This used to only redirect him from the lounge or the door, which was
       // fine when "the desk" meant the shared terminal he was probably already
@@ -2599,6 +2613,10 @@ function updateZoneOccupancy(o){
       occ[t.lastZone] = STATUS_COLOR[t.wrap.getAttribute('data-status')] || STATUS_COLOR.idle;
     }
   });
+  // The boss now works from his own office, so the room his current tool
+  // belongs to has nobody standing in it. Light it anyway — otherwise a solo
+  // turn shows a completely dark floor and you can't tell what he's doing.
+  if(o.workZone && !occ[o.workZone]) occ[o.workZone] = STATUS_COLOR.active || STATUS_COLOR.idle;
   Object.keys(o.zoneEls).forEach(function(key){
     const el = o.zoneEls[key];
     const mat = o.matEls[key];
@@ -2780,6 +2798,7 @@ function render(){
     if(ONLY_TAB && !s.deckTab && !_clientTab[sid]){ _clientTab[sid] = ONLY_TAB; _persistOwners(); }
     const o = ensureOffice(sid, s);
     o.bossModel = s.model;   // so _crewAddr knows the persona (colleague vs boss)
+    o.workZone = s.workZone || null;   // room to light while the boss works from his desk
 
     // Collect every entity that needs a token this render, THEN group by
     // target zone — occupants of the same zone need to know about each
