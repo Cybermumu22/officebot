@@ -2021,11 +2021,14 @@ function handleEvent(evt){
       // after a SpeechTick already showed the final line). Either way it's
       // said once and then fades (armIdleFade).
       target.status = 'idle';
-      // …and never leave a LIVE session parked loungeside: a page reload
-      // replays only this Stop into a fresh session object, so without an
-      // explicit desk here the boss sat in the default zone until the next
-      // prompt — which used to be the lounge.
-      if(target.zone === 'lounge' || target.zone === 'exit') target.zone = 'office';
+      // Walk back to his OWN office now the turn is done — unconditionally.
+      // This used to only redirect him from the lounge or the door, which was
+      // fine when "the desk" meant the shared terminal he was probably already
+      // standing in. Now that he has a room of his own it has to be an actual
+      // journey home: the last tool of a turn usually leaves him in Terminal
+      // (Bash) or Archives (Edit), so a conditional simply never fired and he
+      // stayed put in whichever room he finished in.
+      target.zone = 'office';
       if(s._didWork){ _fxFor(sid, null, 'confetti'); s._didWork = false; } // turn wrapped cleanly 🎉
       if(evt._speech){
         target.bubble = cleanSpeech(evt._speech, 220);
@@ -3539,8 +3542,10 @@ function reopenOffice(sid){
   s.bossLeaving = null; s.leaving = false;
   clearDepartTimers(s);
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
-  // a boss caught mid-exit returns to his desk, not the lounge
-  if(wasClosing || s.status === 'offline'){ s.status = 'idle'; if(s.zone === 'exit' || s.zone === 'lounge') s.zone = 'office'; }
+  // a boss caught mid-exit goes back to his own office. Unconditional: this
+  // branch only runs when he was closing or already offline, so he isn't in
+  // the middle of anything that a redirect could interrupt.
+  if(wasClosing || s.status === 'offline'){ s.status = 'idle'; s.zone = 'office'; }
   const o = officeEls.get(sid);
   if(o){
     o.root.classList.remove('closing');
