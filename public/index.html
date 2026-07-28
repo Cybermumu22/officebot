@@ -1110,9 +1110,14 @@ window.addEventListener('message', function(e){
     // cap is only a hang-guard, generous enough for the WHOLE crew + Tally +
     // boss to leave — a short cap used to cut Tally/boss off and close the tab
     // early.
-    var t0 = Date.now();
+    // The exodus itself is fully paced, so the guard has to be too: a full
+    // 8-strong crew takes ~27s at the default and crosses 60s once the walk
+    // passes ~3.7s, which would have cut the tail of the walk-out off. Never
+    // shorter than the original minute though — it exists to catch a hang, and
+    // a fast walk setting must not make it trigger-happy.
+    var t0 = Date.now(), guard = Math.max(60000, _paced(60000));
     var poll = setInterval(function(){
-      if(!sessions.has(sid) || Date.now() - t0 > 60000){ clearInterval(poll); tell(); }
+      if(!sessions.has(sid) || Date.now() - t0 > guard){ clearInterval(poll); tell(); }
     }, 300);
   }
 });
@@ -1829,7 +1834,7 @@ function handleEvent(evt){
               }
             }, 1400);
           }
-        }, 900); })(target);
+        }, _paced(900)); })(target);   // door beat scales with the walk it introduces
         break;
       }
       target.status = 'thinking'; target.zone = 'warroom';
@@ -3905,7 +3910,11 @@ function playClosing(sid, mode){
     });
     stepDeparture(o, s, mode, cast, true);   // brisk one-by-one walk-out with farewells
     if(s.bossGone){
-      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, 1200);
+      // Waits out the boss's final walk to the door. That walk is --walk-dur
+      // x1.5 (.office.closing) and the bX/bG timers either side are paced, so
+      // leaving this bare deleted the session — vanishing the whole office —
+      // about 1.5s before the boss actually reached the door at 4s.
+      s.removeTimer = setTimeout(function(){ sessions.delete(sid); render(); }, _paced(1200));
       return;
     }
     s.departTimers.push(setTimeout(step, _paced(700)));
