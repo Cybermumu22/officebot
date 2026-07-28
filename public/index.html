@@ -745,9 +745,9 @@ const ZONES = {
   // exit is just THE DOOR on the wall — no mat, no sign plate (skipped in
   // officeSkeletonHtml); departing avatars walk right up to the doorway.
   exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
-  research: { x:15, y:55, label:'RESEARCH', icon:ZONE_ICONS.research },
+  research: { x:17, y:55, label:'RESEARCH', icon:ZONE_ICONS.research },
   terminal: { x:50, y:56, label:'TERMINAL', icon:ZONE_ICONS.terminal },
-  archives: { x:85, y:55, label:'ARCHIVES', icon:ZONE_ICONS.archives },
+  archives: { x:83, y:55, label:'ARCHIVES', icon:ZONE_ICONS.archives },
   lounge:   { x:50, y:84, label:'LOUNGE',   icon:ZONE_ICONS.lounge },
 };
 
@@ -819,9 +819,18 @@ const PROPS = [
   //     far edges only, and the poster hides on phones where space is tight) ---
   { x:6,  y:7.6, w:14, art:'poster', cls:'m-hide' }, // synthwave poster
   { x:85, y:7.6, w:22, art:'doorExit' },             // the EXIT itself — just the door
-  // --- Tally's accounting desk (under the wall monitor; Tally himself is a
-  //     .staff div emitted in officeSkeletonHtml, standing behind it) ---
-  { x:53, y:24, w:26, art:'desk' },
+  // --- Tally's accounts corner. He brings his OWN desk (TALLY_DESK_SVG, drawn
+  //     with the .staff div in officeSkeletonHtml), so there is no desk prop
+  //     here — there used to be one, stacked directly underneath him. Plants
+  //     flank the nook instead, so he reads as having a place of his own
+  //     rather than a figure standing in open floor. ---
+  { x:43,   y:21,   w:13, art:'plant' },
+  { x:63,   y:21,   w:13, art:'plant' },
+  // --- by the exit: the corner everyone walks through and nobody owned. The
+  //     door hung on the wall above entirely empty floor. ---
+  { x:74,   y:23,   w:17, art:'plant' },
+  { x:93,   y:25,   w:16, art:'cooler' },   // in line with the vending machine below it
+  { x:87,   y:33,   w:21, art:'boxes' },     // deliveries stacked by the door
   // --- planning room ---
   { x:14.5, y:24.5, w:11, art:'chair' },
   { x:29.5, y:24.5, w:11, art:'chair' },
