@@ -61,6 +61,8 @@
     --readout-glow:rgba(34,211,238,.6);
     --ink:#e2e4f0;                                 /* default numeral ink */
     --door-pane:#0c0e1c; --door-handle:#cbd5e1;
+    --meter-fill-a:#10b981; --meter-fill-b:#06b6d4;  /* healthy usage bar */
+    --countdown:#ffb347;                             /* clock reset line  */
 
     --walk-dur:1.7s;                          /* how long a token takes to cross a room */
   }
@@ -115,6 +117,8 @@
     --readout-glow:rgba(224,168,120,.6);
     --ink:#f0e4d8;
     --door-pane:#1a1008; --door-handle:#d8c4a8;
+    --meter-fill-a:#8a9a5b; --meter-fill-b:#c98a5e;
+    --countdown:#e0a878;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
@@ -234,7 +238,7 @@
     background:var(--btn-bg); border:1px solid var(--btn-edge); color:var(--chrome-btn);
     font-size:14px; line-height:1; cursor:pointer; backdrop-filter:blur(2px);
   }
-  .floor-reset:hover{color:#fff; border-color:rgba(255,255,255,.35);}
+  .floor-reset:hover{color:var(--ink); border-color:var(--btn-edge);}
 
   /* Zones are now compact SIGN PLATES sitting on the top edge of their
      room mat (the mat is the room; the plate just names it) — like a little
@@ -479,10 +483,10 @@
   }
   .ws-head{display:flex; align-items:center; justify-content:space-between;}
   .ws-title{font-family:'Orbitron',sans-serif; font-size:6.5px; letter-spacing:.5px; color:var(--chrome-text); white-space:nowrap;}
-  .ws-led{width:3px; height:3px; border-radius:50%; background:#10b981; box-shadow:0 0 4px #10b981; animation:tokenLedBlink 2s ease-in-out infinite; flex-shrink:0;}
-  .ws-led.warn{background:#e63946; box-shadow:0 0 5px #e63946; animation-duration:.6s;}
+  .ws-led{width:3px; height:3px; border-radius:50%; background:var(--green); box-shadow:0 0 4px var(--green); animation:tokenLedBlink 2s ease-in-out infinite; flex-shrink:0;}
+  .ws-led.warn{background:var(--accent); box-shadow:0 0 5px var(--accent); animation-duration:.6s;}
   .ws-bar{height:3px; border-radius:2px; background:var(--meter-track); border:1px solid var(--meter-edge); overflow:hidden;}
-  .ws-fill{display:block; height:100%; width:0%; background:linear-gradient(90deg,#10b981,#06b6d4); transition:width .8s ease;}
+  .ws-fill{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--meter-fill-a),var(--meter-fill-b)); transition:width .8s ease;}
   .ws-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
   .ws-fill.hot{background:linear-gradient(90deg,#e63946,#f97316);}
   .ws-line{font-size:11px; line-height:1.15; color:var(--chrome-btn); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -497,7 +501,7 @@
   /* live clock box */
   .wc-date{font-family:'Orbitron',sans-serif; font-size:7px; letter-spacing:1px; color:var(--chrome-text); text-align:center; white-space:nowrap;}
   .wc-time{font-size:18px; line-height:1; color:var(--readout); text-shadow:0 0 5px var(--readout-glow); letter-spacing:1px; text-align:center; white-space:nowrap;}
-  .wc-reset{font-size:9px; color:#ffb347; text-align:center; white-space:nowrap; min-height:8px;}
+  .wc-reset{font-size:9px; color:var(--countdown); text-align:center; white-space:nowrap; min-height:8px;}
   /* usage-pulse: a brief glow ripple across the three wall monitors the moment
      fresh REAL /usage numbers land (deck ⟳ button → poke → poller). Re-fired
      from JS by toggling the class, so it flashes on every refresh even when the
@@ -887,6 +891,7 @@ function applyOfficePrefs(){
 }
 function setOfficePref(k, v){
   if(k === 'walk') v = _clampWalk(v);
+  if(k === 'theme') v = _cleanTheme(v);   // a malformed postMessage can't poison storage
   if(_officePrefs[k] === v) return;
   _officePrefs[k] = v;
   applyOfficePrefs();
@@ -921,14 +926,28 @@ function _moveMs(el){
   }catch(e){}
   return _clampWalk(_officePrefs.walk) * 1000 + 120;
 }
-try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }catch(e){}
+function _cleanTheme(t){ return t === 'claude' ? 'claude' : 'neon'; }
+let _prefsParsed = true;
+try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }
+catch(e){ _prefsParsed = false; }
 (function(){
   // Never trust what was stored — and write the sanitised value straight back.
   // Clamping in memory alone meant a corrupt entry like {"walk":"abc"} survived
   // in localStorage and re-poisoned every load.
-  const raw = _officePrefs.walk;
-  _officePrefs.walk = _clampWalk(raw);
-  if(_officePrefs.walk !== raw){
+  //
+  // theme is normalised for the same reason. Leaving it raw created a stalemate:
+  // the deck skips a value it doesn't recognise (keeping its own), the office
+  // renders anything-not-'claude' as neon, and with no write-back and no push on
+  // load, nothing ever reconciled them — the drawer said CLAUDE while the floor
+  // stayed NEON, permanently. Writing the clean value back fires a storage event
+  // and settles it.
+  const rawWalk = _officePrefs.walk, rawTheme = _officePrefs.theme;
+  _officePrefs.walk = _clampWalk(rawWalk);
+  _officePrefs.theme = _cleanTheme(rawTheme);
+  // Also rewrite when the blob was unparseable: that path leaves the defaults in
+  // memory with nothing changed, so a value-comparison alone would never repair
+  // the garbage still sitting in storage.
+  if(!_prefsParsed || _officePrefs.walk !== rawWalk || _officePrefs.theme !== rawTheme){
     try{ localStorage.setItem(OFFICE_PREFS_KEY, JSON.stringify(_officePrefs)); }catch(e){}
   }
 })();
@@ -940,7 +959,7 @@ window.addEventListener('storage', function(e){
   if(e.key !== OFFICE_PREFS_KEY || !e.newValue) return;
   try{
     const next = JSON.parse(e.newValue);
-    if(next.theme != null) _officePrefs.theme = next.theme;
+    if(next.theme != null) _officePrefs.theme = _cleanTheme(next.theme);
     if(next.walk != null) _officePrefs.walk = _clampWalk(next.walk);
     applyOfficePrefs();
   }catch(err){}

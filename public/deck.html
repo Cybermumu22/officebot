@@ -801,9 +801,15 @@ function syncOfficePrefsFromStore(){
 syncOfficePrefsFromStore();
 /* A change made in another tab reaches this deck's drawer too, so it can never
    sit on a stale mirror and show one number while the floor runs another. */
+let _walkDragging = false;
 window.addEventListener('storage', function(e){
   if(e.key !== 'officebot.prefs') return;
   syncOfficePrefsFromStore();
+  // Our OWN iframe's writes land here too — the writer is the iframe document,
+  // not this one — so a slider drag echoes back as a stream of storage events.
+  // Re-asserting .value mid-drag fights the thumb under the user's finger, so
+  // hold off until they let go.
+  if(_walkDragging) return;
   if(typeof syncSettingsUI === 'function') syncSettingsUI();
 });
 function loadSettings(){
@@ -1450,7 +1456,12 @@ $('office').addEventListener('load', function(){
   // handler reloads the iframe on any >12s background gap, and that stale push
   // then overwrote a newer setting made in another tab. With the office's
   // storage listener, that revert propagated everywhere. Let the office own it.
-  syncOfficePrefsFromStore();   // keep THIS deck's drawer honest instead
+  // keep THIS deck's drawer honest instead. syncSettingsUI() matters as much as
+  // the re-read: a page frozen by a long background gap can miss the storage
+  // event entirely, and then the slider DOM still holds the old number — touch
+  // it and it posts that stale value straight back out.
+  syncOfficePrefsFromStore();
+  if(typeof syncSettingsUI === 'function') syncSettingsUI();
   // push the authoritative owner immediately (server truth) instead of up to 2s
   // later — the resume reload wipes the office's owner maps, so re-asserting now
   // avoids a STANDBY flash / wrong re-pin before the 2s heartbeat catches up
@@ -3510,9 +3521,13 @@ $('segOfficeTheme').addEventListener('click', function(e){
   S.officeTheme = v; save(); syncSettingsUI(); pushOfficePrefs();
 });
 $('rngWalk').addEventListener('input', function(){
+  _walkDragging = true;
   S.walkDur = Number(this.value);
   $('walkVal').textContent = walkLabel(S.walkDur);
   save(); pushOfficePrefs();
+});
+['change','pointerup','touchend','blur'].forEach(function(ev){
+  $('rngWalk').addEventListener(ev, function(){ _walkDragging = false; });
 });
 $('fontMinus').addEventListener('click', function(){ bumpFont(-1); });
 $('fontPlus').addEventListener('click', function(){ bumpFont(1); });
