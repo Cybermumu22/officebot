@@ -55,6 +55,12 @@
     --wallbox-edge:#2a3158;
     --door-a:#4d578f; --door-b:#414a7c; --door-c:#333b68; --door-d:#2d3560;
     --poster-frame:#252c52; --poster-field:#160b38;
+    --wallbox-glow:rgba(6,182,212,.15); --wallbox-flash:rgba(55,245,255,.75);
+    --meter-track:#11142a; --meter-edge:#232742;   /* usage bar trough  */
+    --readout:#22d3ee;                             /* clock + live tokens */
+    --readout-glow:rgba(34,211,238,.6);
+    --ink:#e2e4f0;                                 /* default numeral ink */
+    --door-pane:#0c0e1c; --door-handle:#cbd5e1;
 
     --walk-dur:1.7s;                          /* how long a token takes to cross a room */
   }
@@ -103,6 +109,12 @@
        and clashing in hue, so it nearly vanished. Warm timber instead. */
     --door-a:#8a6242; --door-b:#755236; --door-c:#5e412a; --door-d:#4a3322;
     --poster-frame:#5c4433; --poster-field:#2a1608;
+    --wallbox-glow:rgba(217,119,87,.16); --wallbox-flash:rgba(240,170,120,.75);
+    --meter-track:#241a12; --meter-edge:#4a382c;
+    --readout:#e0a878;
+    --readout-glow:rgba(224,168,120,.6);
+    --ink:#f0e4d8;
+    --door-pane:#1a1008; --door-handle:#d8c4a8;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
@@ -461,7 +473,7 @@
     position:absolute; transform:translateX(-50%); top:1.4%; height:10.4%;
     box-sizing:border-box; padding:2px 5px; border-radius:3px;
     background:var(--wallbox-bg); border:1px solid var(--wallbox-edge);
-    box-shadow:0 0 8px rgba(6,182,212,.15), inset 0 0 6px rgba(0,0,0,.8);
+    box-shadow:0 0 8px var(--wallbox-glow), inset 0 0 6px rgba(0,0,0,.8);
     font-family:'VT323',monospace; z-index:1;
     display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden;
   }
@@ -469,31 +481,31 @@
   .ws-title{font-family:'Orbitron',sans-serif; font-size:6.5px; letter-spacing:.5px; color:var(--chrome-text); white-space:nowrap;}
   .ws-led{width:3px; height:3px; border-radius:50%; background:#10b981; box-shadow:0 0 4px #10b981; animation:tokenLedBlink 2s ease-in-out infinite; flex-shrink:0;}
   .ws-led.warn{background:#e63946; box-shadow:0 0 5px #e63946; animation-duration:.6s;}
-  .ws-bar{height:3px; border-radius:2px; background:#11142a; border:1px solid #232742; overflow:hidden;}
+  .ws-bar{height:3px; border-radius:2px; background:var(--meter-track); border:1px solid var(--meter-edge); overflow:hidden;}
   .ws-fill{display:block; height:100%; width:0%; background:linear-gradient(90deg,#10b981,#06b6d4); transition:width .8s ease;}
   .ws-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
   .ws-fill.hot{background:linear-gradient(90deg,#e63946,#f97316);}
   .ws-line{font-size:11px; line-height:1.15; color:var(--chrome-btn); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .ws-line b{color:#e2e4f0; font-weight:400;}
+  .ws-line b{color:var(--ink); font-weight:400;}
   .ws-fline{color:var(--chrome-btn);}
   .ws-warn{display:none;}
   /* live per-session token counter on the 5-hour monitor: dim at rest,
      glows cyan while the office's session is actively working */
   .ws-stok{color:var(--chrome-text); transition:color .3s, text-shadow .3s;}
-  .office.working .ws-stok{color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.7);}
+  .office.working .ws-stok{color:var(--readout); text-shadow:0 0 5px var(--readout-glow);}
   .ws-alltime{color:var(--chrome-btn);}
   /* live clock box */
   .wc-date{font-family:'Orbitron',sans-serif; font-size:7px; letter-spacing:1px; color:var(--chrome-text); text-align:center; white-space:nowrap;}
-  .wc-time{font-size:18px; line-height:1; color:#22d3ee; text-shadow:0 0 5px rgba(34,211,238,.5); letter-spacing:1px; text-align:center; white-space:nowrap;}
+  .wc-time{font-size:18px; line-height:1; color:var(--readout); text-shadow:0 0 5px var(--readout-glow); letter-spacing:1px; text-align:center; white-space:nowrap;}
   .wc-reset{font-size:9px; color:#ffb347; text-align:center; white-space:nowrap; min-height:8px;}
   /* usage-pulse: a brief glow ripple across the three wall monitors the moment
      fresh REAL /usage numbers land (deck ⟳ button → poke → poller). Re-fired
      from JS by toggling the class, so it flashes on every refresh even when the
      percentages barely move. */
   @keyframes wallPulse{
-    0%{box-shadow:0 0 8px rgba(6,182,212,.15), inset 0 0 6px rgba(0,0,0,.8);}
-    28%{box-shadow:0 0 16px rgba(55,245,255,.75), 0 0 28px rgba(55,245,255,.35), inset 0 0 6px rgba(0,0,0,.8);}
-    100%{box-shadow:0 0 8px rgba(6,182,212,.15), inset 0 0 6px rgba(0,0,0,.8);}
+    0%{box-shadow:0 0 8px var(--wallbox-glow), inset 0 0 6px rgba(0,0,0,.8);}
+    28%{box-shadow:0 0 16px var(--wallbox-flash), 0 0 28px var(--wallbox-flash), inset 0 0 6px rgba(0,0,0,.8);}
+    100%{box-shadow:0 0 8px var(--wallbox-glow), inset 0 0 6px rgba(0,0,0,.8);}
   }
   .wall-box.usage-pulse{animation:wallPulse 1.1s ease-out;}
   /* Tally, the accountant — static office staff at his desk under the
@@ -762,7 +774,7 @@ const PROP_ART = {
   windowCity:'<svg viewBox="0 0 26 20" shape-rendering="crispEdges"><rect x="0" y="0" width="26" height="20" fill="#2a3158"/><rect x="2" y="2" width="22" height="15" fill="#120a30"/><rect x="5" y="4" width="3" height="3" fill="#e2e8f0"/><rect x="5" y="4" width="1" height="1" fill="#94a3b8"/><rect x="12" y="3" width="1" height="1" fill="#e2e4f0"/><rect x="17" y="5" width="1" height="1" fill="#9096b5"/><rect x="21" y="4" width="1" height="1" fill="#e2e4f0"/><rect x="2" y="10" width="4" height="7" fill="#090617"/><rect x="6" y="12" width="3" height="5" fill="#0d0a20"/><rect x="9" y="9" width="4" height="8" fill="#090617"/><rect x="13" y="11" width="3" height="6" fill="#0d0a20"/><rect x="16" y="8" width="4" height="9" fill="#090617"/><rect x="20" y="12" width="4" height="5" fill="#0d0a20"/><rect x="3" y="12" width="1" height="1" fill="#f59e0b"/><rect x="10" y="11" width="1" height="1" fill="#06b6d4"/><rect x="17" y="10" width="1" height="1" fill="#f472b6"/><rect x="21" y="13" width="1" height="1" fill="#f59e0b"/><rect x="11" y="14" width="1" height="1" fill="#67e8f9"/><rect x="0" y="17" width="26" height="3" fill="#333b68"/><rect x="0" y="17" width="26" height="1" fill="#414a7c"/></svg>',
   clock:    '<svg viewBox="0 0 14 14" shape-rendering="crispEdges"><rect x="3" y="0" width="8" height="1" fill="#475569"/><rect x="1" y="1" width="12" height="11" fill="#475569"/><rect x="2" y="2" width="10" height="9" fill="#e2e8f0"/><rect x="7" y="3" width="1" height="4" fill="#1e293b"/><rect x="7" y="6" width="3" height="1" fill="#e63946"/><rect x="3" y="12" width="8" height="1" fill="#334155"/></svg>',
   poster:   '<svg viewBox="0 0 16 22" shape-rendering="crispEdges"><rect x="0" y="0" width="16" height="22" fill="var(--poster-frame)"/><rect x="2" y="2" width="12" height="18" fill="var(--poster-field)"/><rect x="5" y="5" width="6" height="1" fill="#fde68a"/><rect x="4" y="6" width="8" height="3" fill="#fbbf24"/><rect x="4" y="10" width="8" height="1" fill="#ec4899"/><rect x="2" y="13" width="12" height="1" fill="#7c3aed"/><rect x="2" y="16" width="12" height="1" fill="#4c1d95"/></svg>',
-  doorExit: '<svg viewBox="0 0 24 34" shape-rendering="crispEdges"><rect x="7" y="0" width="10" height="5" fill="#052e1c"/><rect x="8" y="1" width="8" height="3" fill="#10b981"/><rect x="9" y="2" width="6" height="1" fill="#6ee7b7"/><rect x="3" y="6" width="18" height="28" fill="var(--door-c)"/><rect x="5" y="8" width="14" height="26" fill="var(--door-b)"/><rect x="7" y="10" width="10" height="9" fill="var(--door-a)"/><rect x="8" y="11" width="8" height="7" fill="#0c0e1c"/><rect x="16" y="22" width="2" height="4" fill="#cbd5e1"/><rect x="6" y="30" width="12" height="3" fill="var(--door-d)"/></svg>',
+  doorExit: '<svg viewBox="0 0 24 34" shape-rendering="crispEdges"><rect x="7" y="0" width="10" height="5" fill="#052e1c"/><rect x="8" y="1" width="8" height="3" fill="#10b981"/><rect x="9" y="2" width="6" height="1" fill="#6ee7b7"/><rect x="3" y="6" width="18" height="28" fill="var(--door-c)"/><rect x="5" y="8" width="14" height="26" fill="var(--door-b)"/><rect x="7" y="10" width="10" height="9" fill="var(--door-a)"/><rect x="8" y="11" width="8" height="7" fill="var(--door-pane)"/><rect x="16" y="22" width="2" height="4" fill="var(--door-handle)"/><rect x="6" y="30" width="12" height="3" fill="var(--door-d)"/></svg>',
   chair:    '<svg viewBox="0 0 14 20" shape-rendering="crispEdges"><rect x="3" y="2" width="8" height="8" fill="#334155"/><rect x="3" y="2" width="8" height="2" fill="#475569"/><rect x="2" y="10" width="10" height="3" fill="#475569"/><rect x="6" y="13" width="2" height="4" fill="#64748b"/><rect x="2" y="17" width="10" height="2" fill="#334155"/><rect x="0" y="18" width="4" height="2" fill="#334155"/><rect x="10" y="18" width="4" height="2" fill="#334155"/></svg>',
   meetTable:'<svg viewBox="0 0 40 24" shape-rendering="crispEdges"><rect x="4" y="6" width="32" height="4" fill="#2a4a8c"/><rect x="4" y="6" width="32" height="1" fill="#3d63b3"/><rect x="2" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="36" y="7" width="2" height="3" fill="#2a4a8c"/><rect x="4" y="10" width="32" height="3" fill="#1d3868"/><rect x="7" y="13" width="3" height="8" fill="#16305e"/><rect x="30" y="13" width="3" height="8" fill="#16305e"/><rect x="12" y="3" width="6" height="3" fill="#334155"/><rect x="13" y="4" width="4" height="2" fill="#06b6d4"/><rect x="24" y="4" width="5" height="2" fill="#e2e8f0"/></svg>',
   cmdDesk:  '<svg viewBox="0 0 40 26" shape-rendering="crispEdges"><rect x="3" y="3" width="10" height="8" fill="#1e293b"/><rect x="4" y="4" width="8" height="6" fill="#06b6d4"/><rect x="4" y="4" width="8" height="2" fill="#67e8f9"/><rect x="15" y="2" width="10" height="9" fill="#1e293b"/><rect x="16" y="3" width="8" height="7" fill="#7c3aed"/><rect x="16" y="3" width="8" height="2" fill="#a78bfa"/><rect x="27" y="3" width="10" height="8" fill="#1e293b"/><rect x="28" y="4" width="8" height="6" fill="#10b981"/><rect x="28" y="4" width="8" height="2" fill="#6ee7b7"/><rect x="1" y="12" width="38" height="2" fill="#64748b"/><rect x="1" y="14" width="38" height="3" fill="#475569"/><rect x="14" y="12" width="12" height="1" fill="#0c0e1c"/><rect x="3" y="17" width="3" height="8" fill="#334155"/><rect x="34" y="17" width="3" height="8" fill="#334155"/></svg>',
@@ -910,7 +922,16 @@ function _moveMs(el){
   return _clampWalk(_officePrefs.walk) * 1000 + 120;
 }
 try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }catch(e){}
-_officePrefs.walk = _clampWalk(_officePrefs.walk);   // never trust what was stored
+(function(){
+  // Never trust what was stored — and write the sanitised value straight back.
+  // Clamping in memory alone meant a corrupt entry like {"walk":"abc"} survived
+  // in localStorage and re-poisoned every load.
+  const raw = _officePrefs.walk;
+  _officePrefs.walk = _clampWalk(raw);
+  if(_officePrefs.walk !== raw){
+    try{ localStorage.setItem(OFFICE_PREFS_KEY, JSON.stringify(_officePrefs)); }catch(e){}
+  }
+})();
 applyOfficePrefs();
 /* Same-origin tabs share localStorage, so this fires when ANOTHER tab changes
    the prefs — a second deck, or an office open standalone alongside one.
@@ -1915,7 +1936,7 @@ function handleEvent(evt){
               setTimeout(function(){ ct.wrap.classList.remove('is-walking'); }, _paced(1800));
             }
           }
-        }, 6000);
+        }, _paced(6000));
         // Settling to idle DROPS the bubble — someone who isn't talking
         // shouldn't have a speech bubble hovering over them.
         target.settleTimer = setTimeout(function(){
@@ -3718,7 +3739,7 @@ function playOpening(sid){
       if(n && CHARACTER_SOLO[n]) cast[n] = t;
     });
     playCastExchange(o, pick(MORNING_EXCHANGES), cast, 800);
-  }, CREW_FROM_MS + CREW_ARRIVE_ORDER.length * CREW_STEP_MS + 4800));
+  }, CREW_FROM_MS + CREW_ARRIVE_ORDER.length * CREW_STEP_MS + _paced(4800)));
 }
 // Started working mid-arrival? The leisurely 5s-per-crew trickle would drag
 // on for most of a minute while you're already busy — reads as "the office
@@ -3775,7 +3796,7 @@ function _rushOpening(sid){
       else lineFor[cn] = { text: chatPool.length ? chatPool.pop() : (CREW_BACK[cn] ? pick(CREW_BACK[cn]) : null), kind: 'banter' };
     }
   });
-  const DOOR_PAUSE = 220, SLOT_HOLD = 250;               // free the door fast so a clump-mate can follow close
+  const DOOR_PAUSE = _paced(220), SLOT_HOLD = _paced(250);               // free the door fast so a clump-mate can follow close
   function enterAt(cn, at, line){
     s.departTimers.push(setTimeout(function(){
       if(!sessions.has(sid) || s.closing) return;
@@ -3807,17 +3828,17 @@ function _rushOpening(sid){
   let _at = 0;
   clumps.forEach(function(clump){
     clump.forEach(function(cn, k){
-      enterAt(cn, _at + k * (300 + Math.round(Math.random() * 130)), lineFor[cn]);   // tight WITHIN a clump
+      enterAt(cn, _at + k * _paced(300 + Math.round(Math.random() * 130)), lineFor[cn]);   // tight WITHIN a clump
     });
-    var span = (clump.length - 1) * 360;
-    _at += span + (1200 + Math.round(Math.random() * 1300));   // VARIED gap between clumps (~1.2–2.5s)
+    var span = (clump.length - 1) * _paced(360);
+    _at += span + _paced(1200 + Math.round(Math.random() * 1300));   // VARIED gap between clumps (~1.2–2.5s)
   });
   s.departTimers.push(setTimeout(function(){
     if(!sessions.has(sid)) return;
     s.arriving = false;
     if(o) o.root.classList.remove('ceremony');
     render();
-  }, _at + 4200));
+  }, _at + _paced(4200)));
 }
 function playClosing(sid, mode){
   const s = sessions.get(sid);

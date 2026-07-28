@@ -782,12 +782,30 @@ let S = loadSettings();
 /* The OFFICE is the source of truth for its own look — it persists
    'officebot.prefs' itself and applies it with or without a deck around it.
    Adopt whatever it currently holds, so a deck opened later can't push a
-   stale mirror over a newer setting and silently revert it. */
-try{
-  const _op = JSON.parse(localStorage.getItem('officebot.prefs') || '{}');
-  if(_op.theme) S.officeTheme = _op.theme;
-  if(_op.walk)  S.walkDur = Math.round(Number(_op.walk) * 10);
-}catch(e){}
+   stale mirror over a newer setting and silently revert it. The bounds are
+   mirrored from index.html; a bad stored value must not reach the drawer. */
+const DECK_WALK_MIN = 6, DECK_WALK_MAX = 40, DECK_WALK_DEFAULT = 17;
+function syncOfficePrefsFromStore(){
+  try{
+    const op = JSON.parse(localStorage.getItem('officebot.prefs') || '{}');
+    if(op.theme === 'claude' || op.theme === 'neon') S.officeTheme = op.theme;
+    if(op.walk != null){
+      const w = Math.round(Number(op.walk) * 10);
+      // isFinite first: Number("abc") is NaN, and NaN survives Math.round,
+      // reaches the slider as an empty value and JSON.stringify's to null —
+      // which then beat DEFAULTS on the next load and stuck permanently.
+      S.walkDur = isFinite(w) ? Math.min(DECK_WALK_MAX, Math.max(DECK_WALK_MIN, w)) : DECK_WALK_DEFAULT;
+    }
+  }catch(e){}
+}
+syncOfficePrefsFromStore();
+/* A change made in another tab reaches this deck's drawer too, so it can never
+   sit on a stale mirror and show one number while the floor runs another. */
+window.addEventListener('storage', function(e){
+  if(e.key !== 'officebot.prefs') return;
+  syncOfficePrefsFromStore();
+  if(typeof syncSettingsUI === 'function') syncSettingsUI();
+});
 function loadSettings(){
   try{
     const raw = localStorage.getItem('pocketDeck.v1');
@@ -1426,10 +1444,13 @@ $('office').addEventListener('load', function(){
   // re-assert the active tab after ANY (re)load (auto-refresh, manual) so the
   // office never reverts to a stale filter baked into the iframe URL
   try{ $('office').contentWindow.postMessage({type:'deckTab', tab:S.tabs[S.active].session}, '*'); }catch(e){}
-  // re-assert the look too. The office persists its own copy, so this is only
-  // belt-and-braces for the case where the two drifted apart — settings changed
-  // while the iframe was detached, say.
-  pushOfficePrefs();
+  // Deliberately NOT re-pushing the look here. The office restores it from
+  // localStorage on its own every load, so this push was redundant — and
+  // actively harmful: a deck tab left open holds a stale S, the Android resume
+  // handler reloads the iframe on any >12s background gap, and that stale push
+  // then overwrote a newer setting made in another tab. With the office's
+  // storage listener, that revert propagated everywhere. Let the office own it.
+  syncOfficePrefsFromStore();   // keep THIS deck's drawer honest instead
   // push the authoritative owner immediately (server truth) instead of up to 2s
   // later — the resume reload wipes the office's owner maps, so re-asserting now
   // avoids a STANDBY flash / wrong re-pin before the 2s heartbeat catches up
