@@ -232,6 +232,20 @@
     border-color:var(--zc,var(--zone-accent));
     box-shadow:inset 0 0 38px -10px var(--zc,var(--zone-accent)), 0 2px 8px rgba(0,0,0,.35);
   }
+  /* The active-room glow takes its colour from whoever is working in it (--zc,
+     set per-mat from CHAR_COLOR). Those are cool by design — cyan, violet,
+     blue — which is right on the neon floor and wrong on terracotta, where the
+     highlight ends up the only cold thing in the room.
+
+     So under Claude the character's colour is BLENDED toward the terracotta
+     accent rather than replaced: rooms still differ by who's in them (Scout's
+     green reads distinctly from Nitpick's red), but every one of them lands
+     inside the warm family. Mixed at the point of use, not in a variable, so
+     --zc resolves against the mat it's actually set on. */
+  :root[data-theme="claude"] .room-mat.mat-active{
+    border-color:color-mix(in srgb, var(--zc,var(--zone-accent)) 30%, var(--zone-accent));
+    box-shadow:inset 0 0 38px -10px color-mix(in srgb, var(--zc,var(--zone-accent)) 30%, var(--zone-accent)), 0 2px 8px rgba(0,0,0,.35);
+  }
   .tokens-layer{position:absolute; inset:0;}
   .floor-reset{
     position:absolute; top:8px; right:8px; z-index:5; width:26px; height:26px; border-radius:7px;
@@ -254,6 +268,10 @@
     transition:border-color .35s, box-shadow .35s;
   }
   .zone.zone-active{border-color:var(--zc,var(--zone-accent)); box-shadow:0 0 16px -3px var(--zc,var(--zone-accent)), 0 2px 6px rgba(0,0,0,.5);}
+  :root[data-theme="claude"] .zone.zone-active{
+    border-color:color-mix(in srgb, var(--zc,var(--zone-accent)) 30%, var(--zone-accent));
+    box-shadow:0 0 16px -3px color-mix(in srgb, var(--zc,var(--zone-accent)) 30%, var(--zone-accent)), 0 2px 6px rgba(0,0,0,.5);
+  }
   /* Decorative furniture — colourful pixel art in the same style as the
      avatar roster (crispEdges rects, top-lit shading), with a drop shadow
      for a bit of depth. Still purely cosmetic: non-interactive, behind the
@@ -265,6 +283,9 @@
   .prop-flat{filter:none; opacity:.75;}
   .zone-icon{width:11px; height:11px; color:var(--chrome-text); opacity:.85; transition:color .35s, opacity .35s; flex-shrink:0;}
   .zone.zone-active .zone-icon{color:var(--zc,var(--zone-accent)); opacity:1;}
+  :root[data-theme="claude"] .zone.zone-active .zone-icon{
+    color:color-mix(in srgb, var(--zc,var(--zone-accent)) 30%, var(--zone-accent));
+  }
   .zone-icon svg{width:100%; height:100%; display:block;}
   .zone-label{font-family:'Orbitron',sans-serif; font-size:.52rem; letter-spacing:.7px; color:var(--chrome-label); text-transform:uppercase;}
 
