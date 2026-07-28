@@ -741,7 +741,7 @@ const ZONE_ICONS = {
 // The lounge is the big room at the bottom (see the .zone[data-zone=lounge]
 // CSS) — its x/y is still the anchor point occupants gather around.
 const ZONES = {
-  warroom:  { x:22, y:28, label:'PLANNING', icon:ZONE_ICONS.planning },
+  warroom:  { x:50, y:28, label:'PLANNING', icon:ZONE_ICONS.planning },
   // exit is just THE DOOR on the wall — no mat, no sign plate (skipped in
   // officeSkeletonHtml); departing avatars walk right up to the doorway.
   exit:     { x:84, y:17, label:'EXIT',     icon:ZONE_ICONS.exit },
@@ -824,18 +824,19 @@ const PROPS = [
   //     here — there used to be one, stacked directly underneath him. Plants
   //     flank the nook instead, so he reads as having a place of his own
   //     rather than a figure standing in open floor. ---
-  { x:43,   y:21,   w:13, art:'plant' },
-  { x:63,   y:21,   w:13, art:'plant' },
-  // --- by the exit: the corner everyone walks through and nobody owned. The
-  //     door hung on the wall above entirely empty floor. ---
-  { x:74,   y:23,   w:17, art:'plant' },
-  { x:93,   y:25,   w:16, art:'cooler' },   // in line with the vending machine below it
-  { x:87,   y:33,   w:21, art:'boxes' },     // deliveries stacked by the door
+  { x:64,   y:21,   w:13, art:'plant' },
+  { x:81,   y:21,   w:13, art:'plant' },
+  { x:88,   y:31,   w:21, art:'boxes' },   // deliveries stacked by the door
+  // --- the top-left, vacated when Planning moved to the middle: a small
+  //     break spot under the wall clock, so the corner isn't bare floor ---
+  { x:11,   y:24,   w:17, art:'cooler' },
+  { x:24,   y:22,   w:15, art:'plant' },
+  { x:16,   y:34,   w:12, art:'bookpile' },
   // --- planning room ---
-  { x:14.5, y:24.5, w:11, art:'chair' },
-  { x:29.5, y:24.5, w:11, art:'chair' },
-  { x:22,   y:29,   w:36, art:'meetTable' }, // meeting table w/ laptop + papers
-  { x:31.5, y:36,   w:24, art:'board' },     // whiteboard easel
+  { x:42.5, y:24.5, w:11, art:'chair' },
+  { x:57.5, y:24.5, w:11, art:'chair' },
+  { x:50,   y:29,   w:36, art:'meetTable' }, // meeting table w/ laptop + papers
+  { x:59.5, y:36,   w:24, art:'board' },     // whiteboard easel
   // --- research room (the two-resident study: shelves, desk, globe,
   //     evidence board with red string, a pile of borrowed books) ---
   { x:5.5,  y:48.5, w:22, art:'shelf' },
@@ -2295,7 +2296,7 @@ function officeSkeletonHtml(){
     + '</div>';
   }).join('');
   // Tally at his desk + the usage monitor mounted on the wall above him
-  const staffHtml = '<div class="staff" style="left:53%;top:17.5%">'
+  const staffHtml = '<div class="staff" style="left:73%;top:17.5%">'
     + '<div class="staff-desk">' + TALLY_DESK_SVG + '</div>'
     + '<div class="staff-face">' + TALLY_AVATAR.svg + '</div>'
     + '<div class="staff-name">Tally</div>'
