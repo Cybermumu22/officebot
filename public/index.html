@@ -1401,7 +1401,7 @@ function ensureSession(sid, evt){
     s = {
       id: sid, cwd: basename(evt.cwd), avatar: avatarForSession(sid), modelNickname: null,
       status: 'idle', zone: 'terminal', bubble: null, lastEventAt: Date.now(),
-      subagents: new Map(), removeTimer: null,
+      subagents: new Map(), removeTimer: null, deskTimer: null,
       lastDelegation: null, lastDelegationAt: 0, pendingAgentTypes: [],
       courier: null, courierTimers: [],
       model: null, departing: null, departTimers: [],
@@ -1411,6 +1411,7 @@ function ensureSession(sid, evt){
   if(evt.cwd) s.cwd = basename(evt.cwd);
   s.lastEventAt = Date.now();
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  if(s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
   return s;
 }
 // Claude Code's SubagentStart hook doesn't carry the agent type — but the
@@ -1894,6 +1895,9 @@ function handleEvent(evt){
       chatLog(displayName(target), target.bubble, 'arrive');
       break;
     case 'PreToolUse':
+      // Heading out to work — cancel any pending walk back to the desk, or a
+      // timer set after the previous tool drags him home mid-job.
+      if(!aid && s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
       target.status = 'active'; target.zone = zoneForTool(evt.tool_name);
       // Prefer what Claude actually said over a mechanical tool description —
       // falls back when the transcript had no text alongside this tool call
@@ -1918,6 +1922,23 @@ function handleEvent(evt){
     case 'PostToolUse':
       target.status = 'calm';
       if(!aid) s._didWork = true; // real work happened this turn → confetti-worthy Stop
+      // The boss goes back to his OWN office whenever the work pauses, not
+      // only when the whole turn ends. Without this a long turn left him
+      // camped in whichever room the last tool happened to use — which is
+      // what "he's in the terminal for the whole session" looked like. The
+      // delay is long enough that back-to-back tool calls don't send him
+      // pacing home and out again between every one; any real pause does.
+      if(!aid){
+        if(s.deskTimer) clearTimeout(s.deskTimer);
+        s.deskTimer = setTimeout(function(){
+          s.deskTimer = null;
+          if(!sessions.has(sid) || s.closing || s.bossGone) return;
+          if(s.status === 'active') return;          // work restarted — leave him where it is
+          if(s.zone === 'exit' || s.zone === 'office') return;   // leaving, or already home
+          s.zone = 'office';
+          render();
+        }, _paced(5000));
+      }
       // The speechSent gate attaches a given quote to exactly ONE event —
       // if this happens to be the event that got it, show it rather than
       // silently consuming it (else that line would never appear anywhere).
@@ -3547,6 +3568,7 @@ function reopenOffice(sid){
   s.bossLeaving = null; s.leaving = false;
   clearDepartTimers(s);
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  if(s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
   // a boss caught mid-exit goes back to his own office. Unconditional: this
   // branch only runs when he was closing or already offline, so he isn't in
   // the middle of anything that a redirect could interrupt.
@@ -3753,6 +3775,7 @@ function playOpening(sid){
   _markWelcomed(sid);   // so a later office reload doesn't replay this arrival
   clearDepartTimers(s);
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
+  if(s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
   s.closing = false; s.arriving = true; s.leaving = false;
   s.crewLeaver = null; s.bossLeaving = null; s.bossGone = false; s.crewSay = {};
   s.crewGone = CREW_ARRIVE_ORDER.slice();   // nobody's in yet
