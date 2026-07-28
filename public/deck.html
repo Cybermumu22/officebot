@@ -601,6 +601,27 @@ button{outline:none;-webkit-user-select:none;user-select:none}
     </div>
   </section>
 
+  <section class="grp" data-g="office">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▦</span><span class="grp-n">Office look</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec"><div class="lbl">Palette</div>
+        <div class="seg" id="segOfficeTheme">
+          <button data-v="neon">Neon</button>
+          <button data-v="claude">Claude</button>
+        </div>
+        <div class="note help">Neon: the original synthwave blues. Claude: Anthropic's warm clay and terracotta, walls a shade lighter than the floor and every room its own tone. The pixel staff keep their own colours either way — they're what makes the floor readable.</div>
+      </div>
+      <div class="sec"><div class="lbl">Walking speed</div>
+        <input type="range" id="rngWalk" min="6" max="40" step="1">
+        <div class="note"><span id="walkVal"></span></div>
+        <div class="note help">How long an agent takes to cross a room. Arrivals, the temp-staff entrance and the end-of-day exodus are all multiples of this, so they stay in proportion.</div>
+      </div>
+    </div>
+  </section>
+
   <section class="grp" data-g="text">
     <h3 class="grp-h">
       <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▤</span><span class="grp-n">Text &amp; colour</span><span class="grp-c">⌄</span></button>
@@ -748,6 +769,11 @@ const DEFAULTS = {
   cvFont:'system', cvMe:'amber', cvAi:'cyan', cvBox:'none',   // CONVO pane: font + bubble/composer tints
   notifyAsk:true,   // notify (with approve/deny buttons) when Claude asks while the app is hidden
   allowRotate:false,   // portrait-locked unless the user opts into rotation
+  // Office look. The OFFICE owns these for real (it persists them itself and
+  // applies them standalone too) — the deck mirrors them so the drawer can
+  // show the current value, and posts changes over. walkDur is tenths of a
+  // second, 6..40 = 0.6s..4.0s, matching WALK_MIN/WALK_MAX in index.html.
+  officeTheme:'neon', walkDur:17,
 
   tabs:[{label:'CLAUDE',session:'deck-1'},{label:'SHELL',session:'deck-2'}],
   active:0, nextTab:3
@@ -1391,6 +1417,10 @@ $('office').addEventListener('load', function(){
   // re-assert the active tab after ANY (re)load (auto-refresh, manual) so the
   // office never reverts to a stale filter baked into the iframe URL
   try{ $('office').contentWindow.postMessage({type:'deckTab', tab:S.tabs[S.active].session}, '*'); }catch(e){}
+  // re-assert the look too. The office persists its own copy, so this is only
+  // belt-and-braces for the case where the two drifted apart — settings changed
+  // while the iframe was detached, say.
+  pushOfficePrefs();
   // push the authoritative owner immediately (server truth) instead of up to 2s
   // later — the resume reload wipes the office's owner maps, so re-asserting now
   // avoids a STANDBY flash / wrong re-pin before the 2s heartbeat catches up
@@ -3071,6 +3101,11 @@ function syncSettingsUI(){
     b.className = (b.dataset.v === S.font) ? 'on' : '';
   });
   $('fontPreview').style.fontFamily = fontDef().css;
+  Array.prototype.forEach.call($('segOfficeTheme').children, function(b){
+    b.className = (b.dataset.v === S.officeTheme) ? 'on' : '';
+  });
+  $('rngWalk').value = S.walkDur;
+  $('walkVal').textContent = walkLabel(S.walkDur);
   $('rngSplit').value = S.splitPct;
   $('fontVal').textContent = S.fontSize;
   $('chatVal').textContent = S.chatFs;
@@ -3423,6 +3458,31 @@ $('segFont').addEventListener('click', function(e){
 });
 $('rngSplit').addEventListener('input', function(){
   S.splitPct = Number(this.value); save(); applyLayout();
+});
+
+// ---- office look: palette + walking speed ----
+// The office iframe owns and persists these; the deck posts the change and
+// keeps a mirror so the drawer opens showing the right value. Posting on every
+// slider `input` is fine — it's one postMessage and a CSS variable write, no
+// re-render — so the floor retimes live while you drag.
+function walkLabel(t){
+  const s = (t / 10).toFixed(1) + 's';
+  return s + ' · ' + (t <= 10 ? 'brisk' : t <= 22 ? 'normal' : t <= 32 ? 'strolling' : 'ambling');
+}
+function pushOfficePrefs(){
+  const f = $('office');
+  if(!f || !f.contentWindow) return;
+  try{ f.contentWindow.postMessage({ type:'officePrefs', theme:S.officeTheme, walk:S.walkDur / 10 }, '*'); }catch(e){}
+}
+$('segOfficeTheme').addEventListener('click', function(e){
+  const v = e.target.dataset && e.target.dataset.v;
+  if(!v) return;
+  S.officeTheme = v; save(); syncSettingsUI(); pushOfficePrefs();
+});
+$('rngWalk').addEventListener('input', function(){
+  S.walkDur = Number(this.value);
+  $('walkVal').textContent = walkLabel(S.walkDur);
+  save(); pushOfficePrefs();
 });
 $('fontMinus').addEventListener('click', function(){ bumpFont(-1); });
 $('fontPlus').addEventListener('click', function(){ bumpFont(1); });

@@ -14,10 +14,63 @@
   :root{
     --bg:#080b14; --surface:#0f1220; --accent:#e63946; --accent2:#7c3aed;
     --green:#10b981; --yellow:#f59e0b; --cyan:#06b6d4; --border:#232742;
+
+    /* ---- themeable office surfaces ----
+       Everything the ROOM keeps in its own variables so a palette swap is one
+       block rather than a hunt through 96 hex literals. The pixel-art cast is
+       deliberately NOT themed: the sprites carry their own colours and are
+       what makes the office readable, so they stay put and the room changes
+       around them. Defaults below are the original neon look, unchanged. */
+    --page-glow:#131a2e;                      /* body vignette at the top    */
+    --floor-grout:rgba(255,255,255,.018);     /* tile grout lines            */
+    --floor-check:rgba(139,150,220,.03);      /* checkerboard tint           */
+    --floor-hi:#10142c;                       /* floor, lit centre           */
+    --floor-lo:#05070f;                       /* floor, dark edges           */
+    --wall-seam:rgba(255,255,255,.025);       /* wall panel seams            */
+    --wall-hi:#1a1f3d;                        /* wall, top                   */
+    --wall-lo:#121631;                        /* wall, bottom                */
+    --wall-trim:#262e55;                      /* baseboard                   */
+    --mat-edge:rgba(255,255,255,.055);        /* room mat border             */
+    /* per-room flooring, two shades each so the weave/stripe reads */
+    --mat-plan-a:#10142c;  --mat-plan-b:#0e1226;
+    --mat-res-a:#0e1a26;   --mat-res-b:#0c1622;
+    --mat-term-a:#0d101f;  --mat-term-b:#0b0e1b;
+    --mat-arch-a:#15102a;  --mat-arch-b:#120d24;
+    --mat-lounge-a:#2a1a0e; --mat-lounge-b:#20130a;
+
+    --walk-dur:1.7s;                          /* how long a token takes to cross a room */
+  }
+
+  /* ---- Claude palette ----
+     The office in Anthropic's warm neutrals instead of synthwave blue: clay
+     and terracotta rather than indigo and violet. Wall sits a clear step
+     LIGHTER than the floor (it catches the light), and each room keeps its
+     own shade so the floor still reads as five separate spaces. Deliberately
+     still dark — the sprites are drawn with dark-background contrast in mind
+     and would wash out on cream. */
+  :root[data-theme="claude"]{
+    --bg:#15100c; --surface:#1e1712; --accent:#d97757; --accent2:#b5714e;
+    --green:#8a9a5b; --yellow:#d4a05a; --cyan:#7d9b9b; --border:#3a2c23;
+
+    --page-glow:#2a1e16;
+    --floor-grout:rgba(255,236,220,.022);
+    --floor-check:rgba(217,119,87,.035);
+    --floor-hi:#2b211a;
+    --floor-lo:#100b08;
+    --wall-seam:rgba(255,236,220,.035);
+    --wall-hi:#4a382c;
+    --wall-lo:#37291f;
+    --wall-trim:#6b4f3c;
+    --mat-edge:rgba(255,236,220,.07);
+    --mat-plan-a:#2e2119;  --mat-plan-b:#291d16;
+    --mat-res-a:#26201c;   --mat-res-b:#211b18;
+    --mat-term-a:#241a14;  --mat-term-b:#1f1611;
+    --mat-arch-a:#31221a;  --mat-arch-b:#2b1e17;
+    --mat-lounge-a:#4a2f1c; --mat-lounge-b:#3a2415;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
-    background:radial-gradient(ellipse at top, #131a2e 0%, var(--bg) 60%);
+    background:radial-gradient(ellipse at top, var(--page-glow) 0%, var(--bg) 60%);
     color:#e2e4f0; font-family:'VT323', monospace; font-size:18px;
     min-height:100vh; display:flex; flex-direction:column;
   }
@@ -98,19 +151,19 @@
   .floor-camera{
     position:absolute; inset:0; transform-origin:0 0;
     background:
-      repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 29px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 29px),
-      conic-gradient(rgba(139,150,220,.03) 25%, transparent 25% 50%, rgba(139,150,220,.03) 50% 75%, transparent 75%) 0 0/58px 58px,
-      radial-gradient(ellipse at 50% 40%, #10142c, #05070f 88%);
+      repeating-linear-gradient(0deg, var(--floor-grout) 0 1px, transparent 1px 29px),
+      repeating-linear-gradient(90deg, var(--floor-grout) 0 1px, transparent 1px 29px),
+      conic-gradient(var(--floor-check) 25%, transparent 25% 50%, var(--floor-check) 50% 75%, transparent 75%) 0 0/58px 58px,
+      radial-gradient(ellipse at 50% 40%, var(--floor-hi), var(--floor-lo) 88%);
   }
   /* Back wall along the top edge: panel seams, a baseboard, and wall props
      (windows with a synthwave night view, clock, poster, the EXIT door). */
   .office-wall{
     position:absolute; left:0; top:0; width:100%; height:13%;
     background:
-      repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 46px),
-      linear-gradient(#1a1f3d, #121631);
-    border-bottom:3px solid #262e55;
+      repeating-linear-gradient(90deg, var(--wall-seam) 0 1px, transparent 1px 46px),
+      linear-gradient(var(--wall-hi), var(--wall-lo));
+    border-bottom:3px solid var(--wall-trim);
     box-shadow:0 4px 10px rgba(0,0,0,.55);
   }
   /* Room areas: each zone stands on its own flooring — carpet weaves for
@@ -119,7 +172,7 @@
      Textures are inline per-mat (ROOM_MATS); this rule is the shared chrome. */
   .room-mat{
     position:absolute; transform:translate(-50%,-50%);
-    border-radius:10px; border:1px solid rgba(255,255,255,.055);
+    border-radius:10px; border:1px solid var(--mat-edge);
     box-shadow:inset 0 0 26px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
     transition:border-color .35s, box-shadow .35s;
   }
@@ -171,7 +224,7 @@
      zone (confirmed: badge rendered ~60px above the intended zone box). */
   .agent-token{
     position:absolute; transform:translate(-50%,-50%);
-    transition:left 1.7s cubic-bezier(.4,0,.2,1), top 1.7s cubic-bezier(.4,0,.2,1);
+    transition:left var(--walk-dur) cubic-bezier(.4,0,.2,1), top var(--walk-dur) cubic-bezier(.4,0,.2,1);
     z-index:2;
   }
   .agent-token.token-main{z-index:3;}
@@ -183,14 +236,17 @@
   .agent-token.token-main:has(.token-bubble.show){z-index:25;}
   /* Ceremony walking: arrivals stroll in relaxed; departures a touch
      brisker (work's over, home beckons). Normal hustle is 1.7s. */
-  .office.ceremony .agent-token{transition-duration:3.4s,3.4s;}
-  .office.closing .agent-token{transition-duration:2.6s,2.6s;}
+  /* Multiples of the base walk, not fixed seconds — so dragging the speed
+     slider keeps the arrival ceremony and the exodus in proportion instead of
+     leaving them stranded at their old pace. */
+  .office.ceremony .agent-token{transition-duration:calc(var(--walk-dur) * 2),calc(var(--walk-dur) * 2);}
+  .office.closing .agent-token{transition-duration:calc(var(--walk-dur) * 1.5),calc(var(--walk-dur) * 1.5);}
   /* A temp's entrance is the LONGEST walk on the floor — front door all the way
      to the war room — and every token shares one fixed duration, so covering
      more ground in the same 1.7s made them look like they were sprinting in.
      Stretched for the entrance only, then removed so their ordinary
      room-to-room moves stay at everyone else's pace. */
-  .agent-token.is-entering{transition-duration:3.2s,3.2s;}
+  .agent-token.is-entering{transition-duration:calc(var(--walk-dur) * 1.9),calc(var(--walk-dur) * 1.9);}
   /* No session = nobody inside. Not even the accountant. */
   .office-placeholder .staff{display:none;}
 
@@ -629,17 +685,20 @@ const ZONES = {
 // Lounge, and a little doormat under the Exit. The zone sign plate sits on
 // the mat's top edge; occupants gather at the mat's centre.
 const ROOM_MATS = {
-  warroom:  { w:24, h:26, bg:'repeating-linear-gradient(45deg, #10142c 0 6px, #0e1226 6px 12px)' },
+  // Colours come from CSS variables (see :root) so a theme swap repaints the
+  // floor without touching this table — var() resolves at computed-value time,
+  // so it works even though these land as inline styles.
+  warroom:  { w:24, h:26, bg:'repeating-linear-gradient(45deg, var(--mat-plan-a) 0 6px, var(--mat-plan-b) 6px 12px)' },
   // Research widened (2026-07): it's a proper two-resident room now
   // (Scout + Bookworm home there) plus wander visitors.
-  research: { w:27, h:27, bg:'repeating-linear-gradient(-45deg, #0e1a26 0 6px, #0c1622 6px 12px)' },
-  terminal: { w:26, h:26, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(#0d101f, #0b0e1b)' },
-  archives: { w:24, h:26, bg:'repeating-linear-gradient(90deg, #15102a 0 9px, #120d24 9px 18px)' },
+  research: { w:27, h:27, bg:'repeating-linear-gradient(-45deg, var(--mat-res-a) 0 6px, var(--mat-res-b) 6px 12px)' },
+  terminal: { w:26, h:26, bg:'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px), linear-gradient(var(--mat-term-a), var(--mat-term-b))' },
+  archives: { w:24, h:26, bg:'repeating-linear-gradient(90deg, var(--mat-arch-a) 0 9px, var(--mat-arch-b) 9px 18px)' },
   // Widened 58% → 76% (2026-07): the permanent 4-man crew + the boss + a
   // settling subagent is a real crowd, and people were spilling into the
   // hallway. Furniture hugs the left/right edges (see PROPS) so the middle
   // band is clear standing room.
-  lounge:   { w:76, h:26, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(#2a1a0e, #20130a)' },
+  lounge:   { w:76, h:26, bg:'repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 2px, transparent 2px 24px), linear-gradient(var(--mat-lounge-a), var(--mat-lounge-b))' },
 };
 
 // Decorative office furniture — colourful pixel art in the same visual
@@ -759,6 +818,39 @@ function _markWelcomed(sid){
   if(ids.length > 60){ ids = ids.slice(-60); var keep = {}; ids.forEach(function(k){ keep[k] = 1; }); _welcomed = keep; }
   try { sessionStorage.setItem('officebot.welcomed', JSON.stringify(ids)); } catch(e){}
 }
+/* ---- office appearance prefs: palette + walking speed ----
+   The OFFICE owns these, not the deck, for two reasons: the dashboard is often
+   opened standalone on localhost:4317 with no deck around it, and a reload
+   should not lose the setting. The deck's drawer just posts 'officePrefs' and
+   this applies + persists it. Both land as CSS variables on <html>, so a
+   change repaints instantly with no re-render.
+
+   Walk range: 0.6s is about as fast as a crossing stays legible, 4s is a
+   deliberate amble. 1.7s is the original. */
+const OFFICE_PREFS_KEY = 'officebot.prefs';
+const WALK_MIN = 0.6, WALK_MAX = 4, WALK_DEFAULT = 1.7;
+const _officePrefs = { theme: 'neon', walk: WALK_DEFAULT };
+function _clampWalk(v){ v = Number(v); return isFinite(v) ? Math.min(WALK_MAX, Math.max(WALK_MIN, v)) : WALK_DEFAULT; }
+function applyOfficePrefs(){
+  const r = document.documentElement;
+  if(_officePrefs.theme === 'claude') r.setAttribute('data-theme', 'claude');
+  else r.removeAttribute('data-theme');
+  r.style.setProperty('--walk-dur', _clampWalk(_officePrefs.walk) + 's');
+}
+function setOfficePref(k, v){
+  if(k === 'walk') v = _clampWalk(v);
+  if(_officePrefs[k] === v) return;
+  _officePrefs[k] = v;
+  applyOfficePrefs();
+  try{ localStorage.setItem(OFFICE_PREFS_KEY, JSON.stringify(_officePrefs)); }catch(e){}
+}
+// The entrance walk is 1.9x the base (see .is-entering); the class has to
+// outlive it, so derive the cleanup delay instead of hardcoding a duration
+// that would be wrong the moment the slider moves.
+function _enterWalkMs(){ return _clampWalk(_officePrefs.walk) * 1900 + 250; }
+try{ Object.assign(_officePrefs, JSON.parse(localStorage.getItem(OFFICE_PREFS_KEY) || '{}')); }catch(e){}
+applyOfficePrefs();
+
 const officeEls = new Map(); // sessionId -> { root, tokensLayer, tokens: Map(tokenId -> tokenRefs) }
 let evtCount = 0;
 
@@ -853,6 +945,14 @@ window.addEventListener('message', function(e){
     if(next && _clientTab[next] && _clientTab[next] !== d.tab) delete _clientTab[next];
     _persistOwners();   // survive the resume iframe reload (no STANDBY flash / re-pin)
     if(prev !== next && typeof render === 'function') render();
+  } else if(d.type === 'officePrefs'){
+    // The deck's settings drawer changed the office's look. The office owns
+    // this state (so it also works when opened standalone, outside the deck);
+    // the deck just tells it what the user picked.
+    if(typeof setOfficePref === 'function'){
+      if(d.theme != null) setOfficePref('theme', d.theme);
+      if(d.walk != null) setOfficePref('walk', d.walk);
+    }
   } else if(d.type === 'refreshUsage'){
     // the deck's ⟳ usage button poked the poller; refresh the wall panels NOW
     // so they pulse immediately instead of waiting for the next 60s poll
@@ -1598,7 +1698,7 @@ function handleEvent(evt){
           const _o = officeEls.get(sid), _t = _o && _o.tokens.get(aid);
           if(_t){
             _t.wrap.classList.add('is-entering');
-            setTimeout(function(){ _t.wrap.classList.remove('is-entering'); }, 3400);
+            setTimeout(function(){ _t.wrap.classList.remove('is-entering'); }, _enterWalkMs());
           }
           render();
           // a present staffer ribs the new intern; sometimes they fire back.

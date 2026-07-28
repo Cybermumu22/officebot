@@ -92,6 +92,35 @@ async function main() {
   console.log('-> general-purpose finished too');
   await wait(1500);
 
+  // ---- parallel fan-out: four Explores at once ----
+  // The squad system only shows up when several agents of the SAME type are
+  // live together: the first is Scout himself, the rest arrive as temps —
+  // Recon, Probe, Ranger — each through the front door, in its own colourway.
+  // Staggered rather than fired at once so each entrance is watchable.
+  const squad = [];
+  for (let i = 0; i < 4; i++) {
+    const id = 'demo-sq' + i + '-' + Date.now();
+    squad.push(id);
+    await post({ hook_event_name: 'SubagentStart', session_id: main1, agent_id: id, agent_type: 'Explore' });
+    console.log('-> Explore #' + (i + 1) + ' spawned' + (i === 0 ? ' (Scout)' : ' (temp — walks in through the door)'));
+    await wait(2600);
+  }
+  await wait(2500);   // let the last one finish its walk in
+
+  for (let i = 0; i < squad.length; i++) {
+    await post({ hook_event_name: 'PreToolUse', session_id: main1, agent_id: squad[i], agent_type: 'Explore',
+      tool_name: 'Grep', tool_input: { pattern: ['auth', 'router', 'config', 'schema'][i] } });
+  }
+  console.log('-> all four searching in parallel');
+  await wait(3200);
+
+  for (let i = squad.length - 1; i >= 0; i--) {
+    await post({ hook_event_name: 'SubagentStop', session_id: main1, agent_id: squad[i], agent_type: 'Explore' });
+    await wait(1100);
+  }
+  console.log('-> squad done — temps clock out and walk back out the door');
+  await wait(1500);
+
   await post({ hook_event_name: 'PreToolUse', ...boss, tool_name: 'Edit', tool_input: { file_path: 'index.html' } });
   console.log('-> main session applying the fix');
   await wait(1400);
