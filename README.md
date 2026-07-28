@@ -160,6 +160,28 @@ one** of them has finished, so the floor never shows him in two places at once.
 Past five it gives up and falls back to numerals — Scout VI, Scout VII. If
 you're running six parallel Explores, you have larger problems than nomenclature.
 
+**Why not just hand the second Explore to Ace or Jack, since they're standing
+about?** Because the character *is* the agent type. Ace **is** `claude`, Jack
+**is** `general-purpose`. Putting Ace on an Explore job would mean the floor was
+telling you something Claude didn't actually do, and then you couldn't trust any
+of it. Recon is a real second `Explore` — that's the whole point of him.
+
+### Except for the jobs with no name on them
+
+Some agents turn up with **no type at all** — Claude Code's own internals, like
+the conversation summariser, spawned without a `Task` call for the office to
+learn from.
+
+Rather than invent a stranger for those, the office gives the job to whichever
+crew member fits best and isn't already busy: **Ace** first (unknown jobs are
+literally the wildcard's job description), then **Jack** the handyman, then
+**Bookworm** — summarising *is* docs work — and on down to the narrow
+specialists, who get asked last.
+
+If every single one of them is mid-job, the work goes to a one-off contractor
+with a pool name instead: Pixel, Gizmo, Byte, Nova. They do the job and you
+never see them again.
+
 ### The regulars
 
 They never take a session. They just run the place.
