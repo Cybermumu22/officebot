@@ -372,7 +372,7 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 #convoPick .cvopt.sel{border-color:#37f5ff;color:#bff4ff}
 /* settings drawer: CONVO bubble tint swatches */
 .cv-swrow{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
-.cv-swrow span{font-size:12px;color:#9fb0d5}
+.cv-swrow span{font:17px/1.2 'VT323',ui-monospace,monospace;letter-spacing:.4px;color:#a9b8d9}
 .cv-swatches{display:flex;gap:8px}
 .cv-swatches button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
 .cv-swatches button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
@@ -399,43 +399,108 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 .engine-ttyd #keybar{display:none}
 .engine-ttyd #xtermHost{display:none}
 
-/* ---- settings drawer ---- */
+/* ---- settings drawer ----
+   Structure: a fixed header (title + ✕), a scrolling body of collapsible
+   GROUPS, and a fixed action bar. Only one group is open at a time, so the
+   drawer opens as five headings instead of a 2000px wall of controls.
+   Long explanations live in `.note.help`, hidden until the group's (?) is
+   tapped — `.note` without `.help` stays visible (those are live status
+   lines: rotate lock, calibration result, poller result).
+
+   Type: the deck's own two retro faces, exactly as the rest of the app uses
+   them — 'Press Start 2P' for tiny ALL-CAPS labels (drawer title, .lbl) and
+   'VT323' for everything meant to be read (buttons, toggles, notes, values).
+   VT323 sits small and light for its em size, so every size here runs ~3-4px
+   above what a sans face would need. Glyph-only controls (✕ ⌄ − + ⟳ ↻) keep a
+   monospace stack on purpose: neither pixel face carries those codepoints, and
+   per-glyph fallback inside a styled word is what makes a UI look broken. */
 #backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40}
-#settings{position:fixed;top:0;right:0;bottom:0;width:min(320px,86vw);z-index:41;background:#0f1220;border-left:1px solid #263056;padding:16px 14px;overflow-y:auto}
-#settings h2{font-size:13px;letter-spacing:2px;color:#7c9eff;margin-bottom:14px}
-#settings .sec{margin-bottom:16px}
-#settings .lbl{font-family:'Press Start 2P',monospace;font-size:7px;letter-spacing:1px;color:#6b7aa5;margin-bottom:7px;text-transform:uppercase}
+#settings{position:fixed;top:0;right:0;bottom:0;width:min(370px,92vw);z-index:41;
+  background:#0d1020;border-left:1px solid #263056;display:flex;flex-direction:column}
+#setHead{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:calc(13px + env(safe-area-inset-top)) 12px 13px 16px;
+  background:#0f1326;border-bottom:1px solid #1b2340}
+#settings h2{flex:1;min-width:0;margin:0;color:#7c9eff;
+  font:8.5px/1.6 'Press Start 2P',monospace;letter-spacing:1.5px}
+#btnCloseSettings{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:#151b32;
+  color:#9fb0d5;border:1px solid #232c4e;font:15px/1 ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+#setBody{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 16px}
+
+/* collapsible group */
+.grp{margin-bottom:8px;border:1px solid #1e2540;border-radius:12px;background:#101528;
+  overflow:hidden;transition:border-color .18s ease,background .18s ease}
+.grp.open{border-color:#2c3a68;background:#0e1324}
+.grp-h{display:flex;align-items:stretch;margin:0;font-weight:normal}
+.grp-t{flex:1;min-width:0;display:flex;align-items:center;gap:11px;min-height:50px;
+  padding:0 2px 0 13px;background:none;border:0;color:#b9c6e4;
+  font:19px/1.2 'VT323',ui-monospace,monospace;letter-spacing:.7px;text-align:left;cursor:pointer}
+.grp.open .grp-t{color:#e6ecff}
+.grp-ic{flex:0 0 auto;width:18px;text-align:center;color:#4e5a86;
+  font:13px/1 ui-monospace,Menlo,Consolas,monospace;transition:color .18s ease}
+.grp.open .grp-ic{color:#7c9eff}
+.grp-n{flex:1;min-width:0}
+.grp-c{flex:0 0 auto;width:24px;text-align:center;color:#4e5a86;
+  font:11px/1 ui-monospace,Menlo,Consolas,monospace;transition:transform .22s ease,color .18s ease}
+.grp.open .grp-c{transform:rotate(180deg);color:#7c9eff}
+.grp-i{flex:0 0 auto;align-self:center;width:26px;height:26px;margin-right:11px;padding:0;
+  border-radius:50%;background:#151b32;color:#7382ac;border:1px solid #232c4e;
+  font:18px/1 'VT323',ui-monospace,monospace;cursor:pointer}
+.grp.help .grp-i{background:#1d2440;color:#9fb8ff;border-color:#4d5fa5}
+.grp-b{display:none;padding:0 13px 12px}
+.grp.open .grp-b{display:block;animation:grpIn .2s ease both}
+@keyframes grpIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+
+#settings .sec{margin:0;padding:14px 0;border-top:1px solid #181e36}
+.grp-b .sec:first-child{border-top:0;padding-top:4px}
+#settings .lbl{font:7.5px/1.5 'Press Start 2P',monospace;letter-spacing:1px;color:#6b7aa5;margin-bottom:10px;text-transform:uppercase}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
-.seg button{flex:1;min-width:70px;padding:8px 6px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:12px;cursor:pointer}
-.seg button.on{background:#1d2440;color:#e6ecff;border-color:#4d5fa5}
+.seg button{flex:1;min-width:68px;min-height:38px;padding:8px 6px;border-radius:9px;background:#141a30;color:#a9b8d9;border:1px solid #232c4e;font:17px/1.15 'VT323',ui-monospace,monospace;letter-spacing:.5px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.seg button.on{background:#222c52;color:#eaf0ff;border-color:#4d5fa5;box-shadow:inset 0 0 0 1px rgba(124,158,255,.18)}
 /* font picker: each option previews ITSELF (a native <select> can't — Android
    ignores option styling in its system picker) */
-#cvFontGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#cvFontGrid button{font-size:14px;min-height:40px}
+#cvFontGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#cvFontGrid button{font-size:14px;min-height:44px}
 .tab.drag{opacity:.85;z-index:5;position:relative;transition:none}
-.rowset{display:flex;align-items:center;gap:10px}
-.rowset button{width:34px;height:34px;border-radius:6px;background:#141830;color:#9fb0d5;border:1px solid #232a4a;font-size:16px;cursor:pointer}
-.rowset .val{min-width:34px;text-align:center;font-size:13px}
-.togglerow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #171c30;font-size:13px}
-.togglerow input{width:18px;height:18px;accent-color:#4d5fa5}
+.rowset{display:flex;align-items:center;gap:9px}
+.rowset button{flex:0 0 auto;width:38px;height:38px;border-radius:9px;background:#141a30;color:#9fb0d5;border:1px solid #232c4e;font:17px/1 ui-monospace,Menlo,Consolas,monospace;cursor:pointer}
+.rowset .val{min-width:40px;text-align:center;font:20px/1 'VT323',ui-monospace,monospace;color:#e6ecff}
+/* full-width action buttons inside a section (calibration, stale cleanup) —
+   a class, so they stop needing inline style to escape .rowset's 38px squares */
+.btnrow{display:flex;gap:8px;margin-top:11px}
+#settings .btn{flex:1;min-height:40px;padding:10px 8px;border-radius:9px;background:#1a2138;color:#d5deef;border:1px solid #2e3a63;font:17px/1.15 'VT323',ui-monospace,monospace;letter-spacing:.5px;cursor:pointer}
+.togglerow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #181e36;font:18px/1.25 'VT323',ui-monospace,monospace;letter-spacing:.4px;color:#cfd8ea;cursor:pointer}
+.togglerow:last-of-type{border-bottom:0}
+.togglerow input{flex:0 0 auto;width:19px;height:19px;accent-color:#4d5fa5}
 #settings input[type=range]{width:100%;accent-color:#4d5fa5}
-#settings input[type=number]{width:90px;padding:7px;border-radius:6px;background:#141830;color:#cfd8ea;border:1px solid #232a4a;font-size:13px}
-.calrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px}
-.calrow span{font-size:12px;color:#9fb0d5}
-.calrow input[type=number]{width:82px;text-align:right}
-#settings .note{font-size:11px;color:#5f6c92;margin-top:6px;line-height:1.5}
-#settings .actions{display:flex;gap:8px;margin-top:18px}
-#settings .actions button{flex:1;padding:10px;border-radius:6px;background:#1d2440;color:#e6ecff;border:1px solid #3b4a7a;font-size:13px;cursor:pointer}
+#settings input[type=number]{width:90px;padding:7px 8px;border-radius:8px;background:#141a30;color:#e6ecff;border:1px solid #232c4e;font:18px/1.1 'VT323',ui-monospace,monospace}
+.calbox{padding:2px 11px;border-radius:10px;background:#0b0f1e;border:1px solid #1a2138}
+.calrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #141a2e}
+.calrow:last-child{border-bottom:0}
+.calrow span{font:17px/1.2 'VT323',ui-monospace,monospace;letter-spacing:.4px;color:#a9b8d9}
+.calrow input[type=number]{width:84px;text-align:right}
+#settings .note{font:16px/1.4 'VT323',ui-monospace,monospace;letter-spacing:.4px;color:#7886b0;margin-top:8px}
+#settings .note.help{display:none;margin-top:10px;padding:9px 11px;border-radius:9px;
+  background:#0b0f1e;border-left:2px solid #2c3a68;color:#8b9ac6}
+.grp.help .note.help{display:block;animation:grpIn .18s ease both}
+/* Symbols VT323 has no glyph for (⟳ ↻ ⇄ ✕ — verified against the vendored
+   woff2's cmap). Left bare they'd fall back mid-sentence at a mismatched
+   weight; wrapped, they render deliberately in mono at VT323's optical size. */
+#settings .gly{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8em;letter-spacing:0}
+#settings .actions{flex:0 0 auto;display:flex;gap:8px;margin:0;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  background:#0f1326;border-top:1px solid #1b2340}
+#settings .actions button{flex:1;min-height:40px;padding:9px 6px;border-radius:9px;background:#1a2138;color:#d5deef;border:1px solid #2e3a63;font:17px/1.15 'VT323',ui-monospace,monospace;letter-spacing:.6px;cursor:pointer}
 /* sessions cleanup (settings drawer) */
-.sess-refresh{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;margin-left:6px;vertical-align:middle;border:1px solid #232a4a;border-radius:5px;background:#141830;color:#8fa0c5;cursor:pointer}
+.sess-refresh{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;margin-left:6px;vertical-align:middle;border:1px solid #232c4e;border-radius:5px;background:#141a30;color:#8fa0c5;cursor:pointer}
 .sess-refresh .pxi{width:11px;height:11px;display:block}
-.sess-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #171c30}
+.sess-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #181e36}
+.sess-row:last-child{border-bottom:0}
 .sess-info{min-width:0;flex:1}
-.sess-name{font-size:12px;color:#cfd8ea;word-break:break-all}
+.sess-name{font:17px/1.25 'VT323',ui-monospace,monospace;letter-spacing:.4px;color:#cfd8ea;word-break:break-all}
 .sess-tag{color:#7c9eff}
 .sess-orphan{color:#f0b366}
-.sess-meta{font-size:10.5px;color:#5f6c92;margin-top:2px}
-.sess-close{flex:0 0 auto;padding:6px 10px;border-radius:6px;background:#2a1622;color:#f8a0a0;border:1px solid #5a2740;font-size:11px;cursor:pointer}
+.sess-meta{font:15px/1.3 'VT323',ui-monospace,monospace;letter-spacing:.3px;color:#6d7ba4;margin-top:1px}
+.sess-close{flex:0 0 auto;padding:6px 11px;border-radius:8px;background:#2a1622;color:#f8a0a0;border:1px solid #5a2740;font:16px/1.15 'VT323',ui-monospace,monospace;letter-spacing:.4px;cursor:pointer}
 /* stale-session banner (top of app, under the header) */
 #staleBanner{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#241a12;border-bottom:1px solid #5a3f24;color:#f0c9a0;font-size:12px}
 #staleBanner #staleMsg{flex:1;min-width:0;line-height:1.4}
@@ -506,89 +571,145 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 </div>
 <div id="backdrop" class="hidden"></div>
 <aside id="settings" class="hidden">
-  <h2>POCKET DECK — SETTINGS</h2>
-  <div class="sec"><div class="lbl">Layout</div>
-    <div class="seg" id="segLayout">
-      <button data-v="flip">Flip</button>
-      <button data-v="split">Split</button>
-      <button data-v="collapse">Collapsible</button>
+  <div id="setHead">
+    <h2>POCKET DECK</h2>
+    <button id="btnCloseSettings" title="Close settings">✕</button>
+  </div>
+  <div id="setBody">
+
+  <section class="grp" data-g="layout">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▣</span><span class="grp-n">Layout &amp; panes</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec"><div class="lbl">Layout</div>
+        <div class="seg" id="segLayout">
+          <button data-v="flip">Flip</button>
+          <button data-v="split">Split</button>
+          <button data-v="collapse">Collapsible</button>
+        </div>
+        <div class="note help">Flip: one full screen at a time (<span class="gly">⇄</span> swaps). Split: office above the terminal. Collapsible: split, but the office folds to a strip.</div>
+      </div>
+      <div class="sec"><div class="lbl">Office pane size</div>
+        <input type="range" id="rngSplit" min="25" max="60" step="1">
+      </div>
+      <div class="sec">
+        <label class="togglerow">Coloured pane labels<input type="checkbox" id="chkTintLabels"></label>
+        <div class="note help">TERMINAL / CHAT / CLAUDE text in their icon's colour. Off = neutral text, coloured icons only.</div>
+      </div>
     </div>
-    <div class="note">Flip: one full screen at a time (⇄ swaps). Split: office above the terminal. Collapsible: split, but the office folds to a strip.</div>
-  </div>
-  <div class="sec"><div class="lbl">Office pane size</div>
-    <input type="range" id="rngSplit" min="25" max="60" step="1">
-  </div>
-  <div class="sec"><div class="lbl">Terminal font</div>
-    <div class="seg" id="segFont">
-      <button data-v="jetbrains">JetBrains</button>
-      <button data-v="fira">Fira Code</button>
-      <button data-v="plex">IBM Plex</button>
-      <button data-v="system">System</button>
+  </section>
+
+  <section class="grp" data-g="text">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▤</span><span class="grp-n">Text &amp; colour</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec"><div class="lbl">Terminal font</div>
+        <div class="seg" id="segFont">
+          <button data-v="jetbrains">JetBrains</button>
+          <button data-v="fira">Fira Code</button>
+          <button data-v="plex">IBM Plex</button>
+          <button data-v="system">System</button>
+        </div>
+        <div id="fontPreview" style="margin-top:9px;padding:9px 11px;border-radius:9px;background:#0b0f1e;border:1px solid #1a2138;font-size:13px;color:#9fe0c0;white-space:pre;overflow-x:auto">const ok = (a) =&gt; a !== null;  // 0O1lI</div>
+      </div>
+      <div class="sec"><div class="lbl">Terminal font size</div>
+        <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
+      </div>
+      <div class="sec"><div class="lbl">Chat text size</div>
+        <div class="rowset"><button id="chatMinus">−</button><span class="val" id="chatVal"></span><button id="chatPlus">+</button></div>
+        <div class="note help">Scales the agent chat AND the CLAUDE-pane bubbles.</div>
+      </div>
+      <div class="sec"><div class="lbl">Claude font</div>
+        <div class="seg" id="cvFontGrid"></div>
+        <div class="note help">Each option shows its own look. If two look identical, the phone lacks that font — Lora, Handwriting, Arcade, Retro and the three monos ship with the deck, so they always work.</div>
+      </div>
+      <div class="sec"><div class="lbl">Claude bubbles</div>
+        <div class="cv-swrow"><span>You</span><div class="cv-swatches" id="swMe"></div></div>
+        <div class="cv-swrow"><span>Claude</span><div class="cv-swatches" id="swAi"></div></div>
+        <div class="cv-swrow"><span>Input box</span><div class="cv-swatches" id="swBox"></div></div>
+      </div>
     </div>
-    <div id="fontPreview" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:#0b0e17;border:1px solid #232a4a;font-size:13px;color:#9fe0c0;white-space:pre;overflow-x:auto">const ok = (a) =&gt; a !== null;  // 0O1lI</div>
-  </div>
-  <div class="sec"><div class="lbl">Terminal font size</div>
-    <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
-  </div>
-  <div class="sec"><div class="lbl">Chat text size</div>
-    <div class="rowset"><button id="chatMinus">−</button><span class="val" id="chatVal"></span><button id="chatPlus">+</button></div>
-    <div class="note">Scales the agent chat AND the CLAUDE-pane bubbles.</div>
-  </div>
-  <div class="sec"><div class="lbl">Claude font</div>
-    <div class="seg" id="cvFontGrid"></div>
-    <div class="note">Each option shows its own look. If two look identical, the phone lacks that font — Lora, Handwriting, Arcade, Retro and the three monos ship with the deck, so they always work.</div>
-  </div>
-  <div class="sec"><div class="lbl">Claude bubbles</div>
-    <div class="cv-swrow"><span>You</span><div class="cv-swatches" id="swMe"></div></div>
-    <div class="cv-swrow"><span>Claude</span><div class="cv-swatches" id="swAi"></div></div>
-    <div class="cv-swrow"><span>Input box</span><div class="cv-swatches" id="swBox"></div></div>
-  </div>
-  <div class="sec">
-    <label class="togglerow">Smooth typing bar<input type="checkbox" id="chkInputBar"></label>
-    <div class="note">On = compose in a box, whole line sends at once. Off = type straight into the terminal — predictions and swipe still work (an invisible bridge streams them in live).</div>
-    <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
-    <label class="togglerow">Coloured pane labels<input type="checkbox" id="chkTintLabels"></label>
-    <div class="note">TERMINAL / CHAT / CLAUDE text in their icon's colour. Off = neutral text, coloured icons only.</div>
-    <label class="togglerow">Keep screen awake<input type="checkbox" id="chkAwake"></label>
-    <label class="togglerow">Notify when Claude asks<input type="checkbox" id="chkNotify"></label>
-    <div class="note">While the app is hidden, approval prompts become notifications with Approve / Deny buttons — they answer the terminal directly.</div>
-    <label class="togglerow">Allow auto-rotate<input type="checkbox" id="chkRotate"></label>
-    <div class="note" id="rotateNote">Off = the deck stays portrait.</div>
-  </div>
-  <div class="sec"><div class="lbl">Terminal engine</div>
-    <div class="seg" id="segEngine">
-      <button data-v="pocket">Pocket</button>
-      <button data-v="ttyd">ttyd page</button>
+  </section>
+
+  <section class="grp" data-g="input">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▥</span><span class="grp-n">Input &amp; alerts</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec">
+        <label class="togglerow">Smooth typing bar<input type="checkbox" id="chkInputBar"></label>
+        <div class="note help">On = compose in a box, whole line sends at once. Off = type straight into the terminal — predictions and swipe still work (an invisible bridge streams them in live).</div>
+        <label class="togglerow">Key bar (Esc · Tab · Ctrl …)<input type="checkbox" id="chkKeybar"></label>
+        <label class="togglerow">Keep screen awake<input type="checkbox" id="chkAwake"></label>
+        <label class="togglerow">Notify when Claude asks<input type="checkbox" id="chkNotify"></label>
+        <div class="note help">While the app is hidden, approval prompts become notifications with Approve / Deny buttons — they answer the terminal directly.</div>
+        <label class="togglerow">Allow auto-rotate<input type="checkbox" id="chkRotate"></label>
+        <div class="note" id="rotateNote">Off = the deck stays portrait.</div>
+      </div>
     </div>
-    <div class="note">Pocket is the built-in terminal (key bar, tabs, auto-reconnect). "ttyd page" embeds ttyd's own UI — fallback if Pocket misbehaves.</div>
-  </div>
-  <div class="sec"><div class="lbl">Terminal port</div>
-    <input type="number" id="numPort" min="1" max="65535">
-    <div class="note">Where ttyd listens (deck-start uses 7681). Closing a tab (tap ✕, then "end?") ENDS its session. Leaving the app or switching tabs only detaches — sessions keep running.</div>
-  </div>
-  <div class="sec"><div class="lbl">Usage % — calibrate</div>
-    <div class="note">A fresh install can't work out a weekly % on its own — that needs weeks of history. Open Claude's <b>/usage</b>, read your real percentages, and type them here; the monitor panels anchor to them straight away. Leave any field blank to skip it.</div>
-    <div class="calrow"><span>Weekly used %</span><input type="number" id="calWeek" min="0" max="100" step="1" inputmode="numeric" placeholder="e.g. 42"></div>
-    <div class="calrow"><span>Fable used %</span><input type="number" id="calFable" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
-    <div class="calrow"><span>Weekly resets in (days)</span><input type="number" id="calWeekDays" min="1" max="7" step="1" inputmode="numeric" placeholder="optional"></div>
-    <div class="calrow"><span>5-hour used %</span><input type="number" id="calFive" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
-    <div class="calrow"><span>5-hour resets in (min)</span><input type="number" id="calFiveMins" min="1" max="300" step="1" inputmode="numeric" placeholder="optional"></div>
-    <div class="rowset" style="margin-top:9px;gap:8px"><button id="btnCalSave" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Save calibration</button><button id="btnCalClear" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Clear</button></div>
-    <div class="note" id="calStatus"></div>
-    <div class="note" style="margin-top:11px">Or pull the real numbers straight from Claude — needs the usage poller running on a device (the phone does; a bare desktop doesn't).</div>
-    <div class="rowset" style="margin-top:6px"><button id="btnUsageRefresh" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">↻ Refresh real usage now</button></div>
-    <div class="note" id="usagePokeStatus"></div>
-  </div>
-  <div class="sec"><div class="lbl">Sessions<button id="sessRefresh" class="sess-refresh" title="Refresh session list"></button></div>
-    <div class="note">Each tab runs as a tmux session that keeps its Claude alive in the background. Closing the app mid-farewell can leave one running with no tab ("orphan"). Review and close them here.</div>
-    <div id="sessList"></div>
-    <div class="rowset" style="margin-top:9px"><button id="btnCloseStale" style="flex:1;width:auto;height:auto;padding:9px;font-size:13px">Close all stale</button></div>
-    <div class="note">Stale = detached and idle 12h+ (never the current tab).</div>
+  </section>
+
+  <section class="grp" data-g="usage">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">◔</span><span class="grp-n">Usage &amp; calibration</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec"><div class="lbl">Usage % — calibrate</div>
+        <div class="note help">A fresh install can't work out a weekly % on its own — that needs weeks of history. Open Claude's <b>/usage</b>, read your real percentages, and type them here; the monitor panels anchor to them straight away. Leave any field blank to skip it.</div>
+        <div class="calbox">
+          <div class="calrow"><span>Weekly used %</span><input type="number" id="calWeek" min="0" max="100" step="1" inputmode="numeric" placeholder="e.g. 42"></div>
+          <div class="calrow"><span>Fable used %</span><input type="number" id="calFable" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
+          <div class="calrow"><span>Weekly resets in (days)</span><input type="number" id="calWeekDays" min="1" max="7" step="1" inputmode="numeric" placeholder="optional"></div>
+          <div class="calrow"><span>5-hour used %</span><input type="number" id="calFive" min="0" max="100" step="1" inputmode="numeric" placeholder="optional"></div>
+          <div class="calrow"><span>5-hour resets in (min)</span><input type="number" id="calFiveMins" min="1" max="300" step="1" inputmode="numeric" placeholder="optional"></div>
+        </div>
+        <div class="btnrow"><button id="btnCalSave" class="btn">Save calibration</button><button id="btnCalClear" class="btn">Clear</button></div>
+        <div class="note" id="calStatus"></div>
+      </div>
+      <div class="sec"><div class="lbl">Real usage</div>
+        <div class="note help">Pull the real numbers straight from Claude — needs the usage poller running on a device (the phone does; a bare desktop doesn't).</div>
+        <div class="btnrow" style="margin-top:0"><button id="btnUsageRefresh" class="btn"><span class="gly">↻</span> Refresh real usage now</button></div>
+        <div class="note" id="usagePokeStatus"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grp" data-g="sess">
+    <h3 class="grp-h">
+      <button class="grp-t" type="button" aria-expanded="false"><span class="grp-ic">▦</span><span class="grp-n">Sessions &amp; connection</span><span class="grp-c">⌄</span></button>
+      <button class="grp-i" type="button" title="Explain these">?</button>
+    </h3>
+    <div class="grp-b">
+      <div class="sec"><div class="lbl">Sessions<button id="sessRefresh" class="sess-refresh" title="Refresh session list"></button></div>
+        <div class="note help">Each tab runs as a tmux session that keeps its Claude alive in the background. Closing the app mid-farewell can leave one running with no tab ("orphan"). Review and close them here.</div>
+        <div id="sessList"></div>
+        <div class="btnrow"><button id="btnCloseStale" class="btn">Close all stale</button></div>
+        <div class="note help">Stale = detached and idle 12h+ (never the current tab).</div>
+      </div>
+      <div class="sec"><div class="lbl">Terminal engine</div>
+        <div class="seg" id="segEngine">
+          <button data-v="pocket">Pocket</button>
+          <button data-v="ttyd">ttyd page</button>
+        </div>
+        <div class="note help">Pocket is the built-in terminal (key bar, tabs, auto-reconnect). "ttyd page" embeds ttyd's own UI — fallback if Pocket misbehaves.</div>
+      </div>
+      <div class="sec"><div class="lbl">Terminal port</div>
+        <input type="number" id="numPort" min="1" max="65535">
+        <div class="note help">Where ttyd listens (deck-start uses 7681). Closing a tab (tap <span class="gly">✕</span>, then "end?") ENDS its session. Leaving the app or switching tabs only detaches — sessions keep running.</div>
+      </div>
+    </div>
+  </section>
+
   </div>
   <div class="actions">
     <button id="btnReconnect">Reconnect</button>
-    <button id="btnReload" title="Reload the app (after updates)">⟳ Reload</button>
-    <button id="btnCloseSettings">Close</button>
+    <button id="btnReload" title="Reload the app (after updates)"><span class="gly">⟳</span> Reload</button>
   </div>
 </aside>
 <script src="/vendor/xterm.js"></script>
@@ -620,6 +741,7 @@ const DEFAULTS = {
   // textarea, so predictions/swipe behave natively; direct typing remains a
   // settings toggle for anyone who prefers it with predictions off.
   rev:5, inputBar:true, font:'jetbrains', chatFs:10,
+  openGrp:'layout',   // which settings group is expanded ('' = all collapsed)
   chatMax:false,   // manual CLAUDE/chat fullscreen (#pbMax): hides the top bar + office so the bottom stack gets the whole screen
   paneOrder:['term','convo','chat'],   // TERMINAL/CLAUDE/SCUTTLEBUTT button order — drag them to rearrange
   tintLabels:true,   // pane LABELS wear their identity color too (toggle in settings; off = neutral text, colored icons only)
@@ -3044,6 +3166,38 @@ document.addEventListener('fullscreenchange', function(){
   if(S.allowRotate && !document.fullscreenElement) _rotFree = false;
 });
 applyRotate();
+// ---- settings drawer: accordion + on-demand help ----
+// One group open at a time (the drawer is a phone-height column — five
+// headings beat one endless scroll). The (i) in a group's header reveals
+// that group's `.note.help` paragraphs; plain `.note` status lines are
+// always shown. The open group is remembered across reloads.
+function openGrp(id){
+  Array.prototype.forEach.call(document.querySelectorAll('#setBody .grp'), function(g){
+    const on = g.dataset.g === id;
+    g.classList.toggle('open', on);
+    if(!on) g.classList.remove('help');   // collapsing also resets its help
+    const t = g.querySelector('.grp-t');
+    if(t) t.setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+  S.openGrp = id || ''; save();
+}
+$('setBody').addEventListener('click', function(e){
+  const info = e.target.closest('.grp-i');
+  if(info){
+    const g = info.closest('.grp');
+    if(!g.classList.contains('open')) openGrp(g.dataset.g);   // (i) on a shut group opens it too
+    g.classList.toggle('help');
+    return;
+  }
+  const head = e.target.closest('.grp-t');
+  if(!head) return;
+  const g = head.closest('.grp');
+  const wasOpen = g.classList.contains('open');
+  openGrp(wasOpen ? '' : g.dataset.g);
+  if(!wasOpen) g.scrollIntoView({block:'nearest'});   // keep the header in view
+});
+openGrp(S.openGrp || '');
+
 $('gearBtn').addEventListener('click', function(){
   syncSettingsUI();
   calRefreshStatus();
