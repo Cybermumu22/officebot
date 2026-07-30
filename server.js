@@ -111,9 +111,11 @@ function saveDeckTabs() {
 // `session_id` (the session the PROCESS was launched under). A freshly
 // launched session stamps the two identically; when they DIFFER the second one
 // is the launch id — precisely the one the opener mapped. So one tail scan
-// yields the ancestor, and the ancestor yields the tab. (Verified: deck-52
-// running as 0b0e3f06 with every entry stamped 059a3760 = deck-52, against a
-// deck-56 control where both ids agreed.)
+// yields the ancestor, and the ancestor yields the tab. (Verified on a tab left
+// a day and then /clear'd: it was running under an id the opener never saw,
+// while every entry in that session's transcript was stamped with the id the
+// tab HAD been launched under — against a freshly launched control tab in the
+// same project where the two ids agreed.)
 const deckTabHealed = new Map(); // sid -> { tab, at } — tab null = scanned, no link yet
 const HEAL_RETRY_MS = 15000;     // a session that hasn't answered yet has no assistant entry to read; retry, don't give up
 const HEAL_TAIL_BYTES = 1048576; // same tail budget as resolveTranscriptInfo — tool results can be huge
