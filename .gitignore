@@ -21,6 +21,12 @@ android/*.keystore
 android/build/
 android/.gradle/
 
+# build/publish leftovers — `npm pack` drops a tarball in the repo root
+*.tgz
+
+# per-machine Claude Code permissions (CLAUDE.md itself IS committed)
+.claude/settings.local.json
+
 # scratch / editor
 *.bak
 .DS_Store
