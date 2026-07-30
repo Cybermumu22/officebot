@@ -449,6 +449,21 @@ function forgetSession(sid, entry) {
   // prompt's hooks) without its tab, invisible to every per-tab office view.
   const tp = entry && entry.lastEvent && entry.lastEvent.transcript_path;
   if (tp) transcriptCache.delete(tp);
+  // The crew's per-agent bookkeeping goes the same way, for the same reason the
+  // transcript cache does: /event is unauthenticated, so every map keyed by a
+  // session id has to die with the session or it grows without bound.
+  const pfx = sid + '|';
+  speechSent.forEach(function (v, k) { if (String(k).indexOf(pfx) === 0) speechSent.delete(k); });
+  if (tp) {
+    const tpfx = tp + '|';
+    subagentFile.forEach(function (v, k) {
+      if (String(k).indexOf(tpfx) !== 0) return;
+      if (v && v.path) subagentCache.delete(v.path);
+      subagentFile.delete(k);
+    });
+    subTokenFiles.forEach(function (v, k) { if (String(k).indexOf(tpfx) === 0) subTokenFiles.delete(k); });
+    subTokenScan.delete(tp);
+  }
 }
 
 function replaySnapshot(res) {
@@ -509,6 +524,11 @@ setInterval(function () {
   // without bound
   transcriptCache.forEach(function (v, k) {
     if (!v || now - (v.checkedAt || 0) > TRANSCRIPT_CACHE_MAX_AGE) transcriptCache.delete(k);
+  });
+  // the crew's diary cache ages out the same way — an agent's entry survives its
+  // session only if that session was never formally forgotten
+  subagentCache.forEach(function (v, k) {
+    if (!v || now - (v.checkedAt || 0) > TRANSCRIPT_CACHE_MAX_AGE) subagentCache.delete(k);
   });
 }, 5 * 60 * 1000);
 
@@ -633,6 +653,136 @@ function resolveTranscriptInfo(transcriptPath) {
   const model = foundModel !== null ? foundModel : (cached ? cached.model : null);
   const result = { model: model, text: foundText, checkedAt: now };
   transcriptCache.set(transcriptPath, result);
+  return result;
+}
+
+/* ---- the crew's own diaries: subagent transcripts (2026-07-30) ------------
+   Everything above reads the MAIN transcript, which is why the crew were mute:
+   a subagent's turns are NOT written into it (verified — zero isSidechain
+   entries in a 12MB session log), so every bubble over a working teammate was
+   a canned line from the client's own list. Claude Code writes each subagent
+   its own file instead:
+
+     <project>/<session-uuid>/subagents/agent-<agent_id>.jsonl
+
+   and it carries exactly what the SubagentStart hook leaves out: the words the
+   agent actually wrote, its model, its effort, and `attributionAgent` — the
+   agent TYPE, stated by the harness. That last one supersedes the FIFO guess
+   in cacheEvent (pair a Task call with the next agent to appear), which
+   mis-names the crew whenever the boss fans several agents out in one message.
+*/
+const SUBAGENT_TAIL_BYTES = 262144;   // 256KB — an agent's whole log is usually smaller than this
+const SUBAGENT_CACHE_TTL_MS = 1000;   // same beat as transcriptCache, so crew speech tracks the terminal
+const SUBAGENT_FILE_RETRY_MS = 5000;  // the file lands a moment after SubagentStart, so a miss is retried, never cached as final
+const subagentCache = new Map();      // file -> { text, model, effort, agentType, checkedAt, mtimeMs, size }
+const subagentFile = new Map();       // tpath|aid -> { path, at } (path null = looked, not there yet)
+
+// speechSent holds main-thread quotes under the bare session id; a subagent's
+// words are deduped per AGENT, or one talkative teammate would gag the rest.
+function speechKey(sid, aid) { return aid ? sid + '|' + aid : sid; }
+
+// Where does this agent's diary live? Derived from the PARENT session's
+// transcript path (…/<sid>.jsonl -> …/<sid>/subagents/), so it inherits the
+// /event path sandbox above and opens no new trust boundary. agent_id arrives
+// on an unauthenticated hook and lands in a filename, so it's whitelisted to
+// the id charset first — a forged "../../.." can't climb out of the directory.
+function subagentTranscriptPath(mainTpath, aid) {
+  if (!mainTpath || !aid || !/^[A-Za-z0-9_-]{1,64}$/.test(String(aid))) return null;
+  // A subagent's own hooks may point transcript_path straight at its diary
+  // instead of the parent session's log — take that as given rather than
+  // deriving a subagents/ path underneath one.
+  if (/[\\/]subagents[\\/]/.test(String(mainTpath))) return String(mainTpath);
+  const key = mainTpath + '|' + aid;
+  const prev = subagentFile.get(key);
+  if (prev && (prev.path || Date.now() - prev.at < SUBAGENT_FILE_RETRY_MS)) return prev.path;
+  const dir = path.join(String(mainTpath).replace(/\.jsonl$/, ''), 'subagents');
+  let found = null;
+  // agent-<id>.jsonl is what Claude Code writes today; the bare id, and then a
+  // scan for "filename contains the id", ride out a rename upstream.
+  const cands = [path.join(dir, 'agent-' + aid + '.jsonl'), path.join(dir, aid + '.jsonl')];
+  for (let i = 0; i < cands.length && !found; i++) {
+    try { if (fs.statSync(cands[i]).isFile()) found = cands[i]; } catch (e) { /* not this one */ }
+  }
+  if (!found) {
+    try {
+      const hit = fs.readdirSync(dir).filter(function (f) {
+        return f.endsWith('.jsonl') && f.indexOf(aid) !== -1;
+      })[0];
+      if (hit) found = path.join(dir, hit);
+    } catch (e) { /* no subagents dir — this session has never delegated */ }
+  }
+  subagentFile.delete(key); subagentFile.set(key, { path: found, at: Date.now() });
+  if (subagentFile.size > 500) subagentFile.delete(subagentFile.keys().next().value);
+  return found;
+}
+
+// Newest words + identity for one live subagent. Same shape as
+// resolveTranscriptInfo, same "keep walking back until every field is
+// answered" rule: the newest entry is often thinking- or tool_use-only and
+// carries no words at all.
+function resolveSubagentInfo(mainTpath, aid) {
+  const file = subagentTranscriptPath(mainTpath, aid);
+  if (!file) return null;
+  const now = Date.now();
+  const cached = subagentCache.get(file);
+  if (cached && (now - cached.checkedAt) < SUBAGENT_CACHE_TTL_MS) return cached;
+  let stat;
+  try { stat = fs.statSync(file); } catch (e) { return cached || null; }
+  // Nothing appended since the last look: reuse it rather than re-reading a
+  // quarter-megabyte per agent per tick. This runs for every live agent on
+  // every 2s pass and a fan-out is a dozen of them — on a phone that adds up.
+  if (cached && stat.mtimeMs === cached.mtimeMs && stat.size === cached.size) {
+    cached.checkedAt = now;
+    return cached;
+  }
+  let text = null, model = null, effort = null, agentType = null, partial = '';
+  // Read only what has been APPENDED since the last look — first sight takes the
+  // last 256KB. A working agent's diary grows every few seconds, and re-reading
+  // a quarter-megabyte per agent per tick (a fan-out is a dozen agents) is real
+  // battery on a phone. Anything the new bytes don't mention keeps its cached
+  // value below, which is the same answer a full re-read would have given.
+  const resume = cached && cached.offset != null && stat.size >= cached.offset;
+  const from = resume ? cached.offset : Math.max(0, stat.size - SUBAGENT_TAIL_BYTES);
+  try {
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(stat.size - from);
+    fs.readSync(fd, buf, 0, buf.length, from);
+    fs.closeSync(fd);
+    // A resumed read starts exactly at a line boundary carried over as
+    // `leftover`; a first read starts mid-line, and that fragment simply fails
+    // to parse below.
+    const lines = ((resume ? (cached.leftover || '') : '') + buf.toString('utf8')).split('\n');
+    partial = lines.pop() || '';   // the final line may still be mid-write
+    for (let i = lines.length - 1; i >= 0 && (text === null || model === null || agentType === null); i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let o;
+      try { o = JSON.parse(line); } catch (e) { continue; } // tail read can start mid-line
+      if (o.type !== 'assistant' || !o.message) continue;
+      if (agentType === null && o.attributionAgent) agentType = o.attributionAgent;
+      if (model === null && o.message.model) model = o.message.model;
+      if (effort === null && o.effort) effort = o.effort;
+      if (text === null && Array.isArray(o.message.content)) {
+        const t = o.message.content
+          .filter(function (b) { return b && b.type === 'text' && b.text; })
+          .map(function (b) { return b.text; });
+        if (t.length) text = t.join(' ');
+      }
+    }
+  } catch (e) { /* diary not readable yet */ }
+  // Type and model are stable for an agent's whole life, so a cached value is
+  // still true when this pass's bytes happened not to mention them. Text is the
+  // opposite: null means "nothing NEW said", which is exactly what the callers
+  // want — they only ever broadcast words they haven't broadcast before.
+  const result = {
+    text: text,
+    model: model !== null ? model : (cached ? cached.model : null),
+    effort: effort !== null ? effort : (cached ? cached.effort : null),
+    agentType: agentType !== null ? agentType : (cached ? cached.agentType : null),
+    offset: stat.size, leftover: partial,
+    checkedAt: now, mtimeMs: stat.mtimeMs, size: stat.size
+  };
+  subagentCache.set(file, result);
   return result;
 }
 
@@ -770,10 +920,53 @@ const CHAT_FIRST_READ_BYTES = 512 * 1024; // first load: last 512KB of transcrip
 // (real event or tick) sees it first. Net effect: the bubble tracks the
 // terminal within ~2-3s instead of "whenever the next tool runs".
 const SPEECH_TICK_MS = 2000;
+
+// The crew's half of the ticker, for the same reason: an agent grinding through
+// a long job writes what it's finding BETWEEN its own hooks, and every word of
+// it used to stay invisible until the agent stopped. Only agents that have
+// actually reported in are polled (entry.subagents is populated by real hooks),
+// so a tick can never conjure a teammate the office has never met.
+function sweepCrewSpeech(entry, sid, last) {
+  entry.subagents.forEach(function (subEvt, aid) {
+    if (subEvt.hook_event_name === 'SubagentStop') return;  // finished — let them leave quietly
+    // Prefer the parent session's log (subagentTranscriptPath derives the
+    // diary folder from it), and fall back to whatever the agent's own hook
+    // carried — which may already BE its diary.
+    const base = (last && last.transcript_path) || subEvt.transcript_path;
+    if (!base) return;
+    const si = resolveSubagentInfo(base, aid);
+    if (!si) return;
+    if (si.agentType && !subEvt.agent_type) {
+      subEvt.agent_type = si.agentType;                      // snapshot replays name them right too
+      entry.agentTypes.set(aid, si.agentType);
+    }
+    const skey = speechKey(sid, aid);
+    if (!si.text || speechSent.get(skey) === si.text) return;
+    speechSent.set(skey, si.text);
+    subEvt._speech = si.text;   // a page load replays their freshest words as well
+    const tick = { hook_event_name: 'SpeechTick', session_id: sid, agent_id: aid, _speech: si.text, _receivedAt: Date.now() };
+    // Carry the type: a client whose FIRST sight of this agent is a tick (page
+    // loaded mid-job, or a hook that arrived with no transcript to read) names
+    // them from it, since ensureSubagent fixes an agent's identity on creation.
+    const atype = subEvt.agent_type || entry.agentTypes.get(aid);
+    if (atype) tick.agent_type = atype;
+    const tab = (last && last.deckTab) || subEvt.deckTab;
+    if (tab) tick.deckTab = tab;
+    broadcast(tick);
+  });
+}
+
 setInterval(function () {
   sessionCache.forEach(function (entry, sid) {
     const last = entry.lastEvent;
-    if (!last || last.hook_event_name === 'SessionEnd' || !last.transcript_path) return;
+    if (last && last.hook_event_name === 'SessionEnd') return;
+    sweepCrewSpeech(entry, sid, last);
+    // The main thread's own words need the session log, which only a main-thread
+    // hook can point us at. The crew sweep above deliberately runs first and
+    // independently: a session can have delegated before any main-thread event
+    // carrying a transcript reached us, and gating the crew on the boss's log
+    // meant those agents were never polled at all.
+    if (!last || !last.transcript_path) return;
     const info = resolveTranscriptInfo(last.transcript_path);
     // Model changed in the transcript (e.g. /model at the terminal — no hook
     // fires for that): announce it right away so the client plays the persona
@@ -859,6 +1052,30 @@ function ingestUsageLine(line) {
   }
 }
 
+// One transcript's newly-appended bytes, folded into the usage tally. Split out
+// of refreshUsage so the crew's diaries — a directory deeper — go through the
+// identical offset bookkeeping instead of a second copy of it.
+function ingestUsageFile(p, now) {
+  let st;
+  try { st = fs.statSync(p); } catch (e) { return; }
+  if (st.mtimeMs < now - USAGE_WEEK_MS) { usageFiles.delete(p); return; }
+  let state = usageFiles.get(p);
+  if (!state) { state = { offset: 0, leftover: '' }; usageFiles.set(p, state); }
+  if (st.size < state.offset) { state.offset = 0; state.leftover = ''; } // file replaced/truncated
+  if (st.size === state.offset) return;
+  try {
+    const fd = fs.openSync(p, 'r');
+    const buf = Buffer.alloc(st.size - state.offset);
+    fs.readSync(fd, buf, 0, buf.length, state.offset);
+    fs.closeSync(fd);
+    state.offset = st.size;
+    const chunk = state.leftover + buf.toString('utf8');
+    const lines = chunk.split('\n');
+    state.leftover = lines.pop(); // last piece may be a partial line still being written
+    lines.forEach(ingestUsageLine);
+  } catch (e) { /* transient read error — retry next refresh */ }
+}
+
 function refreshUsage() {
   const now = Date.now();
   if (now - usageLastRefresh < USAGE_REFRESH_MS) return;
@@ -870,26 +1087,20 @@ function refreshUsage() {
     let names;
     try { names = fs.readdirSync(dir); } catch (e) { return; }
     names.forEach(function (f) {
-      if (!f.endsWith('.jsonl')) return;
-      const p = path.join(dir, f);
-      let st;
-      try { st = fs.statSync(p); } catch (e) { return; }
-      if (st.mtimeMs < now - USAGE_WEEK_MS) { usageFiles.delete(p); return; }
-      let state = usageFiles.get(p);
-      if (!state) { state = { offset: 0, leftover: '' }; usageFiles.set(p, state); }
-      if (st.size < state.offset) { state.offset = 0; state.leftover = ''; } // file replaced/truncated
-      if (st.size === state.offset) return;
-      try {
-        const fd = fs.openSync(p, 'r');
-        const buf = Buffer.alloc(st.size - state.offset);
-        fs.readSync(fd, buf, 0, buf.length, state.offset);
-        fs.closeSync(fd);
-        state.offset = st.size;
-        const chunk = state.leftover + buf.toString('utf8');
-        const lines = chunk.split('\n');
-        state.leftover = lines.pop(); // last piece may be a partial line still being written
-        lines.forEach(ingestUsageLine);
-      } catch (e) { /* transient read error — retry next refresh */ }
+      if (f.endsWith('.jsonl')) { ingestUsageFile(path.join(dir, f), now); return; }
+      // Everything else here is a <session-uuid>/ folder, and a session that
+      // delegated keeps one diary per agent inside its subagents/ folder. Those
+      // tokens are billed exactly like the main thread's, and this sweep — so
+      // every meter downstream of it — never opened them: measured at ~24% of
+      // all recorded spend on this phone (2026-07-30). The readdir doubles as
+      // the "is this a directory that has any" test, so a stray file or a
+      // session that never delegated costs one failed call and nothing else.
+      const subDir = path.join(dir, f, 'subagents');
+      let subs;
+      try { subs = fs.readdirSync(subDir); } catch (e) { return; }
+      subs.forEach(function (sf) {
+        if (sf.endsWith('.jsonl')) ingestUsageFile(path.join(subDir, sf), now);
+      });
     });
   });
   // prune the rolling window (filter, not shift — events arrive per-file and
@@ -1007,6 +1218,60 @@ function allTimeTotal() {
 // and messages append, we catch each one while it's still in the tail.
 const sessionTokens = new Map();  // session_id -> cumulative tokens
 const sessionSeenMsg = new Map(); // session_id -> Set(message id)
+
+// Delegated work is charged like everything else, but the crew's tokens are
+// written to their own diaries (see resolveSubagentInfo) — which this counter
+// never opened. So a fan-out, the single most expensive thing a session does,
+// barely moved the live readout. These files are append-only, so they're read
+// incrementally by byte offset: only bytes that are new since the last pass are
+// ever parsed, which is much cheaper than the main thread's tail re-read.
+const subTokenFiles = new Map();  // "<main transcript>|<diary path>" -> { offset, leftover }
+const subTokenScan = new Map();   // main transcript -> when its subagents/ dir was last listed
+const SUB_TOKEN_SCAN_MS = 3000;   // events burst many times a second; the crew's spend can lag 3s
+function addSubagentTokens(transcriptPath, seen) {
+  const lastScan = subTokenScan.get(transcriptPath) || 0;
+  if (Date.now() - lastScan < SUB_TOKEN_SCAN_MS) return 0;
+  subTokenScan.set(transcriptPath, Date.now());
+  const dir = path.join(String(transcriptPath).replace(/\.jsonl$/, ''), 'subagents');
+  let names;
+  try { names = fs.readdirSync(dir); } catch (e) { return 0; } // this session has never delegated
+  let extra = 0;
+  names.forEach(function (f) {
+    if (!f.endsWith('.jsonl')) return;
+    const p = path.join(dir, f);
+    let st;
+    try { st = fs.statSync(p); } catch (e) { return; }
+    const key = transcriptPath + '|' + p;   // prefix keyed by transcript so forgetSession can sweep it
+    let state = subTokenFiles.get(key);
+    if (!state) { state = { offset: 0, leftover: '' }; subTokenFiles.set(key, state); }
+    if (st.size < state.offset) { state.offset = 0; state.leftover = ''; } // file replaced/truncated
+    if (st.size === state.offset) return;                                  // nothing appended
+    try {
+      const fd = fs.openSync(p, 'r');
+      const buf = Buffer.alloc(st.size - state.offset);
+      fs.readSync(fd, buf, 0, buf.length, state.offset);
+      fs.closeSync(fd);
+      state.offset = st.size;
+      const chunk = state.leftover + buf.toString('utf8');
+      const lines = chunk.split('\n');
+      state.leftover = lines.pop();  // the last piece may still be mid-write
+      lines.forEach(function (line) {
+        if (!line.trim()) return;
+        let o;
+        try { o = JSON.parse(line); } catch (e) { return; }
+        if (o.type !== 'assistant' || !o.message || !o.message.usage) return;
+        // Shares the session's seen-ids set with the main thread. Diary message
+        // ids are distinct from it, so nothing is double-counted either way.
+        const id = o.message.id || o.requestId;
+        if (id) { if (seen.has(id)) return; seen.add(id); }
+        const u = o.message.usage;
+        extra += (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      });
+    } catch (e) { /* transient read error — the next pass picks it up */ }
+  });
+  return extra;
+}
+
 function updateSessionTokens(transcriptPath, sessionId) {
   if (!sessionId || !transcriptPath) return sessionTokens.get(sessionId) || 0;
   try {
@@ -1032,6 +1297,7 @@ function updateSessionTokens(transcriptPath, sessionId) {
         total += (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_input_tokens || 0);
       }
     }
+    total += addSubagentTokens(transcriptPath, seen); // the crew's spend counts too
     sessionTokens.set(sessionId, total);
     return total;
   } catch (e) { return sessionTokens.get(sessionId) || 0; }
@@ -1449,6 +1715,24 @@ const server = http.createServer(function (req, res) {
         }
         // per-session running token total for the live "working" counter
         evt._sessionTokens = updateSessionTokens(evt.transcript_path, evt.session_id);
+      } else if (evt.agent_id && evt.transcript_path) {
+        // A subagent's hook: read the agent's OWN diary for the words it just
+        // wrote and the type the harness assigned it. The type is set even when
+        // the event already claims one — cacheEvent's FIFO fallback is a guess
+        // that only fills in when this finds nothing, so a fan-out stops
+        // handing the wrong codename to the wrong teammate.
+        // Model is deliberately NOT stamped: maybeSetModel would swap the
+        // crew's profession face for a per-model one, and their profession is
+        // who they are on the floor.
+        const si = resolveSubagentInfo(evt.transcript_path, evt.agent_id);
+        if (si) {
+          if (si.agentType) evt.agent_type = si.agentType;
+          const skey = speechKey(evt.session_id, evt.agent_id);
+          if (si.text && speechSent.get(skey) !== si.text) {
+            evt._speech = si.text;
+            speechSent.set(skey, si.text);
+          }
+        }
       }
       cacheEvent(evt);
       broadcast(evt);
