@@ -667,8 +667,12 @@ rebuild needed.
 
 `~/.claude/settings.json` has an `agent-viz` block of `hooks` (SessionStart,
 UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, SubagentStart,
-SubagentStop, Stop, SessionEnd) — each an `http` hook, `async: true`, posting
-to `http://localhost:4317/event`. If the server isn't running, these hooks
+SubagentStop, Stop, SessionEnd, Notification, PreCompact, PostCompact) — each an
+`http` hook, `async: true`, posting
+to `http://localhost:4317/event`. The compaction pair is what keeps the office
+honest while Claude compresses the conversation: no tool hooks fire for up to a
+minute, so without them the floor sits inert through a minute of real work (see
+"Compaction" in public/index.html). If the server isn't running, these hooks
 just fail silently (connection refused) and Claude Code carries on normally —
 nothing about your actual sessions depends on this dashboard being open.
 

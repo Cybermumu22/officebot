@@ -895,13 +895,19 @@ function chatStatusFromEvent(evt) {
     const tool = evt.tool_name || 'a tool';
     const ti = evt.tool_input || {};
     if (tool === 'Read') working = 'reading ' + (base(ti.file_path) || 'a file');
-    else if (tool === 'Edit' || tool === 'Write' || tool === 'NotebookEdit') working = 'editing ' + (base(ti.file_path) || 'a file');
+    else if (tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit' || tool === 'NotebookEdit') working = 'editing ' + (base(ti.file_path || ti.notebook_path) || 'a file');
+    else if (tool === 'TodoWrite' || /^Task(Create|Update|List|Get)$/.test(tool)) working = 'working the task list…';
     else if (tool === 'Bash' || tool === 'PowerShell') working = ti.description || 'running a command';
     else if (tool === 'Grep' || tool === 'Glob') working = 'searching the code…';
     else if (tool === 'Task' || tool === 'Agent') working = 'delegating to ' + (ti.subagent_type || 'an agent');
     else if (tool === 'WebFetch' || tool === 'WebSearch') working = 'browsing…';
     else working = 'using ' + tool;
   } else if (name === 'SubagentStart' || name === 'SubagentStop') working = 'coordinating agents…';
+  // Compaction fires no tool hooks for up to a minute, so without this the
+  // ticker reads a flat 'idle' through the whole thing — the same bug the
+  // office's own compaction staging fixes, one pane over.
+  else if (name === 'PreCompact') working = 'compacting the conversation…';
+  else if (name === 'PostCompact') working = 'picking up where it left off…';
   if (working) {
     // a "working" older than 5 min means we missed the Stop — don't spin forever
     if (at && Date.now() - at > 5 * 60 * 1000) return { state: 'idle', activity: null, at: at };

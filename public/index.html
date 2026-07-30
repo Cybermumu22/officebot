@@ -899,7 +899,11 @@ const _endedSessions = {};   // sid -> true | 'quiet': tombstone so a killed ses
 // ModelTick are deliberately absent: the server keeps emitting those from a
 // dead session's leftover transcript, so they prove nothing.
 const REAL_WORK_HOOKS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse',
-  'PostToolUseFailure', 'SubagentStart', 'SubagentStop', 'Stop'];
+  'PostToolUseFailure', 'SubagentStart', 'SubagentStop', 'Stop',
+  // Compaction is the session working hard with nothing to show for it — no
+  // tool hooks fire for up to a minute — so it counts as proof of life, or the
+  // ghost-buster clocks out an office that is very much alive.
+  'PreCompact', 'PostCompact'];
 // Sessions we've already played the arrival ceremony for — PERSISTED in
 // sessionStorage so an office reload (the deck auto-refreshes when you return
 // to the app) staffs the office instantly instead of re-running "coming to
@@ -1261,11 +1265,20 @@ function cleanSpeechFull(text){
   return t ? truncate(t, 4000) : null;
 }
 
+// Anything not named here falls through to the Terminal, which is right for a
+// tool we've never heard of and wrong for one we simply forgot: MultiEdit and
+// NotebookEdit are file edits (Archives), and the task-list tools are planning
+// work (Planning). All of them are real tool names in Claude Code 2.1.220 —
+// they were being filed in the server room. Both task-list generations are
+// listed: TodoWrite is the older name, Task* the current family.
 function zoneForTool(name){
   if(name === 'Bash') return 'terminal';
-  if(name === 'Read' || name === 'Write' || name === 'Edit') return 'archives';
+  if(name === 'Read' || name === 'Write' || name === 'Edit'
+     || name === 'MultiEdit' || name === 'NotebookEdit') return 'archives';
   if(name === 'Grep' || name === 'Glob' || name === 'WebFetch' || name === 'WebSearch') return 'research';
   if(name === 'Agent' || name === 'Task') return 'warroom';
+  if(name === 'TodoWrite' || name === 'TaskCreate' || name === 'TaskUpdate'
+     || name === 'TaskList' || name === 'TaskGet') return 'warroom';
   return 'terminal';
 }
 function doingText(name, input){
@@ -1274,7 +1287,11 @@ function doingText(name, input){
   if(name === 'Bash') return 'Running: ' + truncate(input.command || '', 40);
   if(name === 'Read') return 'Reading ' + basename(input.file_path);
   if(name === 'Write') return 'Writing ' + basename(input.file_path);
-  if(name === 'Edit') return 'Editing ' + basename(input.file_path);
+  if(name === 'Edit' || name === 'MultiEdit') return 'Editing ' + basename(input.file_path);
+  if(name === 'NotebookEdit') return 'Editing ' + basename(input.notebook_path || input.file_path);
+  if(name === 'TodoWrite' || name === 'TaskCreate') return 'Writing up the task list.';
+  if(name === 'TaskUpdate') return 'Ticking off the task list.';
+  if(name === 'TaskList' || name === 'TaskGet') return 'Checking the task list.';
   if(name === 'Grep') return 'Searching for ‘' + truncate(input.pattern || '', 28) + '’';
   if(name === 'Glob') return 'Looking for ‘' + truncate(input.pattern || '', 28) + '’ files';
   if(name === 'WebFetch') return 'Fetching ' + truncate(input.url || '', 34);
@@ -1405,6 +1422,10 @@ function ensureSession(sid, evt){
       lastDelegation: null, lastDelegationAt: 0, pendingAgentTypes: [],
       courier: null, courierTimers: [],
       model: null, departing: null, departTimers: [],
+      // compaction gets its OWN timer rail: departTimers is cleared by both
+      // ceremonies (playOpening / playClosing), which would silently drop the
+      // recovery timeout that guarantees Tally comes back from Archives.
+      compacting: false, compactTimers: [],
     };
     sessions.set(sid, s);
   }
@@ -1447,9 +1468,14 @@ function ensureSubagent(s, aid, evt){
     }
     var tookUnknownJob = false;
     if(!effType){
-      // A truly type-less agent (harness-spawned — the conversation
-      // summarizer/compaction worker and similar internal housekeeping, with
-      // no Task call to learn from). Don't invent a stranger: hand the job
+      // An agent whose type we don't know YET. This used to blame compaction,
+      // which is wrong twice over: compaction is main-thread work that spawns
+      // no agent at all (it announces itself through PreCompact — see the
+      // Compaction section), and every subagent diary on this phone states a
+      // real agent type. What actually happens is a race: SubagentStart carries
+      // no type, the diary that states one lands a beat later, and the client's
+      // pending-type queue is empty if the page loaded mid-fan-out or the Task
+      // call's PreToolUse was missed. Don't invent a stranger: hand the job
       // to the crew member whose PROFESSION fits closest. These internal
       // jobs are generalist read-condense-tidy work, so: the wildcard first
       // (unknown jobs are literally Ace's job description), the general-
@@ -1545,6 +1571,131 @@ function maybeSetModel(entity, evt){
 function clearDepartTimers(s){
   (s.departTimers || []).forEach(clearTimeout);
   s.departTimers = [];
+}
+
+/* ---- Compaction: the shelves get cleared (2026-07-30) ---------------------
+   When a conversation outgrows the context window Claude Code compacts it,
+   compressing the history to make room. It can run the better part of a
+   minute and NO tool hooks fire while it does, so the floor used to sit inert
+   through the whole thing — the exact "officebot lost my session" look the
+   ghost-buster and the desk timer exist to prevent.
+
+   It is MAIN-THREAD work, not a delegated agent: no compaction artifact
+   appears in any transcript on this phone, and every subagent diary states a
+   real agent type, so the old comment on the type-less-agent fallback (which
+   blamed compaction) was wrong. Nobody new walks in for this. Tally owns it —
+   he keeps the books and the wall meter, and this is filing work — while the
+   boss stays at his own desk (bbcfa5e) and ARCHIVES glows with nobody
+   standing in it.
+*/
+// Inside the Archives mat (ZONES.archives is its CENTRE, mat 28x24), sat
+// off-centre so Tally doesn't stand exactly where a working token does.
+const COMPACT_DESK = { left:'66%', top:'38%' };
+// Hard recovery. /compact mints a NEW session id (the same thing healDeckTab
+// exists to repair), so this office may NEVER receive its own PostCompact.
+const COMPACT_MAX_MS = 120000;
+const TALLY_COMPACT_AUTO = [
+  "We're out of shelf space, boss. I'm filing the old pages.",
+  "Ledger's full — boxing up the early chapters.",
+  "Archiving the back half. You won't miss it.",
+];
+const TALLY_COMPACT_MANUAL = [
+  "Filing day. Boss's orders.",
+  "You asked — clearing the shelves.",
+];
+const TALLY_COMPACT_BACK = [
+  "Books balanced. Room to think again.",
+  "Filed. The shelves are breathing.",
+  "Done — the early pages are in storage.",
+];
+const CREW_COMPACT = [
+  "Wait — which four hundred files am I about to forget?",
+  "Keep the good bits, Tally.",
+  "Box the notes I need and we're going to have words.",
+];
+function clearCompactTimers(s){
+  (s.compactTimers || []).forEach(clearTimeout);
+  s.compactTimers = [];
+}
+// replay = snapshot playback (page loaded mid-compaction): place Tally with no
+// walk and no fresh ceremony chatter, exactly as the arrival does for _replay.
+function playCompaction(sid, evt, replay){
+  const s = sessions.get(sid);
+  if(!s || s.compacting) return;   // PreCompact can repeat; the first one owns the floor
+  s.compacting = true;
+  clearCompactTimers(s);
+  const o = officeEls.get(sid);
+  const manual = String((evt && evt.trigger) || '').toLowerCase() === 'manual';
+  s.status = 'thinking'; s.zone = 'office'; s.workZone = 'archives';
+  s.bubble = manual ? 'Filing day. Hold that thought.' : "Context is full — Tally's filing the old pages.";
+  s.speechBubble = false;
+  if(!replay){
+    chatLog(displayName(s), s.bubble, 'status');
+    logMoment('🗄 ' + displayName(s) + ' is compacting the conversation — Tally is filing (' + s.cwd + ')');
+  }
+  // The arrival ceremony owns the floor while it runs, and a departing/absent
+  // Tally has no business walking to Archives.
+  const staff = o && !s.arriving && !s.closing && !s.tallyGone ? o.root.querySelector('.staff') : null;
+  if(staff){
+    if(!replay) sayStaffLine(o, pick(manual ? TALLY_COMPACT_MANUAL : TALLY_COMPACT_AUTO));
+    staff.style.transition = replay ? 'none'
+      : 'left ' + _pacedDur(1.2) + ' ease, top ' + _pacedDur(1.2) + ' ease';
+    staff.style.left = COMPACT_DESK.left; staff.style.top = COMPACT_DESK.top;
+    if(!replay){
+      s.compactTimers.push(setTimeout(function(){
+        const o2 = officeEls.get(sid);
+        if(!o2 || !s.compacting) return;
+        const t = _pickTeaser(o2, null);
+        if(t) sayBanter(t, pick(CREW_COMPACT));
+      }, _paced(2000)));
+    }
+  }
+  // Always arm the recovery — see COMPACT_MAX_MS. On replay the event may
+  // already be minutes old, so serve out what's left of the window, not a
+  // fresh one.
+  const age = Math.max(0, Date.now() - (evt && evt._receivedAt || Date.now()));
+  s.compactTimers.push(setTimeout(function(){ endCompaction(sid, 'timeout'); },
+    Math.max(5000, COMPACT_MAX_MS - age)));
+  render();
+}
+function endCompaction(sid, reason){
+  const s = sessions.get(sid);
+  if(!s || !s.compacting) return;
+  s.compacting = false;
+  clearCompactTimers(s);
+  const o = officeEls.get(sid);
+  const staff = o && !s.closing && !s.tallyGone ? o.root.querySelector('.staff') : null;
+  if(staff){
+    staff.style.transition = 'left ' + _pacedDur(1.2) + ' ease, top ' + _pacedDur(1.2) + ' ease';
+    staff.style.left = TALLY_HOME.left; staff.style.top = TALLY_HOME.top;
+  }
+  s.workZone = null;
+  if(s.status === 'thinking') s.status = 'calm';
+  // A timeout means we never heard it finish (new session id, or a crash) —
+  // walk Tally back and say nothing rather than narrate a completion we can't
+  // vouch for. Same honesty rule as the 'quiet' ghost-buster tombstone.
+  if(reason === 'timeout'){
+    if(s.bubble && !s.speechBubble) s.bubble = null;
+  } else {
+    if(staff) sayStaffLine(o, pick(TALLY_COMPACT_BACK));
+    s.bubble = 'Fresh page. Where were we.';
+    s.speechBubble = false;
+    chatLog(displayName(s), s.bubble, 'status');
+    logMoment('🗄 Context filed — ' + displayName(s) + ' picked up where it left off (' + s.cwd + ')');
+    _fxFor(sid, null, 'check');
+    armBubbleFade(s, 12000);
+  }
+  render();
+}
+// Any real work in the same TAB proves a compaction is over, whichever session
+// id the work arrives under — which matters because /compact mints a new one,
+// so the office that started compacting often never sees its own PostCompact.
+function endCompactionForTab(sid, tab){
+  endCompaction(sid, 'work');
+  if(!tab) return;
+  sessions.forEach(function(os, oid){
+    if(oid !== sid && os.compacting && os.deckTab === tab) endCompaction(oid, 'work');
+  });
 }
 // The old persona walks out (grayscale) while the new model takes the chair.
 // Three flavours: HOLIDAY (its weekly/fable meter is actually exhausted),
@@ -1804,6 +1955,10 @@ function handleEvent(evt){
   // cancels an in-progress close and brings the office back — actual activity
   // means the session is alive, so the boss must not be walking out.
   if(isRealWork) reopenOffice(sid);
+  // …and it also proves any compaction in this TAB has finished, whichever
+  // session id the work arrives under (see endCompactionForTab). PreCompact is
+  // excluded for the obvious reason: it is what starts one.
+  if(isRealWork && name !== 'PreCompact') endCompactionForTab(sid, s.deckTab);
   // Real work started while the crew were still strolling in? Rush them.
   if(s.arriving && (name === 'UserPromptSubmit' || name === 'PreToolUse' || name === 'SubagentStart')) _rushOpening(sid);
 
@@ -2110,8 +2265,14 @@ function handleEvent(evt){
       // deck's own prompt card owns the genuine "Claude is asking" UI; the
       // office viewer stays quiet.
       break;
+    case 'PreCompact':
+      playCompaction(sid, evt, !!evt._replay);
+      break;
+    case 'PostCompact':
+      endCompaction(sid, 'post');
+      break;
     default:
-      // Any other unhandled hook (PreCompact, SessionResume, …) is not speech
+      // Any other unhandled hook (SessionResume, TeammateIdle, …) is not speech
       // either — never paint the raw hook name into a bubble over the avatar.
       break;
   }
@@ -2121,7 +2282,11 @@ function handleEvent(evt){
   // REAL SPEECH (the closing words of an answer) lingers much longer than
   // status chatter — 12s meant the user flipped to the office and found the
   // boss "not answering"; the full text always lives in DIALOGUE regardless.
-  if(name !== 'SessionEnd' && name !== 'ModelTick')
+  // PreCompact is exempt: compaction runs up to a minute with no further
+  // events, so a 12s fade would blank the ceremony line mid-filing and rebuild
+  // the very "office looks idle" bug this staging exists to fix. endCompaction
+  // arms its own fade when the work is done.
+  if(name !== 'SessionEnd' && name !== 'ModelTick' && name !== 'PreCompact')
     armBubbleFade(target, target.speechBubble ? 60000 : 12000);
   render();
 }
@@ -3793,6 +3958,7 @@ function playOpening(sid){
   if(!s) return;
   _markWelcomed(sid);   // so a later office reload doesn't replay this arrival
   clearDepartTimers(s);
+  clearCompactTimers(s); s.compacting = false;   // a fresh arrival outranks a stale filing job
   if(s.removeTimer){ clearTimeout(s.removeTimer); s.removeTimer = null; }
   if(s.deskTimer){ clearTimeout(s.deskTimer); s.deskTimer = null; }
   s.closing = false; s.arriving = true; s.leaving = false;
@@ -3965,6 +4131,7 @@ function playClosing(sid, mode){
   mode = mode || 'home';   // 'break' when just gone quiet, 'home'/'holiday' at a real close
   s.closing = true; s.arriving = false; s.crewSay = {};
   clearDepartTimers(s);            // cancel an arrival still trickling in
+  clearCompactTimers(s); s.compacting = false;   // …and any filing job: the exodus owns the floor now
   s.crewArriver = null; s.leaving = false;
   const o = officeEls.get(sid);
   // Silence the boss's lingering work/ack bubble on the ENTITY too — clearing
@@ -4227,7 +4394,9 @@ function runChatTick(){
     // no idle chit-chat while the office is opening or shutting down — the
     // ceremony owns the floor, so only the arriving/departing agent speaks
     var _cs = sessions.get(sid);
-    if(_cs && (_cs.closing || _cs.arriving)) return;
+    // …and none during compaction either: Tally is standing in Archives, so a
+    // deadpan from his desk would come from a chair he isn't in.
+    if(_cs && (_cs.closing || _cs.arriving || _cs.compacting)) return;
     // cast of available speakers first — every branch below uses it
     const cast = {};
     let visitor = null;

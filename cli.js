@@ -20,6 +20,10 @@ const HOOK_EVENTS = [
   'SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse',
   'PostToolUseFailure', 'SubagentStart', 'SubagentStop', 'Stop', 'SessionEnd',
   'Notification',   // "Claude needs your permission…" — drives CONVO's waiting state
+  // Compaction: no tool hooks fire while Claude compresses the conversation, so
+  // without these the office (and the CONVO ticker) sit idle through a minute of
+  // real work. Matcher "" catches both the auto and the manual trigger.
+  'PreCompact', 'PostCompact',
 ];
 
 // ---- tiny arg parser ----
