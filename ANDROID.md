@@ -137,8 +137,9 @@ sends over the same wire the terminal uses.
     Claude opens it exactly like a file dragged onto the terminal. Thumbnails
     appear as removable chips until you send.
   - Controls grey out when the terminal is disconnected.
-- A SHELL tab shows "No Claude session on this tab yet" — the composer still
-  types into the shell.
+- A SHELL tab shows "No Claude session on this tab yet" — expected when the tab
+  has no `claude` running in it; the composer still types into the shell. (If the
+  tab *is* running Claude and you see this, see Troubleshooting.)
 - In the ttyd engine mode the CLAUDE pane is read-only (no send, no dialog buttons).
 - Re-run `termux-setup.sh` once after updating — it wires the new
   `Notification` hook so the ticker can say "⏳ Claude is waiting for you".
@@ -210,9 +211,27 @@ terminal server is back; tap the pill to retry immediately.
 **Sessions die when the screen is off** — battery settings (step 6). The
 Termux notification must stay visible; `deck-start` also takes a wake lock.
 
+**The office says `STANDBY - waiting for a session` while the terminal is clearly
+working** (and the CLAUDE pane says "No Claude session on this tab yet") — the tab
+is running a session officebot has not tied to it yet. Since 1.1.2 it re-learns
+the tab by itself, within a couple of hook events: type anything in that tab and
+it should come back. Two known ways in, both handled: a session id minted inside a
+tab that never relaunched (`/clear`, `/compact`, a forked `--resume`), and a
+`claude` that started while officebot was down. If it persists past a few events,
+restart the server (`deck-stop && deck-start`) — your tmux sessions survive — and
+if it still sticks, that is a bug worth reporting with `~/.deck/officebot.log`.
+
 **Update Pocket Deck** — `git -C ~/officebot pull` (or re-run the setup
 script), then pull-to-refresh the deck page.
-**Update Claude Code** — `npm install -g @anthropic-ai/claude-code`.
+
+**Update Claude Code — nothing to do; just run `claude`.** The launcher that
+`termux-setup.sh` installs checks for a new version once a day, downloads the
+official `linux-arm64` build, verifies its checksum, patches it to run under
+Termux's glibc, and smoke-tests it before switching over — keeping the previous
+version for rollback and blocklisting any release that crashes under Android's
+seccomp filter. **Do not** run `npm install -g @anthropic-ai/claude-code` on
+Android: it overwrites that launcher with an unpatched binary and leaves you with
+a `claude` that will not start.
 
 ## How it fits together
 
