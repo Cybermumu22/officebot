@@ -357,12 +357,14 @@ cartoon of it.
 
 ## How it works
 
-Claude Code can fire **hooks** on session and tool events. `setup` points nine
-of them (`SessionStart`, `PreToolUse`, `SubagentStop`, `SessionEnd` and friends)
-at a small local server — `server.js`, plain Node, no dependencies. That server
-remembers the last event per session, streams everything to the browser over
-Server-Sent Events, and reads your transcripts for the live model, token counts
-and what Claude just said.
+Claude Code can fire **hooks** on session and tool events. `setup` points twelve
+of them (`SessionStart`, `PreToolUse`, `SubagentStop`, `PreCompact`,
+`SessionEnd` and friends) at a small local server — `server.js`, plain Node, no
+dependencies. That server remembers the last event per session, streams
+everything to the browser over Server-Sent Events, and reads your transcripts
+for the live model, token counts and what Claude just said — including each
+subagent's own transcript, so the crew report their real findings and their
+delegated tokens are counted rather than quietly missed.
 
 The page itself is HTML, CSS, SVG and one script. No framework, no build step,
 no bundler. Every character is hand-drawn as inline SVG rectangles.
