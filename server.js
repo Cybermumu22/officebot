@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const net = require('net');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 // ttyd (the terminal backend) listens here on loopback; officebot proxies the
 // terminal WebSocket to it (see the server 'upgrade' handler). Overridable for
 // testing.
@@ -90,6 +90,128 @@ function saveDeckTabs() {
     const o = {}; sessionDeckTab.forEach(function (v, k) { o[k] = v; });
     try { fs.writeFileSync(DECK_TAB_FILE, JSON.stringify(o)); } catch (e) { }
   }, 500);
+}
+
+// ---- orphaned-tab recovery ------------------------------------------------
+// The mapping above is written ONLY by the `claude` wrapper's opener, which
+// fires once per launch and pins the session id it passes as --session-id. But
+// a tab can mint a NEW session id WITHOUT relaunching — /clear, /compact, or a
+// forked resume all do — and that id reaches us through Claude's own hooks,
+// which carry no deckTab. The tab then owns a session nobody can find: its
+// office sits on STANDBY while the terminal works, and its CONVO pane reads
+// "No Claude session on this tab yet" (chatSessionForTab matches on deckTab
+// too, which is why one cause produces both symptoms). Worse, the untagged
+// session is adoptable by ANY other tab's view (_sessionShown rule 5), so the
+// work shows up in the wrong tab, and closing that tab doesn't hand it back —
+// the real tab is pinned to STANDBY by rule 4 for as long as the server says
+// it owns nothing. Confirmed on the Pocket Deck after a day idle, 2026-07-30.
+//
+// Recover the tab from the transcript itself. Every assistant entry carries
+// BOTH ids: `sessionId` (the CURRENT session — what the hooks report) and
+// `session_id` (the session the PROCESS was launched under). A freshly
+// launched session stamps the two identically; when they DIFFER the second one
+// is the launch id — precisely the one the opener mapped. So one tail scan
+// yields the ancestor, and the ancestor yields the tab. (Verified: deck-52
+// running as 0b0e3f06 with every entry stamped 059a3760 = deck-52, against a
+// deck-56 control where both ids agreed.)
+const deckTabHealed = new Map(); // sid -> { tab, at } — tab null = scanned, no link yet
+const HEAL_RETRY_MS = 15000;     // a session that hasn't answered yet has no assistant entry to read; retry, don't give up
+const HEAL_TAIL_BYTES = 1048576; // same tail budget as resolveTranscriptInfo — tool results can be huge
+
+// Ask the OS which deck tab each RUNNING claude was launched in, keyed by the
+// session id it was launched under. Two facts about a live claude process make
+// this exact rather than a guess: the wrapper passes `--session-id <uuid>` on
+// the command line, and because the process was started inside a tmux pane its
+// environment carries TMUX_PANE. Pane -> tmux session name is the deck tab.
+//
+// This is what makes the recovery below independent of our own bookkeeping: it
+// keeps working when deck-tabs.json never learned the session (officebot was
+// down or restarted at launch time) or has since evicted it. Throttled and
+// cached — it only runs when an untagged session actually needs a home.
+const LAUNCH_SCAN_TTL_MS = 10000;
+let _launchScan = { at: 0, map: new Map() };
+function tabsByLaunchSid() {
+  if (Date.now() - _launchScan.at < LAUNCH_SCAN_TTL_MS) return _launchScan.map;
+  const map = new Map();
+  try {
+    // pane id (%63) -> tmux session name (deck-52)
+    const panes = new Map();
+    execFileSync('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{session_name}'],
+      { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] })
+      .split('\n').forEach(function (l) {
+        const sp = l.indexOf(' ');
+        if (sp > 0) panes.set(l.slice(0, sp), l.slice(sp + 1).trim());
+      });
+    fs.readdirSync('/proc').forEach(function (pid) {
+      if (!/^\d+$/.test(pid)) return;
+      let argv;
+      try { argv = fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8'); } catch (e) { return; }
+      if (argv.indexOf('--session-id') === -1) return;
+      const parts = argv.split('\0');
+      const i = parts.indexOf('--session-id');
+      const launchSid = i !== -1 ? parts[i + 1] : null;
+      if (!launchSid) return;
+      let env;
+      try { env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8'); } catch (e) { return; }
+      const m = env.match(/(?:^|\0)TMUX_PANE=([^\0]+)/);
+      const tab = m && panes.get(m[1]);
+      if (tab) map.set(launchSid, tab);
+    });
+  } catch (e) { /* no tmux, or /proc unreadable — recovery just falls through */ }
+  _launchScan = { at: Date.now(), map: map };
+  return map;
+}
+
+// The session id the PROCESS was launched under, read out of the transcript of
+// a session that was born later inside it. Returns null for a normally launched
+// session (both ids agree) — the healthy case, and not something to recover.
+function ancestorSid(sid, tpath) {
+  // A session's transcript is always named after the session — including the
+  // one a /clear mints, which is exactly why the file and the launch id inside
+  // it disagree. Requiring the match keeps us reading only this session's own
+  // history, and means /event (unauthenticated by design, loopback-bound)
+  // can't be pointed at an unrelated transcript with a made-up session id.
+  if (path.basename(String(tpath)) !== sid + '.jsonl') return null;
+  try {
+    const stat = fs.statSync(tpath);
+    const readSize = Math.min(stat.size, HEAL_TAIL_BYTES);
+    const fd = fs.openSync(tpath, 'r');
+    const buf = Buffer.alloc(readSize);
+    fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
+    fs.closeSync(fd);
+    const lines = buf.toString('utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let o;
+      try { o = JSON.parse(line); } catch (e) { continue; } // tail read can start mid-line
+      const anc = o && o.session_id;
+      if (anc && anc !== sid) return anc;
+    }
+  } catch (e) { /* transcript not readable yet */ }
+  return null;
+}
+
+function healDeckTab(sid, tpath) {
+  const prev = deckTabHealed.get(sid);
+  // a found tab is permanent; a miss is only cached long enough to keep the
+  // rescan off the hot path of every event
+  if (prev && (prev.tab || Date.now() - prev.at < HEAL_RETRY_MS)) return prev.tab;
+  const launched = tabsByLaunchSid();
+  // 1. This id IS a running claude's launch id — its opener never reached us
+  //    (officebot down or restarting at launch). Ask the OS instead.
+  let tab = launched.get(sid) || null;
+  // 2. Otherwise the id was minted inside an already-running tab, so find the
+  //    launch id in its transcript and place THAT — live process first, our own
+  //    mapping second. Never invent a tab: staying untagged is the safe failure.
+  if (!tab) {
+    const anc = ancestorSid(sid, tpath);
+    if (anc) tab = launched.get(anc) || sessionDeckTab.get(anc) || null;
+  }
+  deckTabHealed.delete(sid);
+  deckTabHealed.set(sid, { tab: tab, at: Date.now() });
+  if (deckTabHealed.size > DECK_TAB_MAX) deckTabHealed.delete(deckTabHealed.keys().next().value);
+  return tab;
 }
 
 // Persisted session metadata so a server restart can rehydrate the live-session
@@ -403,12 +525,19 @@ setInterval(function () {
     try { if (!fs.statSync(rec.tpath).isFile()) return; } catch (e) { return; }
     if (sessionCache.has(sid)) return;
     const le = { session_id: sid, hook_event_name: 'SessionStart', transcript_path: rec.tpath, _receivedAt: Date.now(), _restored: 1 };
-    if (rec.deckTab) le.deckTab = rec.deckTab;
+    // A record written before this session's tab was ever known (an orphan from
+    // /clear or a forked resume) has deckTab null, and a restart would replay it
+    // to the office still untagged — STANDBY again until the tab's next hook.
+    // Heal it here so a restart brings the office straight back.
+    const tab = rec.deckTab || sessionDeckTab.get(sid) || healDeckTab(sid, rec.tpath);
+    if (tab) le.deckTab = tab;
     if (rec.cwd) le.cwd = rec.cwd;
     if (rec.model) le.model = rec.model;
     sessionCache.set(sid, { lastEvent: le, subagents: new Map(), expireTimer: null, agentTypes: new Map(), pendingTypes: [] });
     // ensure the sid→deckTab pair exists (deck-tabs.json usually has it already)
-    if (rec.deckTab && !sessionDeckTab.has(sid)) sessionDeckTab.set(sid, rec.deckTab);
+    // — and persist a freshly healed one, so the mapping is on disk from here
+    // on instead of being re-derived at every boot.
+    if (tab && !sessionDeckTab.has(sid)) { sessionDeckTab.set(sid, tab); saveDeckTabs(); }
   });
 })();
 
@@ -1285,6 +1414,24 @@ const server = http.createServer(function (req, res) {
           if (sessionDeckTab.size > DECK_TAB_MAX) sessionDeckTab.delete(sessionDeckTab.keys().next().value);
           saveDeckTabs();
         } else if (sessionDeckTab.has(evt.session_id)) evt.deckTab = sessionDeckTab.get(evt.session_id);
+        else if (evt.transcript_path && !evt.agent_id) {
+          // Untagged main-thread session: /clear, /compact or a forked resume
+          // minted this id inside an already-running tab, so no opener ever
+          // claimed it. Re-learn the tab from the transcript (see healDeckTab)
+          // and promote it to a real mapping, so every later event — and the
+          // cached lastEvent a page load replays — carries the tag. Runs before
+          // cacheEvent below, so recordSessionMeta persists the tab too.
+          // Subagents are skipped: they ride the parent's session id and inherit
+          // the tag from the branch above once the parent heals.
+          const healed = healDeckTab(evt.session_id, evt.transcript_path);
+          if (healed) {
+            evt.deckTab = healed;
+            sessionDeckTab.delete(evt.session_id);
+            sessionDeckTab.set(evt.session_id, healed);
+            if (sessionDeckTab.size > DECK_TAB_MAX) sessionDeckTab.delete(sessionDeckTab.keys().next().value);
+            saveDeckTabs();
+          }
+        }
       }
       if (!evt.agent_id && evt.transcript_path) {
         const info = resolveTranscriptInfo(evt.transcript_path);

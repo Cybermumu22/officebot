@@ -352,6 +352,46 @@ was added to the installed hooks for the `waiting` state. Dialog detection is
 NOT server-side: the deck scans its own xterm buffer for numbered menus and
 answers by sending the option's number key over the terminal wire.
 
+**A tab keeps its office even when its session id changes underneath
+(2026-07).** Everything per-tab — the office view and the CONVO lookup above —
+keys off `lastEvent.deckTab`, and that tag comes from the `claude` wrapper's
+opener, which fires once per launch and pins the id it passes as
+`--session-id`. But a tab can mint a **new** session id without relaunching:
+`/clear`, `/compact` and a forked `--resume` all do, and those ids arrive
+through Claude's own hooks, which carry no tab. The tab then owned a session
+nobody could find — its office sat on `STANDBY - waiting for a session` while
+the terminal worked, its CONVO pane read "No Claude session on this tab yet",
+and because an untagged session is adoptable by any other tab's view
+(`_sessionShown` rule 5) the work showed up in the **wrong** tab, which closing
+that tab did not undo (rule 4 pins the real tab to STANDBY for as long as the
+server says it owns nothing). Reported after a day idle; `/clear` was the
+trigger.
+
+`healDeckTab` recovers the tab from evidence outside our own bookkeeping, so
+neither a lost nor an evicted mapping can strand a tab again:
+
+1. **Ask the OS.** A live `claude` has `--session-id <uuid>` on its command
+   line and, having been started in a tmux pane, `TMUX_PANE` in its
+   environment; pane → tmux session name *is* the deck tab. So a session whose
+   opener never arrived at all (officebot down or restarting at launch) still
+   places itself. Throttled to one `/proc` sweep per 10s, and only when an
+   untagged session actually needs a home (~120ms on the phone).
+2. **Read the transcript.** Every assistant entry carries **both** ids:
+   `sessionId` (the current session, what the hooks report) and `session_id`
+   (the session the *process* was launched under). A normally launched session
+   stamps the two identically; when they differ the second is the launch id —
+   exactly what the opener mapped. One tail scan yields it, then step 1's map
+   or `deck-tabs.json` places it.
+
+A found tab is promoted to a real `deck-tabs.json` mapping and persisted, so
+later events and the snapshot a page load replays all carry it. Misses are
+re-tried (a session that hasn't answered yet has no assistant entry to read)
+rather than cached as failure. Both steps degrade to no-ops off Termux — no
+tmux or no `/proc` just falls through to the mapping. Nothing ever *invents* a
+tab: staying untagged is the safe failure, which is why a freshly opened tab
+with no `claude` in it still shows STANDBY instead of adopting a neighbour's
+session.
+
 **The feed survives page reloads (2026-07).** Chat lines and the event
 log's "moment" lines are mirrored into `sessionStorage`
 (`officebot.chatlog` / `officebot.moments`, same lifetime as
