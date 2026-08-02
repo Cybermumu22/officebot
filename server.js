@@ -130,11 +130,18 @@ const HEAL_TAIL_BYTES = 1048576; // same tail budget as resolveTranscriptInfo �
 // keeps working when deck-tabs.json never learned the session (officebot was
 // down or restarted at launch time) or has since evicted it. Throttled and
 // cached — it only runs when an untagged session actually needs a home.
+//
+// The same scan also yields `byCwd` — the tab of each live claude keyed by the
+// working directory it is running in, and ONLY for directories where exactly
+// one tab has a claude in them. That is the instant half of the recovery below:
+// see step 1.5 of healDeckTab for why an unambiguous cwd names the tab outright.
 const LAUNCH_SCAN_TTL_MS = 10000;
-let _launchScan = { at: 0, map: new Map() };
+let _launchScan = { at: 0, byLaunchSid: new Map(), byCwd: new Map() };
 function tabsByLaunchSid() {
-  if (Date.now() - _launchScan.at < LAUNCH_SCAN_TTL_MS) return _launchScan.map;
+  if (Date.now() - _launchScan.at < LAUNCH_SCAN_TTL_MS) return _launchScan;
   const map = new Map();
+  const byCwd = new Map();
+  const cwdTabs = new Map();   // cwd -> Set of tabs running a claude there
   try {
     // pane id (%63) -> tmux session name (deck-52)
     const panes = new Map();
@@ -157,11 +164,36 @@ function tabsByLaunchSid() {
       try { env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8'); } catch (e) { return; }
       const m = env.match(/(?:^|\0)TMUX_PANE=([^\0]+)/);
       const tab = m && panes.get(m[1]);
-      if (tab) map.set(launchSid, tab);
+      if (!tab) return;
+      map.set(launchSid, tab);
+      // …and where it is running. Two panes of the SAME tab count once: the
+      // answer we want is the tab, so a tab with two claudes side by side in
+      // one directory is still an unambiguous answer, not a collision.
+      let cwd = null;
+      try { cwd = fs.readlinkSync('/proc/' + pid + '/cwd'); } catch (e) { /* exited mid-scan */ }
+      if (cwd) {
+        if (!cwdTabs.has(cwd)) cwdTabs.set(cwd, new Set());
+        cwdTabs.get(cwd).add(tab);
+      }
+    });
+    cwdTabs.forEach(function (tabs, cwd) {
+      if (tabs.size === 1) byCwd.set(cwd, tabs.values().next().value);
     });
   } catch (e) { /* no tmux, or /proc unreadable — recovery just falls through */ }
-  _launchScan = { at: Date.now(), map: map };
-  return map;
+  _launchScan = { at: Date.now(), byLaunchSid: map, byCwd: byCwd };
+  return _launchScan;
+}
+
+// A transcript being written right now belongs to a session that is alive right
+// now. Step 1.5 below leans on that: it reasons from the set of RUNNING claude
+// processes, so it must not be handed the id of a session that has since died
+// (a late or replayed SessionEnd), whose directory some other tab may have
+// taken over in the meantime. Minutes of slack — a session mid-turn writes
+// constantly, and one merely sitting idle falls back to the transcript scan,
+// which by then has assistant entries to read anyway.
+const HEAL_CWD_FRESH_MS = 120000;
+function transcriptIsLive(tpath) {
+  try { return Date.now() - fs.statSync(tpath).mtimeMs < HEAL_CWD_FRESH_MS; } catch (e) { return false; }
 }
 
 // The session id the PROCESS was launched under, read out of the transcript of
@@ -194,7 +226,7 @@ function ancestorSid(sid, tpath) {
   return null;
 }
 
-function healDeckTab(sid, tpath) {
+function healDeckTab(sid, tpath, cwd) {
   const prev = deckTabHealed.get(sid);
   // a found tab is permanent; a miss is only cached long enough to keep the
   // rescan off the hot path of every event
@@ -202,13 +234,39 @@ function healDeckTab(sid, tpath) {
   const launched = tabsByLaunchSid();
   // 1. This id IS a running claude's launch id — its opener never reached us
   //    (officebot down or restarting at launch). Ask the OS instead.
-  let tab = launched.get(sid) || null;
-  // 2. Otherwise the id was minted inside an already-running tab, so find the
-  //    launch id in its transcript and place THAT — live process first, our own
-  //    mapping second. Never invent a tab: staying untagged is the safe failure.
+  let tab = launched.byLaunchSid.get(sid) || null;
+  // 1.5. The id was minted inside a running tab (/clear, /compact, a forked
+  //    resume) and exactly ONE tab is running a claude in the directory this
+  //    event came from. Then that tab is the answer with no inference: an id
+  //    minted inside a live session was minted inside one of the claudes we
+  //    can see, and only one of them is standing in that directory.
+  //
+  //    This exists because step 2 is unavoidably LATE. `session_id` — the only
+  //    field tying a new id back to its launch id — is written on `assistant`
+  //    entries and nowhere else; the `mode`, `user` and `system` entries a
+  //    fresh /clear writes first carry `sessionId` alone (verified against a
+  //    just-/clear'd transcript on the Pocket Deck, 2026-08-02). So between the
+  //    /clear and Claude's first reply there is nothing in the transcript to
+  //    read, ancestorSid returns null, and the miss is cached for HEAL_RETRY_MS
+  //    on top. For a turn that answers in prose and calls no tools there are
+  //    barely any hooks in between to retry on, so the tab stayed orphaned for
+  //    a whole reply: its office on STANDBY, its CLAUDE pane reading "No Claude
+  //    session on this tab yet", and — because an untagged session is claimable
+  //    by any empty tab's view (_sessionShown rule 5) — the work showing up in
+  //    a different tab entirely. This step closes that window on the FIRST hook
+  //    after the /clear, which is SessionStart.
+  //
+  //    Guarded twice, because a wrong tab is worse than a late one: an
+  //    ambiguous directory (two tabs, same cwd) is not in byCwd at all, and a
+  //    transcript that isn't currently being written doesn't qualify. Either
+  //    way it falls through to step 2, which by then can answer.
+  if (!tab && cwd && transcriptIsLive(tpath)) tab = launched.byCwd.get(cwd) || null;
+  // 2. Otherwise find the launch id in its transcript and place THAT — live
+  //    process first, our own mapping second. Never invent a tab: staying
+  //    untagged is the safe failure.
   if (!tab) {
     const anc = ancestorSid(sid, tpath);
-    if (anc) tab = launched.get(anc) || sessionDeckTab.get(anc) || null;
+    if (anc) tab = launched.byLaunchSid.get(anc) || sessionDeckTab.get(anc) || null;
   }
   deckTabHealed.delete(sid);
   deckTabHealed.set(sid, { tab: tab, at: Date.now() });
@@ -551,7 +609,7 @@ setInterval(function () {
     // /clear or a forked resume) has deckTab null, and a restart would replay it
     // to the office still untagged — STANDBY again until the tab's next hook.
     // Heal it here so a restart brings the office straight back.
-    const tab = rec.deckTab || sessionDeckTab.get(sid) || healDeckTab(sid, rec.tpath);
+    const tab = rec.deckTab || sessionDeckTab.get(sid) || healDeckTab(sid, rec.tpath, rec.cwd);
     if (tab) le.deckTab = tab;
     if (rec.cwd) le.cwd = rec.cwd;
     if (rec.model) le.model = rec.model;
@@ -1697,7 +1755,7 @@ const server = http.createServer(function (req, res) {
           // cacheEvent below, so recordSessionMeta persists the tab too.
           // Subagents are skipped: they ride the parent's session id and inherit
           // the tag from the branch above once the parent heals.
-          const healed = healDeckTab(evt.session_id, evt.transcript_path);
+          const healed = healDeckTab(evt.session_id, evt.transcript_path, evt.cwd);
           if (healed) {
             evt.deckTab = healed;
             sessionDeckTab.delete(evt.session_id);
