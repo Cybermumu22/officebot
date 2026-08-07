@@ -249,6 +249,9 @@ cat > ~/bin/deck-start <<'EOF'
 # ttyd->tmux (the terminal). Safe to run twice — running parts are left alone.
 . ~/.profile 2>/dev/null
 mkdir -p ~/.deck
+# Starting up clears the "deliberately stopped" flag deck-stop leaves behind,
+# so the keepalive job resumes guarding the deck.
+rm -f ~/.deck/stopped
 # Deck tabs open in ~/command-deck (same idea as the PC deck's workspace).
 # Claude NEVER remembers folder trust for $HOME itself (hasTrustDialogAccepted
 # stays false there by design — confirmed in ~/.claude.json), so tabs that
@@ -309,7 +312,10 @@ if curl -sf -o /dev/null http://127.0.0.1:4317/; then echo "office:   OK"; else 
 # refused connection (curl exit 7) is a real failure.
 if curl -s -o /dev/null http://127.0.0.1:7681/token; then echo "terminal: OK"; else echo "terminal: FAILED (see ~/.deck/ttyd.log and ANDROID.md)"; fi
 echo "Pocket Deck: http://localhost:4317/deck.html"
-termux-open-url http://localhost:4317/deck.html 2>/dev/null
+# DECK_NO_OPEN=1 suppresses the browser launch, so unattended callers (the boot
+# script and the keepalive job below) can bring the stack back without throwing
+# Chrome in your face.
+[ -n "$DECK_NO_OPEN" ] || termux-open-url http://localhost:4317/deck.html 2>/dev/null
 EOF
 chmod 700 ~/bin/deck-start
 
@@ -380,6 +386,10 @@ chmod 700 ~/bin/deck-usage-poll
 
 cat > ~/bin/deck-stop <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
+# Tell the keepalive job this shutdown was deliberate. Without this it would
+# notice the dead office within 15 minutes and start it right back up, making
+# deck-stop look broken. deck-start clears the flag.
+mkdir -p ~/.deck && touch ~/.deck/stopped
 pkill -f 'deck-usage-poll' 2>/dev/null
 tmux kill-session -t usagepoll 2>/dev/null   # the poller's hidden claude
 pkill -f 'officebot/server.js' 2>/dev/null
@@ -401,9 +411,139 @@ exec ~/bin/deck-start
 EOF
 chmod 700 ~/bin/deck-restart
 
-cp ~/bin/deck-start ~/.shortcuts/Pocket-Deck && chmod 700 ~/.shortcuts/Pocket-Deck
-cp ~/bin/deck-start ~/.termux/boot/deck-start.sh && chmod 700 ~/.termux/boot/deck-start.sh
-echo "created: deck-start, deck-stop, home-screen widget (needs Termux:Widget), boot script (needs Termux:Boot)"
+# Keepalive: bring the deck back after Android kills it.
+#
+# Android reaps Termux's background processes when the phone sits idle — on the
+# machine this was diagnosed on, the office and the tmux server were both gone
+# every morning while the phone itself had been up for 20 days. It is not a
+# crash (the log showed clean starts and no errors), so there is nothing to fix
+# in officebot; what was missing was anything to start it again. Termux:Boot
+# only fires on reboot, which may not happen for weeks.
+#
+# Android's own JobScheduler is the one hook that survives the app being killed:
+# it will relaunch Termux to run a registered job. Hence this.
+cat > ~/bin/deck-keepalive <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+# Checks the deck every ~15 min and restarts it if it died. Does nothing at all
+# when the deck is healthy. Register with: deck-keepalive --install
+. ~/.profile 2>/dev/null
+mkdir -p ~/.deck
+LOG="$HOME/.deck/keepalive.log"
+JOB_ID=4317          # stable: reusing the id overwrites, so you never get duplicates
+PERIOD_MS=900000     # 15 min — Android's floor for a periodic job; less is ignored
+
+if [ "$1" = "--install" ]; then
+  # --battery-not-low false matters more than it looks: the default is TRUE, so
+  # on a low battery overnight — exactly when the deck is most likely to have
+  # been killed — the job would be held back and the deck would stay down.
+  # Do NOT add "--network none": it makes termux-job-scheduler register nothing
+  # at all, silently. No network constraint is already the default.
+  termux-job-scheduler --script "$HOME/bin/deck-keepalive" --job-id "$JOB_ID" \
+    --period-ms "$PERIOD_MS" --persisted true --battery-not-low false >/dev/null 2>&1
+  # termux-job-scheduler exits 0 even when it schedules nothing, so trusting its
+  # status code would report a working keepalive that does not exist.
+  if termux-job-scheduler --pending 2>/dev/null | grep -q "Job $JOB_ID:"; then
+    echo "Keepalive registered: checks every ~15 min, survives reboots."
+    echo "Log: $LOG    Remove with: deck-keepalive --uninstall"
+    exit 0
+  fi
+  echo "!! registration FAILED — the deck will not self-heal." >&2
+  echo "   Check that the Termux:API app is installed and not battery-restricted." >&2
+  exit 1
+fi
+if [ "$1" = "--uninstall" ]; then
+  termux-job-scheduler --cancel --job-id "$JOB_ID"; echo "Keepalive job cancelled."; exit 0
+fi
+if [ "$1" = "--status" ]; then
+  echo "--- pending jobs ---"; termux-job-scheduler --pending
+  echo "--- last 20 keepalive events ---"
+  tail -20 "$LOG" 2>/dev/null || echo "(no events yet — nothing has died since install)"
+  exit 0
+fi
+
+stamp() { date '+%Y-%m-%d %H:%M:%S'; }
+
+# deck-stop leaves this flag; deck-start removes it. It is the difference between
+# "Android killed the deck" (restart it) and "the user stopped the deck" (leave
+# it alone) — without it, deck-stop would silently undo itself within 15 minutes.
+[ -f "$HOME/.deck/stopped" ] && exit 0
+
+# This runs ~96 times a day forever; healthy checks write nothing, so 200 lines
+# is still weeks of real events.
+if [ -f "$LOG" ] && [ "$(wc -l < "$LOG")" -gt 400 ]; then
+  tail -200 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+fi
+
+# Health is an HTTP request, not a pgrep: a process that is alive but wedged
+# still leaves you looking at a broken page. Both halves are checked — the
+# office (4317) is what shows the error page, but a dead terminal (7681) is just
+# as broken and would otherwise go unnoticed until you tried to type in a tab.
+# ttyd runs with -c, so an unauthenticated GET correctly answers 401: ANY reply
+# means alive, only a refused connection is a real failure. Hence no -f there.
+DOWN=""
+curl -sf -o /dev/null --max-time 8 http://127.0.0.1:4317/ || DOWN="office"
+curl -s  -o /dev/null --max-time 8 http://127.0.0.1:7681/token || DOWN="${DOWN:+$DOWN and }terminal"
+[ -z "$DOWN" ] && exit 0
+
+if pgrep -f 'officebot/server.js' >/dev/null 2>&1; then
+  WHY="process alive but not answering (wedged)"
+else
+  WHY="process gone (killed by Android, or never started)"
+fi
+echo "$(stamp)  $DOWN down: $WHY — restarting" >> "$LOG"
+
+# A wedged process would make deck-start's "already running?" pgrep guard skip
+# the restart, leaving it wedged forever. Clear it out first — but only when the
+# office is the sick half, so a terminal-only failure does not take the office
+# (and the session state it holds) down with it.
+case "$DOWN" in
+  *office*) pkill -f 'officebot/server.js' 2>/dev/null ;;
+esac
+
+DECK_NO_OPEN=1 "$HOME/bin/deck-start" >> "$LOG" 2>&1
+
+sleep 3
+if curl -sf -o /dev/null --max-time 8 http://127.0.0.1:4317/ &&
+   curl -s  -o /dev/null --max-time 8 http://127.0.0.1:7681/token; then
+  echo "$(stamp)  deck back up" >> "$LOG"
+else
+  echo "$(stamp)  !! restart FAILED — see ~/.deck/officebot.log" >> "$LOG"
+fi
+EOF
+chmod 700 ~/bin/deck-keepalive
+
+# Thin wrappers, NOT copies. These two used to be `cp ~/bin/deck-start`, and on
+# a real phone they had already drifted a version behind it. One script holds
+# the logic; these only decide how it is called.
+cat > ~/.shortcuts/Pocket-Deck <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+# HOME-SCREEN BUTTON: start the Pocket Deck and open it in the browser.
+# Works even when Android killed everything overnight — deck-start brings back
+# whatever is missing and leaves running parts alone. If the deck page ever
+# shows "can't be reached", this button is the fix.
+. ~/.profile 2>/dev/null
+~/bin/deck-start
+EOF
+chmod 700 ~/.shortcuts/Pocket-Deck
+
+cat > ~/.termux/boot/deck-start.sh <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+# Termux:Boot — bring the deck up automatically after the phone restarts.
+# DECK_NO_OPEN=1 suppresses the browser launch: opening Chrome by itself every
+# time the phone boots would be obnoxious. The home-screen button leaves it
+# unset, so tapping that DOES open the deck.
+. ~/.profile 2>/dev/null
+mkdir -p ~/.deck
+DECK_NO_OPEN=1 ~/bin/deck-start >> ~/.deck/boot.log 2>&1
+# Re-assert the self-heal job. It is registered --persisted so it should have
+# survived the reboot; re-installing is idempotent (same job id overwrites) and
+# costs nothing, so a job Android dropped comes back.
+~/bin/deck-keepalive --install >> ~/.deck/boot.log 2>&1
+EOF
+chmod 700 ~/.termux/boot/deck-start.sh
+
+~/bin/deck-keepalive --install || true
+echo "created: deck-start, deck-stop, deck-keepalive, home-screen widget (needs Termux:Widget), boot script (needs Termux:Boot)"
 
 step "Checking everything"
 echo "node:    $(node -v 2>/dev/null || echo MISSING)"

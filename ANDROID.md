@@ -93,7 +93,15 @@ Claude account. Take the steps in order.
   your session running; reopen and it snaps back mid-output. Closing a TAB
   (tap ✕, then "end?") **ends that session for real** — the office shows it
   signing off. `exit` inside a session ends it too.
-- `deck-stop` stops the servers (sessions stay alive).
+- `deck-stop` stops the servers (sessions stay alive). It stays stopped — the
+  keepalive below can tell a deliberate stop from a kill.
+- **If Android kills the deck, it comes back on its own.** Phones reap
+  background apps that sit idle, so the deck can be gone by morning and the
+  page simply fails to load. A job registered with Android checks every ~15
+  minutes and restarts whatever is missing, so it is usually back before you
+  notice. `deck-keepalive --status` shows the job and anything that has died
+  lately; `--uninstall` turns it off. In a hurry, the home-screen
+  **Pocket-Deck** button brings everything back immediately.
 
 ### CLAUDE — chat with Claude
 

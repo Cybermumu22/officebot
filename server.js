@@ -2299,6 +2299,42 @@ server.on('upgrade', function (req, socket, head) {
   socket.on('error', function () { try { up.destroy(); } catch (e) {} });
 });
 
+// On Android this process is far more likely to be KILLED than to crash —
+// One UI reaps Termux's background processes when the phone sits idle. The two
+// look identical in the log unless we say something on the way out, which cost
+// a real diagnosis once: 40 restarts, zero error output, no way to tell whether
+// officebot had thrown or Android had reaped it. So: anything that kills us on
+// purpose leaves a dated line, and silence between a start banner and the next
+// one now positively means "reaped from outside".
+// Local time, not toISOString(): these lines get read side by side with
+// ~/.deck/keepalive.log, which stamps local time. Two logs about the same
+// minute that disagree by the UTC offset are a needless puzzle at 8am.
+function stamp() {
+  const d = new Date();
+  const p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+function logFatal(kind, err) {
+  const detail = err && err.stack ? err.stack : String(err);
+  console.error('[' + stamp() + '] FATAL ' + kind + ': ' + detail);
+}
+process.on('uncaughtException', function (err) {
+  logFatal('uncaughtException', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', function (err) {
+  // Not fatal to node by default, but it means a request path silently gave up
+  // — worth a dated line, and not worth taking the office down over.
+  logFatal('unhandledRejection', err);
+});
+['SIGTERM', 'SIGINT', 'SIGHUP'].forEach(function (sig) {
+  process.on(sig, function () {
+    console.error('[' + stamp() + '] exiting on ' + sig);
+    process.exit(0);
+  });
+});
+
 server.on('error', function (err) {
   if (err && err.code === 'EADDRINUSE') {
     console.error('\n  Port ' + PORT + ' is already in use.');
@@ -2319,7 +2355,9 @@ let HOST = process.env.AGENT_VIZ_HOST || '127.0.0.1';
 if (HOST === '*' || HOST === 'all' || HOST === 'lan') HOST = '0.0.0.0';
 const LAN = HOST === '0.0.0.0' || HOST === '::';
 server.listen(PORT, HOST, function () {
-  console.log('officebot dashboard: http://localhost:' + PORT + ' (bound to ' + HOST + ')');
+  // Dated: the log is append-only across many restarts, and an undated banner
+  // makes it impossible to tell when a given run began — or how long it lasted.
+  console.log('[' + stamp() + '] officebot dashboard: http://localhost:' + PORT + ' (bound to ' + HOST + ')');
   console.log('Hook endpoint:       http://localhost:' + PORT + '/event');
   if (LAN) console.log('  ⚠ LAN mode: no authentication — only use this on a network you trust.');
 });
