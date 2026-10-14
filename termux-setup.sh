@@ -346,6 +346,13 @@ POKE="$HOME/.deck/usage-poke"
 while true; do
   rm -f "$POKE" 2>/dev/null   # the pass we're about to run satisfies any pending poke
   tmux has-session -t "$SESS" 2>/dev/null || start_claude
+  # A stray dialog (session-feedback prompt, update notice) can eat the Enter,
+  # leaving "/usage" sitting in the prompt — the next pass then types
+  # "/usage/usage" which goes to the model as chat. Escape dismisses any
+  # dialog, C-u clears leftover prompt text, THEN type the command.
+  tmux send-keys -t "$SESS" Escape 2>/dev/null
+  sleep 1
+  tmux send-keys -t "$SESS" C-u 2>/dev/null
   tmux send-keys -t "$SESS" '/usage' Enter 2>/dev/null
   # The Usage tab loads its numbers async and a slow phone can take well over
   # 4s — poll the pane up to ~18s instead of gambling on one capture.
@@ -355,6 +362,18 @@ while true; do
     RAW=$(tmux capture-pane -t "$SESS" -p -S -120 2>/dev/null)
     case "$RAW" in *"% used"*) GOT=1; break ;; esac
   done
+  if [ -n "$GOT" ]; then
+    # The Usage tab is taller than the screen: "Current week (Fable)" sits
+    # BELOW the fold (pushed down by the promo banner), so a single capture
+    # never contains it and the office fell back to its rough 100% estimate.
+    # Scroll down and capture again; POST both screens concatenated — the
+    # parser just searches the text, duplicate lines are harmless.
+    tmux send-keys -t "$SESS" Down Down Down Down Down Down Down Down 2>/dev/null
+    sleep 2
+    RAW2=$(tmux capture-pane -t "$SESS" -p 2>/dev/null)
+    RAW="$RAW
+$RAW2"
+  fi
   tmux send-keys -t "$SESS" Escape 2>/dev/null
   if [ -n "$GOT" ]; then
     MISS=0
