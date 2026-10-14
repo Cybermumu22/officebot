@@ -877,6 +877,18 @@ function chatSessionForTab(tab) {
 //   text blocks) or a tool_result turn (no text blocks -> skipped naturally)
 // - assistant entries: join text blocks; a single logical message spans
 //   MULTIPLE JSONL lines sharing message.id (observed up to 7) -> merge
+const ATTACH_DIR = path.join(os.homedir(), '.deck', 'attach');
+// basename of an "[Image: source: <path>]" note's file when it lives in the
+// deck's attach dir (the only place /deck/attach/img serves from), else null
+function attachImageOf(content) {
+  const blocks = typeof content === 'string' ? [content]
+    : Array.isArray(content) ? content.map(function (b) { return b && b.type === 'text' ? b.text : ''; }) : [];
+  for (let i = 0; i < blocks.length; i++) {
+    const m = /^\[Image: source: (.+)\]$/.exec(String(blocks[i] || '').trim());
+    if (m && path.dirname(m[1]) === ATTACH_DIR) return path.basename(m[1]);
+  }
+  return null;
+}
 function parseChatLines(lines) {
   const out = [];
   let effort = null, permMode = null;
@@ -887,11 +899,29 @@ function parseChatLines(lines) {
     // logged instantly as their own entries, effort rides every assistant line
     if (obj.type === 'permission-mode' && obj.permissionMode) { permMode = obj.permissionMode; continue; }
     if (obj.type === 'assistant' && obj.effort && !obj.isSidechain) effort = obj.effort;
-    if (obj.isSidechain || obj.isMeta || !obj.message) continue;
     const ts = obj.timestamp ? Date.parse(obj.timestamp) : null;
+    // An image prompt is logged as "[Image #1]text" + an inline image block,
+    // then (one line later) an isMeta note "[Image: source: /path]". Pin the
+    // picture to its prompt so the deck shows the photo, not the marker. Only
+    // files in ~/.deck/attach (what the deck uploads) can be served back, so
+    // only those are named; a note that lands in a later read than its prompt
+    // goes out on its own as role 'img' and the deck attaches it client-side.
+    if (obj.type === 'user' && obj.isMeta && !obj.isSidechain && obj.message) {
+      const img = attachImageOf(obj.message.content);
+      if (img) {
+        const prev = out.length ? out[out.length - 1] : null;
+        if (prev && prev.role === 'user' && prev.nimg && (prev.imgs || []).length < prev.nimg) {
+          (prev.imgs = prev.imgs || []).push(img);
+        } else {
+          out.push({ role: 'img', text: '', img: img, ts: ts, id: obj.uuid || null });
+        }
+      }
+      continue;
+    }
+    if (obj.isSidechain || obj.isMeta || !obj.message) continue;
     if (obj.type === 'user') {
       const c = obj.message.content;
-      let text = null;
+      let text = null, nimg = 0;
       if (typeof c === 'string') {
         if (c.indexOf('<command-name>') !== -1 || c.indexOf('<local-command-stdout>') !== -1
           || c.indexOf('<local-command-caveat>') !== -1 || c.indexOf('[Request interrupted') === 0) continue;
@@ -901,9 +931,12 @@ function parseChatLines(lines) {
         if (!t.length) continue; // tool_result turns carry no text blocks
         text = t.join('\n\n');
         if (text.indexOf('[Request interrupted') === 0) continue;
+        nimg = c.filter(function (b) { return b && b.type === 'image'; }).length;
       } else continue;
       if (!text || !text.trim()) continue;
-      out.push({ role: 'user', text: text, ts: ts, id: obj.uuid || null });
+      const um = { role: 'user', text: text, ts: ts, id: obj.uuid || null };
+      if (nimg) um.nimg = nimg;
+      out.push(um);
     } else if (obj.type === 'assistant') {
       const c = obj.message.content;
       if (!Array.isArray(c)) continue;
@@ -1817,7 +1850,7 @@ const server = http.createServer(function (req, res) {
     req.on('data', function (c) { size += c.length; if (size > 15e6) req.destroy(); else chunks.push(c); });
     req.on('end', function () {
       try {
-        const dir = path.join(os.homedir(), '.deck', 'attach');
+        const dir = ATTACH_DIR;
         fs.mkdirSync(dir, { recursive: true });
         const name = (String(req.headers['x-filename'] || 'image.jpg').replace(/[^\w.\-]/g, '_').slice(-60)) || 'image.jpg';
         const file = path.join(dir, Date.now() + '_' + name);
@@ -1830,6 +1863,97 @@ const server = http.createServer(function (req, res) {
       }
     });
     return;
+  }
+
+  // Pocket Deck: show pictures in the CLAUDE chat. GET /deck/attach/img?f=
+  // serves one file from ~/.deck/attach; /deck/shots/latest names the newest
+  // phone screenshot, /deck/shots/img?f= previews it, POST /deck/shots/attach
+  // copies it into ~/.deck/attach (same result as uploading it). All
+  // loopback-only. <img> can't send X-Deck, so the two image GETs instead
+  // refuse cross-site fetches (Sec-Fetch-Site); names must be a plain
+  // basename that resolves inside its folder.
+  const deckUrl = req.url.split('?')[0];
+  if (deckUrl === '/deck/attach/img' || deckUrl.indexOf('/deck/shots/') === 0) {
+    const raI = req.socket.remoteAddress || '';
+    const site = String(req.headers['sec-fetch-site'] || 'same-origin');
+    if (!(raI === '127.0.0.1' || raI === '::1' || raI === '::ffff:127.0.0.1')
+      || !(site === 'same-origin' || site === 'none')) { res.writeHead(403); res.end(); return; }
+    const qI = new URL(req.url, 'http://localhost').searchParams;
+    const IMG_MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.heic': 'image/heic' };
+    const inDir = function (dir, name) {
+      name = String(name || '');
+      if (!name || name !== path.basename(name) || name[0] === '.') return null;
+      const f = path.join(dir, name);
+      return path.dirname(f) === dir ? f : null;
+    };
+    const sendImg = function (f) {
+      fs.readFile(f, function (err, data) {
+        if (err) { res.writeHead(404); res.end(); return; }
+        res.writeHead(200, { 'Content-Type': IMG_MIME[path.extname(f).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'private, max-age=86400' });
+        res.end(data);
+      });
+    };
+    const home = os.homedir();
+    const SHOT_DIRS = [path.join(home, 'storage', 'shared', 'DCIM', 'Screenshots'),
+      path.join(home, 'storage', 'shared', 'Pictures', 'Screenshots')];
+    const newestShot = function () {
+      let best = null;
+      SHOT_DIRS.forEach(function (dir) {
+        let names = [];
+        try { names = fs.readdirSync(dir); } catch (e) { return; }
+        names.forEach(function (n) {
+          if (!IMG_MIME[path.extname(n).toLowerCase()] || n[0] === '.') return;
+          try {
+            const st = fs.statSync(path.join(dir, n));
+            if (st.isFile() && (!best || st.mtimeMs > best.mtime)) best = { dir: dir, name: n, mtime: st.mtimeMs };
+          } catch (e) { /* vanished mid-scan */ }
+        });
+      });
+      return best;
+    };
+    const json = function (code, o) { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (req.method === 'GET' && deckUrl === '/deck/attach/img') {
+      const f = inDir(ATTACH_DIR, qI.get('f'));
+      if (!f) { res.writeHead(404); res.end(); return; }
+      sendImg(f); return;
+    }
+    if (req.method === 'GET' && deckUrl === '/deck/shots/latest') {
+      if (!deckHeaderOk(req)) { res.writeHead(403); res.end(); return; }
+      const b = newestShot();
+      if (!b) { json(200, { ok: false, error: fs.existsSync(path.join(home, 'storage')) ? 'no screenshots found' : 'storage not set up' }); return; }
+      json(200, { ok: true, name: b.name, mtime: b.mtime }); return;
+    }
+    if (req.method === 'GET' && deckUrl === '/deck/shots/img') {
+      const name = qI.get('f');
+      for (let i = 0; i < SHOT_DIRS.length; i++) {
+        const f = inDir(SHOT_DIRS[i], name);
+        if (f && fs.existsSync(f)) { sendImg(f); return; }
+      }
+      res.writeHead(404); res.end(); return;
+    }
+    if (req.method === 'POST' && deckUrl === '/deck/shots/attach') {
+      if (!deckHeaderOk(req)) { res.writeHead(403); res.end(); return; }
+      const b = newestShot();
+      const want = qI.get('f');
+      // attach the screenshot the user saw in the menu (if named), else the newest
+      let src = null;
+      if (want) {
+        for (let i = 0; i < SHOT_DIRS.length && !src; i++) {
+          const f = inDir(SHOT_DIRS[i], want);
+          if (f && fs.existsSync(f)) src = f;
+        }
+      } else if (b) src = path.join(b.dir, b.name);
+      if (!src) { json(404, { ok: false, error: 'screenshot not found' }); return; }
+      try {
+        fs.mkdirSync(ATTACH_DIR, { recursive: true });
+        const name = (path.basename(src).replace(/[^\w.\-]/g, '_').slice(-60)) || 'screenshot.jpg';
+        const dest = path.join(ATTACH_DIR, Date.now() + '_' + name);
+        fs.copyFileSync(src, dest);
+        json(200, { ok: true, path: dest, name: name });
+      } catch (e) { json(500, { ok: false, error: String(e && e.message) }); }
+      return;
+    }
+    res.writeHead(404); res.end(); return;
   }
 
   // Pocket Deck: hand the deck page the terminal (ttyd) credential. Same

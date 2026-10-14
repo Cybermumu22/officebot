@@ -28,6 +28,12 @@
 @font-face{font-family:'Caveat';font-weight:400;font-display:swap;src:url('/vendor/fonts/caveat-400.woff2') format('woff2')}
 @font-face{font-family:'Lora';font-weight:400;font-display:swap;src:url('/vendor/fonts/lora-400.woff2') format('woff2')}
 @font-face{font-family:'Comfortaa';font-weight:400;font-display:swap;src:url('/vendor/fonts/comfortaa-400.woff2') format('woff2')}
+/* "Claude app" chat style: free (OFL) lookalikes of the Claude app's own
+   Anthropic Serif / Anthropic Sans, which are proprietary. Variable weight,
+   so bold is real and the serif can sit at 370 like Anthropic Serif. */
+@font-face{font-family:'Newsreader';font-weight:200 800;font-style:normal;font-display:swap;src:url('/vendor/fonts/newsreader-var.woff2') format('woff2')}
+@font-face{font-family:'Newsreader';font-weight:200 800;font-style:italic;font-display:swap;src:url('/vendor/fonts/newsreader-var-italic.woff2') format('woff2')}
+@font-face{font-family:'Instrument Sans';font-weight:400 700;font-display:swap;src:url('/vendor/fonts/instrument-sans-var.woff2') format('woff2')}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;background:#080b14;color:#cfd8ea;font-family:system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
 /* app feel, not website feel: no tap flash, no focus rings, no accidental
@@ -193,7 +199,7 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 #convoPane{display:none;flex:1;min-height:0;flex-direction:column;position:relative;
   background:linear-gradient(160deg,#0b0e17 0%,#0e1322 55%,#101326 100%)}
 #convoLog{flex:1;min-height:0;overflow-y:auto;padding:12px 10px 8px;
-  font-size:calc(var(--chat-fs,11px) + 3px);line-height:1.5;
+  font-size:calc(var(--cv-fs,17px) - 4px);line-height:1.5;
   font-family:var(--cv-ff,system-ui,-apple-system,sans-serif);
   display:flex;flex-direction:column;gap:8px}
 .cvmsg{max-width:86%;padding:9px 12px;border-radius:16px;white-space:pre-wrap;
@@ -201,7 +207,7 @@ button{outline:none;-webkit-user-select:none;user-select:none}
   -webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);
   border:1px solid rgba(255,255,255,.10);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 16px rgba(0,0,0,.35)}
-.cv-user{align-self:flex-end;border-bottom-right-radius:5px;color:var(--cvu-fg,#f2e3bd);
+.cv-user{font-family:var(--cv-me-ff,inherit);align-self:flex-end;border-bottom-right-radius:5px;color:var(--cvu-fg,#f2e3bd);
   background:linear-gradient(150deg,var(--cvu-a,rgba(245,158,11,.20)),var(--cvu-b,rgba(180,110,20,.10)));
   border-color:var(--cvu-bd,rgba(245,158,11,.28))}
 .cv-asst{align-self:flex-start;border-bottom-left-radius:5px;color:var(--cva-fg,#dbe7f5);
@@ -225,7 +231,7 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 .cv-copy:active{opacity:1}
 .cvmsg pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.35);
   border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px;margin:6px 0;
-  font:calc(var(--chat-fs,11px) + 1px)/1.45 ui-monospace,Menlo,Consolas,monospace}
+  font:calc(var(--cv-fs,17px) - 6px)/1.45 ui-monospace,Menlo,Consolas,monospace}
 .cvmsg code{background:rgba(0,0,0,.30);border-radius:4px;padding:1px 5px;
   font:inherit;font-family:ui-monospace,Menlo,Consolas,monospace}
 .cvmsg .cvh{display:block;font-weight:700;margin:4px 0 2px}
@@ -376,6 +382,146 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 .cv-swatches{display:flex;gap:8px}
 .cv-swatches button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
 .cv-swatches button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+
+/* ---- CLAUDE pane: "Claude app" style (S.cvStyle 'app', the default) ----
+   Mimics the official Claude Android app in dark mode: warm charcoal page,
+   your messages in a rounded grey bubble, Claude's replies as plain
+   full-width serif text (no bubble), a rounded "Reply to Claude…" composer
+   with a + button and the clay-orange up-arrow send. Everything is scoped to
+   #convoPane.cv-app, so the liquid-glass look ('glass') is untouched. Colours
+   are claude.ai's own dark tokens: page #262624, raised #30302e, deep
+   #141413, text #faf9f5 / #c2c0b6, clay #c96442 / #d97757. The "Claude font"
+   picker sets Claude's replies here (its 'claude' entry is the default);
+   the bubble tint swatches only drive the glass style. */
+#convoPane.cv-app{background:#262624}
+.cv-app #convoLog{padding:18px 16px 10px;gap:20px;color:#faf9f5;
+  font-family:'Instrument Sans',system-ui,sans-serif}
+#convoPane.cv-app .cvmsg{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;
+  border:1px solid transparent}
+#convoPane.cv-app .cv-user{max-width:85%;padding:10px 15px;border-radius:20px;
+  background:#141413;color:#faf9f5;
+  font:calc(var(--cv-fs,17px) - 2px)/1.5 var(--cv-me-ff,'Instrument Sans',system-ui,sans-serif)}
+#convoPane.cv-app .cv-asst{align-self:stretch;max-width:100%;padding:0 2px;border-radius:0;
+  background:none;color:#faf9f5;
+  font:370 var(--cv-fs,17px)/1.6 var(--cv-ff,'Newsreader',Georgia,'Noto Serif',serif)}
+#convoPane.cv-app .cv-failed{border:1px dashed rgba(230,57,70,.6)}
+#convoPane.cv-app .cv-dlg{border:1px dashed rgba(222,220,209,.22);background:none;color:#c2c0b6}
+.cv-app .cvmsg .cvh{font-size:1.12em;font-weight:700;margin:8px 0 2px}
+.cv-app .cvmsg b{font-weight:600;color:#fff}
+.cv-app .cvmsg pre{background:#1a1918;border:1px solid rgba(222,220,209,.12);border-radius:12px;
+  padding:12px;margin:10px 0;color:#e8e6dc;
+  font:calc(var(--cv-fs,17px) - 4px)/1.5 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+.cv-app .cvmsg code{background:rgba(222,220,209,.07);border:1px solid rgba(222,220,209,.12);
+  border-radius:6px;padding:0 5px;color:#ef8f7b;font-size:.86em;
+  font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+/* under each reply: a quiet action row (copy), like the app's icon strip.
+   No timestamps — the app doesn't show them. Your own bubble stays clean. */
+.cv-app .cvts{display:none}
+.cv-app .cv-user .cvfoot{display:none}
+.cv-app .cv-asst .cvfoot{justify-content:flex-start;margin-top:8px}
+.cv-app .cv-copy{opacity:.55;color:#c2c0b6;padding:4px 6px;margin-left:-6px;border-radius:8px}
+.cv-app .cv-copy:active{opacity:1;background:rgba(222,220,209,.08)}
+.cv-copy svg{width:16px;height:16px;display:block}
+.cv-app .cv-note{color:#8f8c83;font-style:normal;font-size:12px}
+/* softer arrival than the glass pop: a short fade-up */
+.cv-app .cv-in{animation:cvFadeUp .28s ease-out both}
+@keyframes cvFadeUp{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+/* "Claude is working" line: the clay spark + word, no strip behind it */
+.cv-app #convoTicker{background:none;border:none;color:#a6a39a;font-style:normal;
+  font-size:13px;padding:4px 18px 2px;animation:none}
+.cv-app #convoTicker .cv-star{color:#d97757;font-size:15px;animation:cvSpark 2.4s ease-in-out infinite}
+@keyframes cvSpark{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(.82)}100%{transform:rotate(360deg) scale(1)}}
+.cv-app #convoTicker .cv-word{color:#c2c0b6}
+/* composer */
+.cv-app #convoBar{margin:4px 10px calc(10px + env(safe-area-inset-bottom));padding:12px 12px 10px 14px;
+  border-radius:26px;background:#30302e;background-image:none;
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  border:1px solid rgba(222,220,209,.15);box-shadow:0 4px 18px rgba(0,0,0,.28)}
+.cv-app #convoBar:focus-within{border-color:rgba(222,220,209,.28)}
+.cv-app #convoText{color:#faf9f5;font:calc(var(--cv-fs,17px) - 1px)/1.45 var(--cv-me-ff,'Instrument Sans',system-ui,sans-serif);min-height:40px}
+.cv-app #convoText::placeholder{color:#8f8c83}
+.cv-app #convoBtns{gap:8px}
+.cv-app #convoAttach,.cv-app #pbMax{width:34px;height:34px;border-radius:50%;
+  background:transparent;color:#c2c0b6;border:1px solid rgba(222,220,209,.18)}
+.cv-app #convoAttach{order:-2}
+.cv-app #cvOpts{order:-1}
+.cv-app #pbMax.cv-on{background:rgba(217,119,87,.14);color:#d97757;border-color:rgba(217,119,87,.45)}
+/* model · effort · mode — plain text + chevron, like the app's model picker */
+.cv-app #cvOpts{background:transparent;border:none;color:#c2c0b6;font-weight:500;
+  font-size:13px;letter-spacing:0;padding:6px 6px;border-radius:10px}
+.cv-app #cvOpts::after{content:'';flex:0 0 auto;width:6px;height:6px;margin:-3px 2px 0 1px;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(45deg)}
+.cv-app #cvOpts .cvbolt{display:none}
+.cv-app #cvOpts:active{background:rgba(222,220,209,.08)}
+.cv-app #cvOpts.busy{animation:cvTick 1.05s ease-in-out infinite}
+#convoSend .cvup,#convoAttach .cvplus{display:none}
+.cv-app #convoSend .cvarrow,.cv-app #convoAttach .pxi{display:none}
+.cv-app #convoSend .cvup,.cv-app #convoAttach .cvplus{display:block}
+.cvup{width:18px;height:18px}
+.cvplus{width:18px;height:18px}
+.cv-app #convoSend{width:36px;height:36px;border-radius:50%;background:#c96442;color:#fff;box-shadow:none;
+  transition:transform .12s ease,background .15s ease,opacity .15s ease}
+/* nothing typed and nothing attached: the arrow rests, dimmed */
+.cv-app #convoBar:has(#convoText:placeholder-shown):has(#cvChips:empty) #convoSend{background:#5a4d46;color:#b9b4aa}
+.cv-app #convoSend.busy{animation:cvTick 1.05s ease-in-out infinite}
+.cv-app .cv-chip{border-radius:12px;border-color:rgba(222,220,209,.18);background:#262624}
+/* the question card and the options sheet: solid raised sheets */
+.cv-app #convoCard,.cv-app #convoPick{background:#30302e;-webkit-backdrop-filter:none;backdrop-filter:none;
+  border:1px solid rgba(222,220,209,.15);border-radius:20px;padding:14px;
+  box-shadow:0 10px 32px rgba(0,0,0,.5);
+  font-family:'Instrument Sans',system-ui,sans-serif;
+  animation:cvFadeUp .25s ease-out both}
+.cv-app #convoCard .cvq,.cv-app #convoPick .cvq{color:#faf9f5;font-size:calc(var(--cv-fs,17px) - 3px)}
+.cv-app #convoCard .cvopt,.cv-app #convoPick .cvopt{font-size:calc(var(--cv-fs,17px) - 3px)}
+.cv-app #convoCard .cvpre{background:#1a1918;border-color:rgba(222,220,209,.12);color:#e8e6dc}
+.cv-app #convoCard .cvopt,.cv-app #convoPick .cvopt,.cv-app #convoPick .cv-optrow button{
+  background:#262624;color:#faf9f5;border:1px solid rgba(222,220,209,.15);border-radius:12px}
+.cv-app #convoCard .cvopt:active,.cv-app #convoPick .cvopt:active{background:#3a3936}
+.cv-app #convoPick .cvopt.sel,.cv-app #convoPick .cv-optrow button.sel{border-color:#d97757;color:#fff;
+  background:rgba(217,119,87,.12)}
+.cv-app #convoCard .cvsubmit{background:#c96442;border-color:#c96442;color:#fff}
+.cv-app #convoCard .cvmin,.cv-app #convoCard .cvkeys button{background:#262624;color:#c2c0b6;
+  border-color:rgba(222,220,209,.15)}
+.cv-app #convoPick .cv-optlbl{color:#a6a39a;letter-spacing:.6px}
+@media (prefers-reduced-motion: reduce){
+  .cv-app .cv-in,.cv-app #convoCard,.cv-app #convoPick,.cv-app #convoTicker .cv-star,
+  .cv-app #convoSend.busy,.cv-app #cvOpts.busy{animation:none}
+}
+
+/* ---- CLAUDE pane: pictures in your messages, the viewer, the + menu ---- */
+.cvimgs{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.cvimgs:not(:empty){margin-bottom:8px}
+.cvimgs:only-child{margin-bottom:0}
+.cvimg{display:block;max-width:min(220px,62vw);max-height:260px;border-radius:12px;object-fit:cover;
+  background:rgba(255,255,255,.06);cursor:zoom-in}
+.cvimg-ph{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;
+  font-size:12px;opacity:.7;background:rgba(255,255,255,.06)}
+/* app style: the pictures sit ABOVE your bubble like the official app — the
+   bubble paints only the text, so an image-only message has no empty bubble */
+#convoPane.cv-app .cv-user.cv-hasimg{background:none;padding:0;display:flex;flex-direction:column;align-items:flex-end}
+#convoPane.cv-app .cv-user.cv-hasimg .cvbody{background:#141413;padding:10px 15px;border-radius:20px}
+#convoPane.cv-app .cv-user.cv-hasimg .cvbody:empty{display:none}
+#convoPane.cv-app .cv-user.cv-hasimg .cvimgs{margin-bottom:6px}
+#cvViewer{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:flex;
+  align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+#cvViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+#cvViewer.hidden{display:none}
+#cvAddMenu{position:fixed;left:8px;right:8px;bottom:var(--cv-dock,150px);z-index:31;
+  padding:8px;border-radius:18px;background:#1a1f36;border:1px solid rgba(130,150,225,.3);
+  box-shadow:0 10px 32px rgba(0,0,0,.5);animation:cvFadeUp .2s ease-out both}
+#cvAddMenu.hidden{display:none}
+#cvAddMenu button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:none;
+  border-radius:12px;background:transparent;color:#e6ecff;font:15px/1.3 system-ui,sans-serif;text-align:left;cursor:pointer}
+#cvAddMenu button:active{background:rgba(255,255,255,.07)}
+#cvAddMenu button:disabled{opacity:.45}
+#cvAddMenu .cvam-ic{flex:0 0 auto;width:22px;height:22px;opacity:.85}
+#cvAddMenu .cvam-thumb{flex:0 0 auto;width:44px;height:44px;border-radius:9px;object-fit:cover;background:rgba(255,255,255,.06)}
+#cvAddMenu .cvam-sub{display:block;font-size:12px;opacity:.6;margin-top:2px}
+#cvAddMenu .cvam-msg{padding:4px 12px 8px;font-size:12px;color:#f3a7ae}
+#cvAddMenu .cvam-msg:empty{display:none}
+.cv-app #cvAddMenu{background:#30302e;border-color:rgba(222,220,209,.15);border-radius:20px}
+.cv-app #cvAddMenu button{color:#faf9f5;font-family:var(--cv-me-ff,'Instrument Sans',system-ui,sans-serif)}
+.cv-app #cvAddMenu button:active{background:rgba(222,220,209,.08)}
 
 /* ---- connection pill ---- */
 #conn{position:absolute;top:6px;right:10px;z-index:5;padding:3px 10px;border-radius:12px;font-family:'VT323',monospace;font-size:15px;letter-spacing:.5px;background:#3b1d24;color:#ff9db1;border:1px solid #7a2f42;cursor:pointer}
@@ -559,12 +705,14 @@ button{outline:none;-webkit-user-select:none;user-select:none}
           <div id="convoBtns">
             <button id="cvOpts" title="Model · effort · mode">—</button>
             <span class="cv-spacer"></span>
-            <button id="convoAttach" title="Attach image">📎</button>
+            <button id="convoAttach" title="Add a picture">📎</button>
             <button id="pbMax" title="Fullscreen chat"></button>
             <button id="convoSend" title="Send">➤</button>
           </div>
           <input type="file" id="cvFile" accept="image/*" multiple class="hidden">
         </div>
+        <div id="cvAddMenu" class="hidden"></div>
+        <div id="cvViewer" class="hidden"></div>
       </div>
     </div>
   </div>
@@ -640,13 +788,25 @@ button{outline:none;-webkit-user-select:none;user-select:none}
       <div class="sec"><div class="lbl">Terminal font size</div>
         <div class="rowset"><button id="fontMinus">−</button><span class="val" id="fontVal"></span><button id="fontPlus">+</button></div>
       </div>
-      <div class="sec"><div class="lbl">Chat text size</div>
+      <div class="sec"><div class="lbl">Scuttlebutt text size</div>
         <div class="rowset"><button id="chatMinus">−</button><span class="val" id="chatVal"></span><button id="chatPlus">+</button></div>
-        <div class="note help">Scales the agent chat AND the CLAUDE-pane bubbles.</div>
+        <div class="note help">Scales the SCUTTLEBUTT agent chat. The CLAUDE chat has its own size above.</div>
+      </div>
+      <div class="sec"><div class="lbl">Claude chat style</div>
+        <div class="seg" id="cvStyleSeg"><button data-v="app">Claude app</button><button data-v="glass">Liquid glass</button></div>
+        <div class="note help">Claude app = looks like the official Claude Android app. The bubble colours below only change the Liquid glass style.</div>
+      </div>
+      <div class="sec"><div class="lbl">Claude text size</div>
+        <div class="rowset"><button id="cvFsMinus">−</button><span class="val" id="cvFsVal"></span><button id="cvFsPlus">+</button></div>
+        <div class="note help">Size of Claude's replies in the CLAUDE chat. Your messages, code and the typing box grow and shrink with it.</div>
       </div>
       <div class="sec"><div class="lbl">Claude font</div>
         <div class="seg" id="cvFontGrid"></div>
-        <div class="note help">Each option shows its own look. If two look identical, the phone lacks that font — Lora, Handwriting, Arcade, Retro and the three monos ship with the deck, so they always work.</div>
+        <div class="note help">The font of Claude's replies in the CLAUDE chat. "Claude" is the closest match to the official app. Each option shows its own look. If two look identical, the phone lacks that font — Lora, Handwriting, Arcade, Retro and the three monos ship with the deck, so they always work.</div>
+      </div>
+      <div class="sec"><div class="lbl">Your font</div>
+        <div class="seg" id="cvMeFontGrid"></div>
+        <div class="note help">The font of your own messages and the typing box in the CLAUDE chat. "Claude" matches the official app.</div>
       </div>
       <div class="sec"><div class="lbl">Claude bubbles</div>
         <div class="cv-swrow"><span>You</span><div class="cv-swatches" id="swMe"></div></div>
@@ -761,12 +921,15 @@ const DEFAULTS = {
   // the user wants Samsung predictions. The bar gives the IME a real
   // textarea, so predictions/swipe behave natively; direct typing remains a
   // settings toggle for anyone who prefers it with predictions off.
-  rev:5, inputBar:true, font:'jetbrains', chatFs:10,
+  rev:6, inputBar:true, font:'jetbrains', chatFs:10,
   openGrp:'layout',   // which settings group is expanded ('' = all collapsed)
   chatMax:false,   // manual CLAUDE/chat fullscreen (#pbMax): hides the top bar + office so the bottom stack gets the whole screen
   paneOrder:['term','convo','chat'],   // TERMINAL/CLAUDE/SCUTTLEBUTT button order — drag them to rearrange
   tintLabels:true,   // pane LABELS wear their identity color too (toggle in settings; off = neutral text, colored icons only)
-  cvFont:'system', cvMe:'amber', cvAi:'cyan', cvBox:'none',   // CONVO pane: font + bubble/composer tints
+  cvFont:'claude', cvMe:'amber', cvAi:'cyan', cvBox:'none',   // CONVO pane: font + bubble/composer tints
+  cvStyle:'app',
+  cvMeFont:'claudesans',   // font of YOUR messages + the typing box in the CLAUDE pane
+  cvFs:17,   // CLAUDE pane text size in px (Claude's reply size; everything else in the pane scales off it)   // CONVO pane look: 'app' = the official Claude Android app, 'glass' = the liquid-glass bubbles
   notifyAsk:true,   // notify (with approve/deny buttons) when Claude asks while the app is hidden
   allowRotate:false,   // portrait-locked unless the user opts into rotation
   // Office look. The OFFICE owns these for real (it persists them itself and
@@ -829,6 +992,12 @@ function loadSettings(){
       // replaced by a manual fullscreen toggle (chatMax). Drop the stale flag and
       // seed the new one so old saved state can't linger or leave chatMax unset.
       if(!stored.rev || stored.rev < 5){ s.rev = 5; delete s.bigType; if(s.chatMax == null) s.chatMax = false; }
+      // rev 6: the Claude font picker gained a 'Claude' entry and became the
+      // default; anyone still on the old default ('system') moves to it
+      if(!stored.rev || stored.rev < 6){ s.rev = 6; if(s.cvFont === 'system') s.cvFont = 'claude'; }
+      // the CLAUDE pane got its own text size (it used to ride chatFs, shared
+      // with SCUTTLEBUTT) — seed it from the old setting so nothing jumps
+      if(stored.cvFs == null && stored.chatFs != null) s.cvFs = stored.chatFs + 7;
       return s;
     }
   }catch(e){}
@@ -1110,7 +1279,8 @@ function bindComposer(ta, btn, onSubmit, opts){
     // a line break that raced in from the IME before we intercepted it would
     // otherwise ride along as a stray blank line
     const v = ta.value.replace(/[\r\n]+$/, '');
-    if(!v){ ta.value = ''; autogrow(); return; }
+    // opts.allowEmpty: a picture-only message (CLAUDE composer) may send with no text
+    if(!v && !(opts.allowEmpty && opts.allowEmpty())){ ta.value = ''; autogrow(); return; }
     if(onSubmit(v) === false) return;   // rejected (e.g. disconnected) — keep the text
     // springy release pop — the tactile "it sent" cue
     btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
@@ -1899,7 +2069,9 @@ function cvSaveCacheSoon(){
       var el = log.children[i];
       if(!el.classList || !el.classList.contains('cvmsg')) continue;   // skip notes/placeholders
       if(el.classList.contains('cv-pending')) continue;                // optimistic, not yet in the transcript
-      out.push({ id: el._cvId || null, role: el.classList.contains('cv-user') ? 'user' : 'assistant', text: el._cvRaw || '', ts: el._cvTs || 0 });
+      var cm = { id: el._cvId || null, role: el.classList.contains('cv-user') ? 'user' : 'assistant', text: el._cvRaw || '', ts: el._cvTs || 0 };
+      if(el._cvNimg){ cm.nimg = el._cvNimg; cm.imgs = el._cvImgs || []; }
+      out.push(cm);
     }
     if(out.length > CV_CONVO_CAP) out = out.slice(-CV_CONVO_CAP);
     try { sessionStorage.setItem(cvSlotKey(tab), JSON.stringify({ sid: CV.sid || null, msgs: out })); } catch(e){}
@@ -1914,8 +2086,8 @@ function convoRestoreCache(tab){
   var cache = cvLoadCache(tab);
   CV.sid = cache.sid || null;   // so the first tail read on this tab merges (same sid) instead of wiping
   cache.msgs.forEach(function(m){
-    if(!m || !m.text) return;
-    log.appendChild(convoBubbleEl({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text, ts: m.ts || 0, id: m.id || null }));
+    if(!m || (!m.text && !m.nimg)) return;
+    log.appendChild(convoBubbleEl({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text || '', ts: m.ts || 0, id: m.id || null, nimg: m.nimg, imgs: m.imgs }));
     if(m.id) CV.seen.add(m.id);   // so the next tail replay dedupes against restored bubbles
   });
   CV.empty = log.children.length === 0;
@@ -1980,7 +2152,7 @@ function cvCopy(text, btn){
   function ok(){
     if(!btn) return;
     btn.textContent = '✓';
-    setTimeout(function(){ btn.textContent = '⧉'; }, 1200);
+    setTimeout(function(){ btn.innerHTML = cvCopySvg(); }, 1200);
   }
   function fallback(){
     try{
@@ -1994,6 +2166,38 @@ function cvCopy(text, btn){
     navigator.clipboard.writeText(text).then(ok).catch(fallback);
   } else fallback();
 }
+// a function (hoisted), not a const: cache restore can build bubbles before this line runs
+function cvCopySvg(){ return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/></svg>'; }
+// "[Image #1]" markers and raw ~/.deck/attach path lines are how a picture
+// shows up in a prompt's TEXT — the bubble shows the picture instead
+function cvStripImgMarks(t){
+  return String(t || '').replace(/\[Image #\d+\]\s*/g, '')
+    .split('\n').filter(function(l){ return !/^\s*\/\S*\/\.deck\/attach\/\S+\s*$/.test(l); }).join('\n')
+    .replace(/^\s+|\s+$/g, '');
+}
+// echo-match key for an optimistic bubble vs its transcript copy
+function cvNorm(t){ return cvStripImgMarks(t).replace(/\s+/g, ' '); }
+function cvImgUrl(name){ return '/deck/attach/img?f=' + encodeURIComponent(name); }
+// (re)draw a user bubble's picture strip: known pictures + a placeholder for
+// each one we can't show (pasted straight into the terminal, not via the deck)
+function cvPaintImgs(div){
+  const host = div.querySelector('.cvimgs');
+  if(!host) return;
+  host.innerHTML = '';
+  const imgs = div._cvImgs || [];
+  imgs.forEach(function(n){
+    const im = document.createElement('img');
+    im.className = 'cvimg'; im.alt = 'Picture'; im.loading = 'lazy';
+    im.src = cvImgUrl(n);
+    host.appendChild(im);
+  });
+  for(let i = imgs.length; i < (div._cvNimg || 0); i++){
+    const ph = document.createElement('span');
+    ph.className = 'cvimg-ph'; ph.textContent = '🖼 Picture';
+    host.appendChild(ph);
+  }
+  div.classList.toggle('cv-hasimg', host.children.length > 0);
+}
 function convoBubbleEl(m){
   const div = document.createElement('div');
   div.className = 'cvmsg ' + (m.role === 'user' ? 'cv-user' : 'cv-asst') + ' cv-in';
@@ -2002,9 +2206,22 @@ function convoBubbleEl(m){
   div._cvTs = m.ts || 0;
   // Full text always — the old length clamp ("▾ show all") was removed; long
   // messages render in full, both user and assistant bubbles.
-  div.innerHTML = '<div class="cvbody">' + mdLite(m.text) + '</div>'
-    + '<span class="cvfoot"><button class="cv-copy" title="Copy message">⧉</button>'
+  const isUser = m.role === 'user';
+  if(isUser){
+    div._cvRaw = cvStripImgMarks(m.text);
+    div._cvImgs = (m.imgs || []).slice();
+    String(m.text || '').split('\n').forEach(function(l){
+      const pm = /^\s*\/\S*\/\.deck\/attach\/(\S+)\s*$/.exec(l);
+      if(pm && div._cvImgs.indexOf(pm[1]) === -1) div._cvImgs.push(pm[1]);
+    });
+    div._cvNimg = Math.max(m.nimg || 0, div._cvImgs.length,
+      (String(m.text || '').match(/\[Image #\d+\]/g) || []).length);
+  }
+  div.innerHTML = (isUser ? '<div class="cvimgs"></div>' : '')
+    + '<div class="cvbody">' + mdLite(isUser ? div._cvRaw : m.text) + '</div>'
+    + '<span class="cvfoot"><button class="cv-copy" title="Copy message">' + cvCopySvg() + '</button>'
     + '<span class="cvts">' + cvTime(m.ts) + '</span></span>';
+  if(isUser) cvPaintImgs(div);
   div.addEventListener('animationend', function(){ div.classList.remove('cv-in'); });
   div.querySelector('.cv-copy').addEventListener('click', function(e){
     e.stopPropagation();
@@ -2030,6 +2247,23 @@ function convoNote(text, keep){
 function convoAddMsg(m){
   const log = $('convoLog');
   const stick = cvAtBottom(log);
+  // a picture whose source note arrived in a later read than its prompt:
+  // hand it to the newest user bubble still missing one
+  if(m.role === 'img'){
+    if(!m.img) return;
+    const users = log.querySelectorAll('.cv-user');
+    for(let i = users.length - 1; i >= Math.max(0, users.length - 4); i--){
+      const u = users[i];
+      if((u._cvImgs || []).indexOf(m.img) !== -1) return;   // already shown
+      if((u._cvImgs || []).length < (u._cvNimg || 0)){
+        u._cvImgs.push(m.img); cvPaintImgs(u);
+        if(stick) log.scrollTop = log.scrollHeight;
+        cvSaveCacheSoon();
+        return;
+      }
+    }
+    return;
+  }
   // R2 dedupe: a same-sid reset replays the 512KB tail, so ids we already
   // rendered come back — skip them. NOT the current grow-target, which is one
   // logical message still arriving split across polls.
@@ -2039,8 +2273,12 @@ function convoAddMsg(m){
   if(m.role === 'user'){
     // the transcript echoing back a message we already showed optimistically
     const pend = log.querySelector('.cv-pending');
-    if(pend && pend._cvText === m.text.trim()){
+    if(pend && pend._cvText != null && cvNorm(pend._cvText) === cvNorm(m.text)){
       pend.classList.remove('cv-pending'); pend._cvText = null;
+      // the transcript knows the real picture count/names — adopt them
+      if(m.nimg) pend._cvNimg = Math.max(pend._cvNimg || 0, m.nimg);
+      if(m.imgs && m.imgs.length) pend._cvImgs = m.imgs.slice();
+      cvPaintImgs(pend);
       pend._cvId = m.id || null; pend._cvTs = m.ts || pend._cvTs || 0;   // R2: adopt the real id for cache + dedupe
       if(m.id) CV.seen.add(m.id);
       cvSendBusySync();
@@ -2591,7 +2829,7 @@ function convoSyncSend(){
   const dlg = CV.lastCardSig || Date.now() - (CV.dialogAt || 0) < 12000;
   $('convoText').placeholder = !pocket ? 'read-only in ttyd engine — switch to Pocket to send'
     : !live ? 'terminal disconnected — reconnecting…'
-    : (dlg ? 'Answer Claude’s question…' : 'Message Claude…');
+    : (dlg ? 'Answer Claude’s question…' : S.cvStyle === 'glass' ? 'Message Claude…' : 'Reply to Claude…');
 }
 // Multiline-safe send: the composer is multiline now (Enter = newline), but
 // raw \n bytes on the pty read as Enter and would SUBMIT the prompt early.
@@ -2601,10 +2839,13 @@ function convoSyncSend(){
 // socket, false = queued); the optional `ticket` tracks that same content send
 // so the caller can watch for a later flush-time delivery. The trailing Enter
 // is deliberately untracked — it's a submit keystroke, not the message bytes.
-function cvSendText(msg, enterDelay, ticket){
+function cvSendText(msg, enterDelay, ticket, asPaste){
   let bp = false;
   try { bp = term.modes.bracketedPasteMode; } catch(e) {}
-  if(/[\r\n]/.test(msg)){
+  // asPaste: picture paths must arrive as a PASTE even on one line — Claude
+  // Code only turns a pasted image path into an attachment; typed out, a
+  // picture-only send reached Claude as a bare path (confirmed on the phone)
+  if(/[\r\n]/.test(msg) || (asPaste && bp)){
     if(bp){
       // Paste first, then Enter as its OWN keystroke a beat later. A \r glued
       // to the paste-end marker races the TUI's paste handling — confirmed on
@@ -2696,17 +2937,17 @@ bindComposer($('convoText'), $('convoSend'), function(v){
   }
   // attachments ride as file paths ahead of the text — Claude reads them
   const paths = CV.att.map(function(a){ return a.path; });
-  const sendMsg = paths.length ? paths.join('\n') + '\n' + v : v;
+  const sendMsg = paths.length ? paths.join('\n') + (v ? '\n' + v : '') : v;
   const sendDelay = paths.length ? 900 : 300;
   // optimistic bubble the instant you hit send — the buttery part
   convoNote(null);
   CV.empty = false;
-  const shown = (CV.att.map(function(a){ return '📎 ' + a.name; }).join('\n') + '\n' + v).replace(/^\n/, '');
   const log = $('convoLog');
-  const el = convoBubbleEl({ role: 'user', text: shown, ts: Date.now(), id: null });
+  const el = convoBubbleEl({ role: 'user', text: v, ts: Date.now(), id: null,
+    imgs: CV.att.map(function(a){ return a.path.split('/').pop(); }) });
   el.classList.add('cv-pending');
-  // dedup key = EXACTLY what the transcript will echo back (paths + text),
-  // so this pretty 📎 bubble absorbs the echo instead of duplicating it
+  // dedup key: what we typed (paths + text). The transcript echoes the paths
+  // as "[Image #N]" markers, so the match compares cvNorm() of both
   el._cvText = sendMsg.trim();
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
@@ -2719,7 +2960,7 @@ bindComposer($('convoText'), $('convoSend'), function(v){
   el._cvFire = function(){
     const ticket = { delivered: false };
     el._cvTicket = ticket;   // kept so a retry can re-watch the SAME queued bytes, not re-enqueue them
-    cvSendText(sendMsg, sendDelay, ticket);
+    cvSendText(sendMsg, sendDelay, ticket, paths.length > 0);
     _cvWatchDelivery(el, ticket);
     // Verify-and-retry Enter: the transcript echo is PROOF of submission. If it
     // hasn't arrived, the Enter almost certainly lost a race (image ingestion /
@@ -2761,7 +3002,7 @@ bindComposer($('convoText'), $('convoSend'), function(v){
   CV.fastUntil = Date.now() + 20000;
   setTimeout(convoTick, 350);
   setTimeout(convoTick, 1200);
-}, { noEnter: true });
+}, { noEnter: true, allowEmpty: function(){ return CV.att.length > 0; } });
 // Hidden-mode probe: status only (?lite=1 — the server skips the transcript
 // read), fired from the same heartbeat while the app is backgrounded. If the
 // session is WAITING (Notification hook), raise the approval notification.
@@ -2935,7 +3176,11 @@ const CV_ARROW_SVG = (function(){
   });
   return '<svg class="cvarrow" viewBox="0 0 14 14" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">' + r + '</svg>';
 })();
-$('convoSend').innerHTML = CV_ARROW_SVG;
+// Claude-app style icons — CSS shows these instead of the pixel ones in .cv-app
+const CV_UP_SVG = '<svg class="cvup" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>';
+const CV_PLUS_SVG = '<svg class="cvplus" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+$('convoSend').innerHTML = CV_ARROW_SVG + CV_UP_SVG;
+$('convoAttach').insertAdjacentHTML('beforeend', CV_PLUS_SVG);
 $('inputSend').innerHTML = CV_ARROW_SVG;
 // The CONVO send button waves while a sent message is still waiting for its
 // transcript echo — .cv-pending without the 6s .cv-sent promotion (once the
@@ -3047,20 +3292,132 @@ function cvRenderChips(){
     host.appendChild(c);
   });
 }
-$('convoAttach').addEventListener('click', function(){ $('cvFile').click(); });
+// upload one picture (from the gallery picker, a paste, or the clipboard)
+// into ~/.deck/attach and add it to the composer as a chip
+function cvUploadFile(f, name){
+  name = name || f.name || ('pasted.' + ((f.type || 'image/png').split('/')[1] || 'png'));
+  return fetch('/deck/attach', {
+    method: 'POST',
+    headers: { 'X-Filename': name, 'X-Deck': '1', 'Content-Type': f.type || 'application/octet-stream' },
+    body: f,
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(!d || !d.ok) return false;
+    CV.att.push({ path: d.path, name: d.name, url: URL.createObjectURL(f) });
+    cvRenderChips(); cvDockOverlays();
+    return true;
+  }).catch(function(){ return false; });
+}
 $('cvFile').addEventListener('change', function(){
-  Array.prototype.forEach.call(this.files, function(f){
-    fetch('/deck/attach', {
-      method: 'POST',
-      headers: { 'X-Filename': f.name, 'X-Deck': '1', 'Content-Type': f.type || 'application/octet-stream' },
-      body: f,
-    }).then(function(r){ return r.json(); }).then(function(d){
-      if(!d || !d.ok) return;
-      CV.att.push({ path: d.path, name: d.name, url: URL.createObjectURL(f) });
-      cvRenderChips();
-    }).catch(function(){});
-  });
+  Array.prototype.forEach.call(this.files, function(f){ cvUploadFile(f); });
   this.value = '';   // same file can be picked again
+});
+// Paste a picture straight into the box: Samsung Keyboard's clipboard (and
+// Gboard's) hands images to the page as a paste carrying a file
+$('convoText').addEventListener('paste', function(e){
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  const files = [];
+  for(let i = 0; i < items.length; i++){
+    if(items[i].kind === 'file' && /^image\//.test(items[i].type)){
+      const f = items[i].getAsFile();
+      if(f) files.push(f);
+    }
+  }
+  if(!files.length) return;   // plain text: let it paste normally
+  e.preventDefault();
+  files.forEach(function(f){ cvUploadFile(f); });
+});
+
+// ---- the + menu: latest screenshot · paste picture · gallery ----
+function cvAgo(ms){
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if(s < 60) return 'just now';
+  if(s < 3600) return Math.round(s / 60) + ' min ago';
+  if(s < 86400) return Math.round(s / 3600) + ' h ago';
+  return Math.round(s / 86400) + ' d ago';
+}
+const CV_ICON_IMG = '<svg class="cvam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4.5 3.5"/></svg>';
+const CV_ICON_PASTE = '<svg class="cvam-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16" rx="2.5"/><path d="M9 4.5V3.8A.8.8 0 0 1 9.8 3h4.4a.8.8 0 0 1 .8.8v.7M9 10h6M9 14h4"/></svg>';
+function cvAddMenuClose(){ $('cvAddMenu').classList.add('hidden'); }
+function cvAddMenuMsg(t){ const m = $('cvAddMenu').querySelector('.cvam-msg'); if(m) m.textContent = t || ''; }
+function cvAddMenuOpen(){
+  const menu = $('cvAddMenu');
+  menu.innerHTML =
+      '<button type="button" id="cvamShot" disabled><img class="cvam-thumb" alt="" hidden>' + CV_ICON_IMG.replace('cvam-ic', 'cvam-ic cvam-shotic')
+    +   '<span><span class="cvam-t">Latest screenshot</span><span class="cvam-sub">Looking…</span></span></button>'
+    + '<button type="button" id="cvamPaste">' + CV_ICON_PASTE + '<span>Paste picture<span class="cvam-sub">From your clipboard</span></span></button>'
+    + '<button type="button" id="cvamPick">' + CV_ICON_IMG + '<span>Choose from gallery</span></button>'
+    + '<div class="cvam-msg"></div>';
+  cvDockOverlays();
+  menu.classList.remove('hidden');
+  const shotBtn = $('cvamShot');
+  fetch('/deck/shots/latest', { headers: { 'X-Deck': '1' } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      const sub = shotBtn.querySelector('.cvam-sub');
+      if(!d || !d.ok){
+        sub.textContent = d && d.error === 'storage not set up'
+          ? 'Run termux-setup-storage once to allow this' : 'No screenshots found';
+        return;
+      }
+      const th = shotBtn.querySelector('.cvam-thumb');
+      th.src = '/deck/shots/img?f=' + encodeURIComponent(d.name);
+      th.hidden = false;
+      shotBtn.querySelector('.cvam-shotic').style.display = 'none';
+      sub.textContent = cvAgo(d.mtime);
+      shotBtn.disabled = false;
+      shotBtn.onclick = function(){
+        shotBtn.disabled = true; sub.textContent = 'Adding…';
+        fetch('/deck/shots/attach?f=' + encodeURIComponent(d.name), { method: 'POST', headers: { 'X-Deck': '1' } })
+          .then(function(r){ return r.json(); })
+          .then(function(a){
+            if(!a || !a.ok){ shotBtn.disabled = false; sub.textContent = 'Couldn’t add it — try again'; return; }
+            CV.att.push({ path: a.path, name: a.name, url: cvImgUrl(a.path.split('/').pop()) });
+            cvRenderChips(); cvAddMenuClose(); cvDockOverlays();
+            $('convoText').focus();
+          })
+          .catch(function(){ shotBtn.disabled = false; sub.textContent = 'Couldn’t add it — try again'; });
+      };
+    })
+    .catch(function(){ shotBtn.querySelector('.cvam-sub').textContent = 'Couldn’t check screenshots'; });
+  $('cvamPaste').onclick = function(){
+    if(!navigator.clipboard || !navigator.clipboard.read){
+      cvAddMenuMsg('This browser can’t read pictures from the clipboard. Tap the text box and paste from your keyboard’s clipboard instead.');
+      return;
+    }
+    navigator.clipboard.read().then(function(list){
+      const jobs = [];
+      list.forEach(function(item){
+        const t = item.types.filter(function(x){ return /^image\//.test(x); })[0];
+        if(t) jobs.push(item.getType(t).then(function(b){ return cvUploadFile(b, 'pasted.' + (t.split('/')[1] || 'png')); }));
+      });
+      if(!jobs.length){ cvAddMenuMsg('No picture on the clipboard — copy one first.'); return; }
+      Promise.all(jobs).then(function(){ cvAddMenuClose(); $('convoText').focus(); });
+    }).catch(function(){
+      cvAddMenuMsg('Clipboard blocked. Allow it when the browser asks, or paste from your keyboard’s clipboard.');
+    });
+  };
+  $('cvamPick').onclick = function(){ cvAddMenuClose(); $('cvFile').click(); };
+}
+$('convoAttach').addEventListener('click', function(e){
+  e.stopPropagation();
+  if($('cvAddMenu').classList.contains('hidden')) cvAddMenuOpen(); else cvAddMenuClose();
+});
+// tap anywhere else closes the menu
+document.addEventListener('click', function(e){
+  const menu = $('cvAddMenu');
+  if(!menu.classList.contains('hidden') && !menu.contains(e.target) && e.target !== $('convoAttach')) cvAddMenuClose();
+});
+// tap a picture in the chat (or a composer chip) to see it full screen
+function cvViewImg(src){
+  const v = $('cvViewer');
+  v.innerHTML = '';
+  const im = document.createElement('img'); im.src = src; im.alt = 'Picture';
+  v.appendChild(im);
+  v.classList.remove('hidden');
+}
+$('cvViewer').addEventListener('click', function(){ this.classList.add('hidden'); this.innerHTML = ''; });
+$('convoLog').addEventListener('click', function(e){
+  if(e.target && e.target.classList && e.target.classList.contains('cvimg')) cvViewImg(e.target.src);
 });
 
 // ---- CONVO appearance: font + per-role bubble tints (settings drawer) ----
@@ -3082,6 +3439,8 @@ const CV_TINTS = {
 // Android/Samsung's built-in family names, which desktop browsers gracefully
 // fall back from. The three bundled monos ship with the deck already.
 const CV_FONTS = {
+  claude:    "'Newsreader',Georgia,'Noto Serif',serif",   // lookalike of the Claude app's Anthropic Serif
+  claudesans:"'Instrument Sans',system-ui,sans-serif",     // lookalike of its Anthropic Sans (your messages)
   system:    'system-ui,-apple-system,sans-serif',
   rounded:   "ui-rounded,'SF Pro Rounded','Comfortaa',system-ui,sans-serif",
   serif:     "Georgia,'Noto Serif','Times New Roman',serif",
@@ -3107,7 +3466,7 @@ const CV_FONTS = {
 // renderCvFontGrid). 'cursive' was labelled Handwriting before Caveat
 // arrived — the stored key keeps working, only the label moved.
 const CV_FONT_LIST = [
-  ['system','System'], ['rounded','Rounded'], ['condensed','Condensed'],
+  ['claude','Claude'], ['system','System'], ['rounded','Rounded'], ['condensed','Condensed'],
   ['light','Thin / light'], ['medium','Medium'], ['black','Heavy'],
   ['serif','Serif'], ['bookish','Book serif'], ['lora','Lora'],
   ['hand','Handwriting'], ['cursive','Casual'], ['fantasy','Fantasy'],
@@ -3116,30 +3475,41 @@ const CV_FONT_LIST = [
   ['jetbrains','JetBrains'], ['fira','Fira Code'], ['plex','IBM Plex'],
 ];
 function renderCvFontGrid(){
-  const g = $('cvFontGrid');
+  // both pickers offer both Claude lookalikes; each lists its own app default
+  // first as plain "Claude" (replies = serif, your messages = sans)
+  const rest = CV_FONT_LIST.filter(function(f){ return f[0] !== 'claude'; });
+  renderFontGrid('cvFontGrid', 'cvFont',
+    [['claude','Claude'], ['claudesans','Claude sans']].concat(rest));
+  renderFontGrid('cvMeFontGrid', 'cvMeFont',
+    [['claudesans','Claude'], ['claude','Claude serif']].concat(rest));
+}
+function renderFontGrid(hostId, key, list){
+  const g = $(hostId);
   g.innerHTML = '';
-  CV_FONT_LIST.forEach(function(f){
+  list.forEach(function(f){
     const b = document.createElement('button');
     b.textContent = f[1];
     b.style.fontFamily = CV_FONTS[f[0]];
     if(f[0] === 'pixel') b.style.fontSize = '9px';        // PS2P is huge
     if(f[0] === 'retro' || f[0] === 'hand') b.style.fontSize = '17px'; // both run small
-    b.className = S.cvFont === f[0] ? 'on' : '';
+    b.className = S[key] === f[0] ? 'on' : '';
     b.addEventListener('click', function(){
-      S.cvFont = f[0]; save(); applyConvoStyle(); renderCvFontGrid();
+      S[key] = f[0]; save(); applyConvoStyle(); renderCvFontGrid();
     });
     g.appendChild(b);
   });
 }
 function applyConvoStyle(){
   const p = $('convoPane');
+  p.classList.toggle('cv-app', S.cvStyle !== 'glass');
   const me = CV_TINTS[S.cvMe] || CV_TINTS.amber;
   const ai = CV_TINTS[S.cvAi] || CV_TINTS.cyan;
   p.style.setProperty('--cvu-a', me.a);  p.style.setProperty('--cvu-b', me.b);
   p.style.setProperty('--cvu-bd', me.bd); p.style.setProperty('--cvu-fg', me.fg);
   p.style.setProperty('--cva-a', ai.a);  p.style.setProperty('--cva-b', ai.b);
   p.style.setProperty('--cva-bd', ai.bd); p.style.setProperty('--cva-fg', ai.fg);
-  p.style.setProperty('--cv-ff', CV_FONTS[S.cvFont] || CV_FONTS.system);
+  p.style.setProperty('--cv-ff', CV_FONTS[S.cvFont] || CV_FONTS.claude);
+  p.style.setProperty('--cv-me-ff', CV_FONTS[S.cvMeFont] || CV_FONTS.claudesans);
   // composer card tint — 'none' keeps the neutral glass defaults. The send
   // button rides the same tint (--cv-accent) so it always matches the box.
   const bx = CV_TINTS[S.cvBox];
@@ -3156,6 +3526,17 @@ function applyConvoStyle(){
   }
 }
 applyConvoStyle();
+function renderCvStyleSeg(){
+  $('cvStyleSeg').querySelectorAll('button').forEach(function(b){
+    b.className = (S.cvStyle === 'glass' ? 'glass' : 'app') === b.dataset.v ? 'on' : '';
+  });
+}
+$('cvStyleSeg').querySelectorAll('button').forEach(function(b){
+  b.addEventListener('click', function(){
+    S.cvStyle = b.dataset.v; save(); applyConvoStyle(); renderCvStyleSeg(); convoSyncSend();
+  });
+});
+renderCvStyleSeg();
 // swatch pickers — one row per role, built from CV_TINTS
 function buildSwatches(hostId, key, withNone){
   const host = $(hostId);
@@ -3202,6 +3583,7 @@ function syncSettingsUI(){
   $('rngSplit').value = S.splitPct;
   $('fontVal').textContent = S.fontSize;
   $('chatVal').textContent = S.chatFs;
+  $('cvFsVal').textContent = S.cvFs;
   $('chkInputBar').checked = S.inputBar;
   $('chkKeybar').checked = S.keybar;
   $('chkTintLabels').checked = !!S.tintLabels;
@@ -3591,6 +3973,14 @@ function bumpFont(d){
 function applyChatFs(){ document.documentElement.style.setProperty('--chat-fs', S.chatFs + 'px'); }
 $('chatMinus').addEventListener('click', function(){ bumpChat(-1); });
 $('chatPlus').addEventListener('click', function(){ bumpChat(1); });
+function applyCvFs(){ $('convoPane').style.setProperty('--cv-fs', S.cvFs + 'px'); }
+applyCvFs();
+$('cvFsMinus').addEventListener('click', function(){ bumpCvFs(-1); });
+$('cvFsPlus').addEventListener('click', function(){ bumpCvFs(1); });
+function bumpCvFs(d){
+  S.cvFs = Math.max(12, Math.min(28, S.cvFs + d));
+  save(); $('cvFsVal').textContent = S.cvFs; applyCvFs();
+}
 function bumpChat(d){
   S.chatFs = Math.max(8, Math.min(18, S.chatFs + d));
   save(); $('chatVal').textContent = S.chatFs; applyChatFs();
