@@ -241,7 +241,8 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 .cv-user.cv-in{transform-origin:100% 100%}
 .cv-asst.cv-in{transform-origin:0 100%}
 @keyframes cvPop{0%{opacity:0;transform:scale(.86) translateY(10px)}100%{opacity:1;transform:none}}
-#convoTicker{flex:0 0 auto;padding:5px 14px;font-size:11px;font-style:italic;color:#7d9ac9;
+#convoTicker{flex:0 0 auto;padding:5px 14px;font-size:calc(var(--cv-fs,17px) - 6px);font-style:italic;color:#7d9ac9;
+  font-family:var(--cv-ff,system-ui,sans-serif);
   background:rgba(20,26,48,.5);border-top:1px solid #171c30;animation:cvTick 1.6s ease-in-out infinite}
 @keyframes cvTick{0%,100%{opacity:.55}50%{opacity:1}}
 #convoTicker .cv-star{display:inline-block;font-style:normal;color:#c9a6ff;
@@ -428,8 +429,9 @@ button{outline:none;-webkit-user-select:none;user-select:none}
 @keyframes cvFadeUp{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
 /* "Claude is working" line: the clay spark + word, no strip behind it */
 .cv-app #convoTicker{background:none;border:none;color:#a6a39a;font-style:normal;
-  font-size:13px;padding:4px 18px 2px;animation:none}
-.cv-app #convoTicker .cv-star{color:#d97757;font-size:15px;animation:cvSpark 2.4s ease-in-out infinite}
+  font-family:var(--cv-ff,'Newsreader',Georgia,serif);font-size:calc(var(--cv-fs,17px) - 2px);
+  padding:4px 18px 2px;animation:none}
+.cv-app #convoTicker .cv-star{color:#d97757;font-size:1.1em;animation:cvSpark 2.4s ease-in-out infinite}
 @keyframes cvSpark{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(.82)}100%{transform:rotate(360deg) scale(1)}}
 .cv-app #convoTicker .cv-word{color:#c2c0b6}
 /* composer */
